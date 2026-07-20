@@ -1,10 +1,12 @@
 # Gated DeltaNet and Hybrid Attention
 
 **Improves:** quadratic full attention for long sequences, and simpler linear
-recurrent alternatives such as Mamba2 or DeltaNet.  
+recurrent alternatives such as Mamba2 or DeltaNet.
 **Primary goal:** maintain a fixed-size recurrent key-value memory that can both
 forget globally and update a specific association, then combine it with periodic
 full attention to recover exact-retrieval capacity.
+
+**Simple Explanation:** A linear-attention mechanism that reduces attention complexity to **O(n)** by replacing token-to-token attention with a **shared recurrent memory**. Each token uses its **Q, K, and V** to read from and update this memory via the **delta rule** , while a **learned gate**(Mamba2) controls  **how much of the update is written** , allowing the model to preserve important information and ignore less relevant updates.
 
 ## From full attention to recurrent state
 
@@ -132,13 +134,13 @@ there (16 Q heads, 2 KV heads in 80B-A3B).
 
 ## Complexity and trade-offs
 
-| Property | Full attention | Gated DeltaNet |
-|---|---|---|
-| Prefill token mixing | Quadratic in sequence length | Linear in sequence length with chunkwise algorithm |
-| Decode history | Growing KV cache | Fixed-size recurrent matrix state |
-| Exact access to an old token | Strong content-addressable path | Compressed; collisions are possible |
-| Parallel training | Natural large matmuls | Requires specialized chunkwise kernels |
-| Serving support | Mature | Architecture- and kernel-specific |
+| Property                     | Full attention                  | Gated DeltaNet                                     |
+| ---------------------------- | ------------------------------- | -------------------------------------------------- |
+| Prefill token mixing         | Quadratic in sequence length    | Linear in sequence length with chunkwise algorithm |
+| Decode history               | Growing KV cache                | Fixed-size recurrent matrix state                  |
+| Exact access to an old token | Strong content-addressable path | Compressed; collisions are possible                |
+| Parallel training            | Natural large matmuls           | Requires specialized chunkwise kernels             |
+| Serving support              | Mature                          | Architecture- and kernel-specific                  |
 
 The official Qwen3-Next card claims 10× inference throughput over 32K context
 relative to Qwen3-32B for its tested model/system, but that result combines Gated
@@ -148,4 +150,6 @@ be attributed to the recurrence equation alone.
 **Verified lineage:** Qwen3 itself is still an all-attention dense/MoE family.
 Gated DeltaNet first enters this line through Qwen3-Next; official later Qwen
 materials describe it as continuing into Qwen3.5/3.6.
+
+**Disclaimer:** Gated DeltaNet is **not yet a universal replacement** for Transformer attention. While it reduces attention complexity from **O(n²)** to  **O(n)** , it compresses past information into a recurrent memory, which can trade off some retrieval fidelity compared to full attention. Its efficiency advantages become most noticeable for  **very long contexts (100K–1M+ tokens)** , whereas for more common context lengths (e.g.,  **8K–32K tokens** ), optimized Transformer attention is often already efficient enough that the practical benefits are smaller.
 ([Qwen FlashQLA post](https://qwen.ai/blog?id=flashqla))

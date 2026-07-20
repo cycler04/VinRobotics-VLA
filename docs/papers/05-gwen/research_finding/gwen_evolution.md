@@ -1,11 +1,10 @@
-
 # Qwen Model Family Through Qwen 3.6
 
 ## Executive Summary
 
 The public Qwen family progression up to **Qwen 3.6** is best understood as seven major version families: **Qwen**, **Qwen1.5**, **Qwen2**, **Qwen2.5**, **Qwen3**, **Qwen3.5**, and **Qwen3.6**. Across those families, the most important arcs were: a move from early decoder-only LLMs with separate multimodal branches into broader multilingual and longer-context text models; then into heavily specialized coding/math/vision/audio branches; then into hybrid “thinking / non-thinking” agents; and finally into **native multimodal, efficiency-oriented, agentic models** with explicit coding-first post-training in 3.6. The biggest step-changes were **Qwen1.5 → Qwen2**, **Qwen2 → Qwen2.5**, **Qwen2.5 → Qwen3**, and **Qwen3 → Qwen3.5**. Those jumps were driven by larger and cleaner pretraining corpora, more aggressive post-training, better long-context methods, more parameter-efficient architectures, stronger reinforcement learning, and—by 3.5—native multimodal early-fusion training and hybrid linear-attention/MoE design. citeturn18view0turn28view0turn39view0turn40view0turn42view0turn44view0
 
-If the goal is to identify the clearest “version-to-version” inflection points, 
+If the goal is to identify the clearest “version-to-version” inflection points,
 
 - **Qwen2** is where Qwen becomes an obviously stronger modern open-weight family;
 - **Qwen2.5** is where Qwen becomes a very strong general-purpose platform with powerful specialist branches;

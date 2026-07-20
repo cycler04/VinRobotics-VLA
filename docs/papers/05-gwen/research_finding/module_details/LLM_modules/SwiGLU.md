@@ -1,8 +1,10 @@
 # SwiGLU Feed-Forward Networks
 
-**Improves:** the original two-matrix ReLU FFN and its GELU successor.  
+**Improves:** the original two-matrix ReLU FFN and its GELU successor.
 **Primary goal:** use a learned, input-dependent multiplicative gate to control
 which expanded features pass through the token-wise FFN.
+
+Simple Explanation: Instead of a direct pass, make 2 pass, 1 is caried through SiLU fuction (gate), 1 is keeped (value), the final value is **gate * value,** adopt **what** and **how much** the token is.
 
 ## From ReLU/GELU FFN to a gated FFN
 
@@ -37,6 +39,8 @@ essential to the SwiGLU definition. The key change is the element-wise product
 between two learned projections. The GLU-variants paper found SwiGLU and related
 gated variants better than the ReLU/GELU baselines in its Transformer
 experiments. ([Shazeer, 2020](https://arxiv.org/abs/2002.05202))
+
+![1784536547554](image/SwiGLU/1784536547554.png)
 
 ## Architectural interpretation
 
@@ -95,8 +99,7 @@ Trade-offs:
 
 - the gate improves expressivity empirically, but requires an extra input
   projection;
-- performance depends on chosen intermediate width, initialization, data, and
-  the rest of the architecture;
+- performance depends on chosen intermediate width, initialization, data, and the rest of the architecture;
 - SwiGLU changes the per-expert computation but does not make an FFN sparse;
   MoE is the separate routing mechanism that chooses which FFNs execute;
 - fused kernels can reduce memory traffic, but “SwiGLU” alone does not promise

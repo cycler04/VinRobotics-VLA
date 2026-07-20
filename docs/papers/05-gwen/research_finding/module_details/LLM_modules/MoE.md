@@ -3,7 +3,9 @@
 **Improves:** a dense Transformer FFN that applies the same parameters to every
 token.
 **Primary goal:** increase total parameter capacity while activating only a
-small subset of FFN parameters for each token.
+small subset of FFN parameters for each token
+
+Simple description: Split the FFN into mulitple specialize expert, each token is routed to their FFN expert instead of all the dense FFN.
 
 ## Dense FFN versus sparse expert routing
 
@@ -68,8 +70,7 @@ $$
 
 This explains names such as `235B-A22B`: roughly 235B total parameters exist,
 but approximately 22B participate in one token's forward path. FLOPs per token
-can resemble a much smaller dense model even though the checkpoint carries much
-larger capacity.
+can resemble a much smaller dense model even though the checkpoint carries much larger capacity.
 
 That does **not** mean deployment costs only the active parameter count:
 
@@ -97,8 +98,7 @@ Two design choices recur in Qwen:
 Routers can collapse onto a few popular experts. Auxiliary load-balancing losses,
 router regularization, capacity limits, token dropping, or global routing
 statistics are used to distribute work. The Switch Transformer paper documents
-both the scaling advantage and the communication/training-instability problems
-of sparse MoE.
+both the scaling advantage and the communication/training-instability problems of sparse MoE.
 ([Fedus et al., 2021](https://arxiv.org/abs/2101.03961))
 
 ## Qwen evolution

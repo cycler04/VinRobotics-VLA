@@ -37,6 +37,7 @@ layout as `12 × (3 × (Gated DeltaNet → MoE) → 1 × (Gated Attention → Mo
 
 | New module | Main predecessor | Main improvement | What it does **not** solve |
 |---|---|---|---|
+| [BBPE tokenizer](BBPE_Tokenizer.md) | Word, character, or character-level subword tokenization | Uses a universal byte base plus learned merges for open coverage and compact multilingual/code encoding | It does not guarantee equal token efficiency, semantic boundaries, or preservation before normalization |
 | [RoPE](RoPE.md) | Additive absolute position embedding | Makes attention scores depend naturally on relative displacement | Long-context extrapolation beyond training is not guaranteed |
 | [GQA](GQA.md) | Multi-head attention (MHA) | Shrinks the KV cache and decoder memory bandwidth | It does not remove quadratic prefill attention |
 | [FlashAttention](FlashAttention.md) | Materialized attention implementation | Computes exact attention with much less HBM traffic and temporary memory | It does not change attention's mathematical output or quadratic FLOPs |
@@ -44,7 +45,8 @@ layout as `12 × (3 × (Gated DeltaNet → MoE) → 1 × (Gated Attention → Mo
 | [RMSNorm](RMSNorm.md) | LayerNorm | Removes mean-centering and simplifies normalization | It preserves scale invariance, not shift invariance |
 | [QK-Norm](QK_Norm.md) | Only scaling logits by `sqrt(d_head)` | Controls Q/K magnitude and attention-logit growth | It does not replace residual-stream normalization |
 | [Sparse MoE](MoE.md) | One dense FFN for every token | Increases parameter capacity without activating all parameters per token | Communication, routing balance, and total weight memory remain expensive |
-| [DCA + YaRN](Long_Context_DCA_YaRN.md) | Plain RoPE outside its trained length | Re-indexes chunks and rescales RoPE frequencies for longer context | Long context is not equivalent to perfect retrieval or reasoning |
+| [YaRN](YaRN.md) | Plain RoPE outside its trained length | Rescales the RoPE frequency spectrum and attention temperature | It does not change full attention's quadratic cost |
+| [DCA](DCA.md) | Raw RoPE distances across very long sequences | Re-indexes intra-, inter-, and successive-chunk query-key regions | Far-distance position detail is deliberately coarsened |
 | [Gated DeltaNet](Gated_DeltaNet.md) | Full softmax attention or simpler linear recurrence | Uses a fixed-size recurrent memory with targeted update and global forgetting | Fixed-size state can still collide and lose exact detail |
 | [Multi-token prediction](Multi_Token_Prediction.md) | Next-token-only training | Supervises several future positions and provides draft tokens for speculation | Speedup requires verification and an inference engine that supports it |
 
@@ -71,4 +73,3 @@ The files in this directory focus on module mechanics. Pretraining data,
 post-training, reasoning mode, tool use, and multimodal fusion can dominate
 observable behavior, but they are separate from the block-level substitutions
 analyzed here.
-

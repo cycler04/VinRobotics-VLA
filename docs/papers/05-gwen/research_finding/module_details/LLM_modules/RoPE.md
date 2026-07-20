@@ -1,10 +1,11 @@
 # Rotary Position Embedding (RoPE)
 
 **Improves:** additive absolute position embeddings used by the original
-Transformer.  
+Transformer.
 **Primary goal:** make attention scores depend naturally on relative position
-while encoding position through a cheap, deterministic transformation of Q and
-K.
+while encoding position through a cheap, deterministic transformation of Q and K, remove the need of learned position encoding or fixed encoding.
+
+Simple explaination: Spin the **Q, K value** by an angle (with sin, cos), rotation speed change base on position.
 
 ## What changed from absolute position embeddings
 
@@ -23,8 +24,7 @@ Position and content are mixed before all projections. Learned absolute tables
 also have a fixed trained range; sinusoidal tables can be evaluated farther out,
 but the attention score does not obtain a relative-position form by construction.
 
-RoPE instead projects content first, then rotates pairs of Q and K dimensions by
-an angle determined by token position. For frequency `theta_i` and the
+RoPE instead projects content first, then **rotates pairs of Q and K** dimensions by an angle determined by token position. For frequency `theta_i` and the
 two-dimensional pair `(2i, 2i+1)`:
 
 $$
@@ -101,7 +101,7 @@ generalizes to any length.” At positions much longer than training:
   against long-range coverage.
 
 This is why later systems combine RoPE with techniques such as a larger base
-frequency, YaRN, position interpolation, or DCA. The YaRN paper explicitly starts
+frequency, [YaRN](YaRN.md), position interpolation, or [DCA](DCA.md). The YaRN paper explicitly starts
 from the observation that ordinary RoPE models fail to generalize reliably past
 their trained length. ([Peng et al., 2023](https://arxiv.org/abs/2309.00071))
 

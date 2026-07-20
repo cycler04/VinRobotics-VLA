@@ -1,9 +1,12 @@
+
 # Grouped-Query Attention (GQA)
 
 **Improves:** multi-head attention (MHA), with multi-query attention (MQA) as the
-other endpoint.  
+other endpoint.
 **Primary goal:** preserve most of MHA's quality while reducing autoregressive
 KV-cache size and memory bandwidth.
+
+**Simple explanation:** Grouped-Query Attention (GQA) is a technique that reduces **KV-cache memory usage** and **memory bandwidth** by allowing multiple query heads to share the same key and value heads. This significantly reduces the amount of KV data stored and read during inference while maintaining nearly the same model quality as standard multi-head attention.
 
 ## From MHA to MQA to GQA
 

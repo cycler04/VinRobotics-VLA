@@ -1,8 +1,12 @@
 # FlashAttention
 
-**Improves:** the memory access pattern of standard exact attention.  
+**Improves:** the memory access pattern of standard exact attention.
 **Primary goal:** avoid writing the full attention-score and probability matrices
 to high-bandwidth memory (HBM).
+
+**Simple explanation:** FlashAttention makes standard Transformer attention faster and more memory-efficient by computing it in small blocks that fit in fast on-chip memory. It reduces slow data transfers to and from GPU memory without approximating or changing the attention result.
+
+It does **not** reduce attention’s theoretical (O(n^2)) computation. Instead, it performs the same exact attention calculation with a more efficient GPU implementation.
 
 ## It is an algorithm, not a different learned attention layer
 
@@ -20,8 +24,7 @@ A naive GPU implementation materializes `S` and `P`, each shaped approximately
 `sequence_length × sequence_length` per head. It writes them to HBM, reads them
 back for softmax/value mixing, and stores large intermediates for backward.
 
-FlashAttention computes the same mathematical result, up to ordinary floating-
-point ordering differences. Its main innovation is IO-aware tiling:
+FlashAttention computes the same mathematical result, up to ordinary floating-point ordering differences. Its main innovation is IO-aware tiling:
 
 1. load blocks of Q, K, and V from HBM into small, fast on-chip SRAM;
 2. compute one score tile;

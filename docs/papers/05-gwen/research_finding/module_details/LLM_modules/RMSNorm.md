@@ -1,8 +1,10 @@
 # RMSNorm and Pre-Normalized Residual Blocks
 
-**Improves:** LayerNorm as the normalization inside a Transformer block.  
+**Improves:** LayerNorm as the normalization inside a Transformer block.
 **Primary goal:** retain scale control while removing LayerNorm's mean-centering
 operation; in Qwen it is used before each sublayer (`pre-norm`).
+
+Simple explaination: Replace 2 heavy computation: **means, variace** with 1 computation: **RMS** to increase speed without reduce perfomance.
 
 ## LayerNorm versus RMSNorm
 
@@ -31,14 +33,13 @@ $$
 \end{aligned}
 $$
 
-The common LLM form keeps a learned per-channel scale `gamma` and usually has no
-learned bias `beta`. It is invariant to re-scaling but not to adding a constant
+The common LLM form keeps a learned per-channel scale `gamma` and usually has no learned bias `beta`. It is invariant to re-scaling but not to adding a constant
 shift. The RMSNorm paper's central hypothesis is that LayerNorm's re-centering
-invariance is dispensable; it reports comparable task performance and lower
-runtime in its tested RNN and Transformer settings.
+invariance is dispensable; it reports comparable task performance and **lower
+runtime** in its tested RNN and Transformer settings.
 ([Zhang and Sennrich, 2019](https://arxiv.org/abs/1910.07467))
 
-The paper's 7–64% runtime reductions are measurements on its particular models
+The paper's **7–64% runtime** reductions are measurements on its particular models
 and hardware, not a universal modern-LLM speedup. In current fused GPU kernels,
 the real gain depends on memory traffic, fusion, dtype, hidden width, and the
 fraction of total time spent in normalization.
@@ -75,16 +76,21 @@ stream itself.
 
 ```mermaid
 flowchart TD
-    X[Residual x] --> N1[RMSNorm: x / RMS(x) × gamma]
-    N1 --> A[Attention]
-    X --> ADD1[Add]
+    X["Residual x"] --> N1["RMSNorm\nx divided by RMS(x), scaled by gamma"]
+    N1 --> A["Attention"]
+
+    X --> ADD1["Add"]
     A --> ADD1
-    ADD1 --> Y[Residual y]
-    Y --> N2[RMSNorm]
-    N2 --> F[SwiGLU FFN or MoE]
-    Y --> ADD2[Add]
+
+    ADD1 --> Y["Residual y"]
+
+    Y --> N2["RMSNorm"]
+    N2 --> F["SwiGLU FFN or MoE"]
+
+    Y --> ADD2["Add"]
     F --> ADD2
-    ADD2 --> Z[Next-layer residual]
+
+    ADD2 --> Z["Next-layer residual"]
 ```
 
 For a simplified token state `x = [3, 4]` with `gamma = [1, 1]` and no epsilon:
@@ -113,9 +119,7 @@ prove that one representation is universally better.
 - Pre-norm makes optimization easier at depth, but can change representation
   scaling and final-layer behavior; a final normalization is normally still
   applied before the LM head.
-- RMSNorm and QK-Norm act at different locations: RMSNorm normalizes the block
-  input; QK-Norm normalizes projected query/key heads immediately before their
-  dot products.
+- RMSNorm and QK-Norm act at different locations: RMSNorm normalizes the block input; QK-Norm normalizes projected query/key heads immediately before their dot products.
 
 ## How Qwen uses it
 
