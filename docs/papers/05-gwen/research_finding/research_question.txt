@@ -1,0 +1,9 @@
+Understand Gwen architectures:
+- What modern LLM look like?
+- What Qwen differ from other LLMs?
+- Deeper research in new LLM modules, what Qwen used 
+- What QwenVL differ from normal Qwen (Apply to previous Qwen<3)
+- Evolution of Qwen versions, what it improve, what it fix. 
+- Focus on understanding Qwen3.5 in architerture, pre-training, post-training, inference.
+- What Qwen downside compare to other models. 
+- QwenVLA and Robots differences from normal VLA. 

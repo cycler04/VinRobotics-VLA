@@ -1,0 +1,85 @@
+# Secrets and machine-local configuration
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.p12
+*.pfx
+/notes/wifi.txt
+
+# Python environments, bytecode, and packaging output
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+build/
+dist/
+pip-wheel-metadata/
+
+# Tests, coverage, lint, and type-check caches
+.pytest_cache/
+.hypothesis/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.mypy_cache/
+.pyright/
+.ruff_cache/
+.tox/
+.nox/
+
+# Local datasets and generated VLA artifacts
+/dataset/
+/output/
+/artifacts/
+/checkpoints/
+/runs/
+/wandb/
+/mlruns/
+/lightning_logs/
+/tensorboard/
+
+# Large generated data/model files outside the standard output folders
+*.arrow
+*.ckpt
+*.h5
+*.hdf5
+*.npy
+*.npz
+*.onnx
+*.parquet
+*.pth
+*.safetensors
+*.tfrecord
+
+# Downloaded research papers; keep the Markdown findings in Git
+/docs/papers/**/*.pdf
+
+# Notebook, tool, and temporary files
+.ipynb_checkpoints/
+.cache/
+*.log
+*.part
+*.tmp
+*.swp
+*.swo
+*~
+
+# Shared agent knowledge lives in .agents/ and is version-controlled.
+# Track only the portable Codex project config and agent wrappers.
+.codex/*
+!.codex/config.toml
+!.codex/agents/
+!.codex/agents/*.toml
+
+# Editors and OS metadata
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
