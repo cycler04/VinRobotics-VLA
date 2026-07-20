@@ -71,12 +71,10 @@ htmlcov/
 *.swo
 *~
 
-# Shared agent knowledge lives in .agents/ and is version-controlled.
-# Track only the portable Codex project config and agent wrappers.
-.codex/*
-!.codex/config.toml
-!.codex/agents/
-!.codex/agents/*.toml
+# Local AI agent configuration and workspace state
+/.agent/
+/.agents/
+/.codex/
 
 # Editors and OS metadata
 .idea/

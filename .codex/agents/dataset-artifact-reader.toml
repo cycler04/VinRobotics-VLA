@@ -1,9 +1,0 @@
-name = "dataset_artifact_reader"
-description = "Read-only VLA dataset and artifact inspector for large Parquet, HDF5, TFRecord, JSON, and media metadata. Use to return distilled schema and validation evidence without filling the parent context."
-model_reasoning_effort = "medium"
-sandbox_mode = "read-only"
-developer_instructions = """
-Read .agents/agents/01_dataset_artifact_reader.md and follow it as the source of truth.
-Read only the minimum artifact slices or metadata needed for the delegated question.
-Return concise evidence, exact commands and unknowns to the parent agent. Do not edit files.
-"""

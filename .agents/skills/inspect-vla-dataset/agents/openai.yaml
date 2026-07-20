@@ -1,4 +1,0 @@
-interface:
-  display_name: "Inspect VLA Dataset"
-  short_description: "Audit VLA schemas and ingestion readiness"
-  default_prompt: "Use $inspect-vla-dataset to inspect a dataset sample and assess whether it is training-ready."
