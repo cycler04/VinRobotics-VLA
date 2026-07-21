@@ -19,11 +19,11 @@ choices are being mixed:
    refinement from noise;
 3. **training objective:** regression, categorical next-token prediction,
    diffusion noise prediction, or flow matching;
-4. **architecture and scale:** a small readout, a specialized Transformer
-   expert, or a decoder-centric Diffusion Transformer.
+4. **architecture and scale:** a small readout, a token-routed Transformer
+   expert, or a separate decoder-centric Diffusion Transformer.
 
-This explains the important overlaps. Qwen-VLA is both a flow-matching model
-and a large 1.15B-parameter DiT action expert attached to a 4B VLM. π0.5 uses
+This explains the important overlaps. Qwen-VLA is a flow-matching model with a
+separate 1.15B-parameter DiT action decoder downstream of a 4B VLM. π0.5 uses
 FAST tokens during pretraining but a continuous flow expert for low-level
 deployment. Conversely, RT-1 does **not** perform continuous regression: it
 predicts one of 256 bins for each action dimension with categorical
@@ -36,8 +36,8 @@ cross-entropy. [RT-1, §3.3](https://arxiv.org/abs/2212.06817)
 | [Continuous regression](01_continuous_regression.md) | Predict a continuous action or chunk in one forward pass with L1/MSE-style loss | OpenVLA-OFT | RT-1 is a parallel **categorical** policy, not continuous regression |
 | [Discrete autoregressive actions](02_discrete_autoregressive_actions.md) | Serialize action symbols and generate them with next-token prediction | RT-2, OpenVLA, π0-FAST | FAST changes the tokenizer, not the autoregressive decoder |
 | [Compact diffusion or flow decoder](03_compact_diffusion_flow.md) | A relatively small conditional denoiser iteratively refines an action chunk | Diffusion Policy variants and compact VLA heads | “Compact” is an architecture/scale distinction, not a different probabilistic objective |
-| [Flow-matching Transformer expert](04_flow_matching_transformer_expert.md) | A robot-specialized Transformer learns a conditional velocity field | π0, π0.5 | π0.5 also uses FAST-token pretraining; Qwen-VLA uses the same broad pattern at larger scale |
-| [Large Diffusion Transformer](05_large_diffusion_transformer.md) | A substantial DiT performs action generation rather than acting as a shallow readout | RDT-1B; Dita; Qwen-VLA with caveats | Dita is 334M and calls itself lightweight; Qwen-VLA's DiT is an attached expert, not a standalone whole system |
+| [Flow-matching Transformer expert](04_flow_matching_transformer_expert.md) | Robot tokens use specialized weights inside a shared Transformer computation | π0, π0.5 | π0.5 also uses FAST-token pretraining; this is not Qwen-VLA's downstream-decoder topology |
+| [Decoder-centric DiT](05_large_diffusion_transformer.md) | A substantial Transformer is itself the iterative diffusion/flow action decoder | RDT-1B; Dita; Qwen-VLA with caveats | Dita is 334M and calls itself lightweight; Qwen-VLA uses a separate flow-matching DiT after its VLM |
 
 ## The common input/output contract
 
@@ -101,4 +101,3 @@ so they do not establish a decoder family as globally superior.
 - Wang et al. *Qwen-VLA: Unifying Vision-Language-Action Modeling across Tasks,
   Environments, and Robot Embodiments*, arXiv:2605.30280v2, 2026.
   [Paper](https://arxiv.org/abs/2605.30280)
-

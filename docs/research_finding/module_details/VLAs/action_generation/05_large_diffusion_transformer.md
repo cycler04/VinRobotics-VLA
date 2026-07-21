@@ -1,4 +1,4 @@
-# Large or Decoder-Centric Diffusion Transformers
+# Large or Decoder-Centric DiT Action Decoders
 
 > **Scope.** Action generators that place substantial Transformer capacity
 > inside the iterative diffusion/flow path instead of using a shallow action
@@ -9,17 +9,18 @@
 
 “Large standalone Diffusion Transformer” is not accurate for all three models:
 
-| Model | Verified action-generator scale | Objective | Is the decoder standalone from the whole VLA? |
-| --- | ---: | --- | --- |
-| RDT-1B | 1.2B-parameter RDT | diffusion | Decoder-centric policy, but still conditioned by separate language/vision encoders |
-| Dita | 334M parameters for the published policy | DDPM diffusion | Integrated policy with DINOv2, CLIP, Q-Former, and causal DiT; the authors call it lightweight |
-| Qwen-VLA | about 1.15B action expert plus Qwen3.5-4B VLM | conditional flow matching | No; the DiT is explicitly attached to and conditioned by the VLM |
+| Model    |                       Verified action-generator scale | Objective                 | Is the decoder standalone from the whole VLA?                                                  |
+| -------- | ----------------------------------------------------: | ------------------------- | ---------------------------------------------------------------------------------------------- |
+| RDT-1B   |                                    1.2B-parameter RDT | diffusion                 | Decoder-centric policy, but still conditioned by separate language/vision encoders             |
+| Dita     |              334M parameters for the published policy | DDPM diffusion            | Integrated policy with DINOv2, CLIP, Q-Former, and causal DiT; the authors call it lightweight |
+| Qwen-VLA | about 1.15B DiT action decoder after a Qwen3.5-4B VLM | conditional flow matching | No; the DiT is a separate downstream decoder conditioned by VLM hidden states                  |
 
 The defensible common label is **large or decoder-centric DiT action
 generation**. RDT-1B is the unambiguous billion-parameter example. Dita belongs
 because it moves denoising into the main Transformer token sequence rather than
-because it is billion-scale. Qwen-VLA overlaps with the
-[flow-expert family](04_flow_matching_transformer_expert.md).
+because it is billion-scale. Qwen-VLA belongs here because action generation is
+performed by a billion-parameter DiT decoder, not by token-routed expert weights
+inside the Qwen backbone.
 
 ## What changes relative to a compact head?
 
@@ -37,19 +38,22 @@ The expected benefit is greater capacity and finer token-level conditioning for
 heterogeneous images, histories, embodiments, and action spaces. The cost is
 that every diffusion or flow step invokes a substantial Transformer.
 
+Here **DiT names the denoising-network architecture**, not one mandatory loss.
+RDT-1B and Dita use DDPM-derived diffusion objectives, while Qwen-VLA uses a
+DiT to predict a flow-matching velocity field. All three repeatedly apply a
+Transformer to an intermediate noisy action trajectory.
+
 ## RDT-1B
 
 RDT-1B is a Robotics Diffusion Transformer scaled to 1.2B parameters for
 bimanual manipulation. It uses separate SigLIP vision and T5-XXL language
 encoders, proprioceptive inputs, and a scalable Transformer denoiser. The policy
 was pretrained on multi-robot data and predicts the next 64 robot actions.
-[RDT-1B paper](https://arxiv.org/abs/2410.07864) ·
-[official model card](https://huggingface.co/robotics-diffusion-transformer/rdt-1b)
+[RDT-1B paper](https://arxiv.org/abs/2410.07864) · [official model card](https://huggingface.co/robotics-diffusion-transformer/rdt-1b)
 
 The denoiser itself has 28 layers, width 2,048, and 32 attention heads. It
 alternates cross-attention to language and image conditions. Training corrupts
-actions with a 1,000-step DDPM schedule and learns a clean-action estimate with
-MSE; deployment uses five DPM-Solver++ steps to produce a 64-action chunk.
+actions with a 1,000-step DDPM schedule and learns a clean-action estimate with MSE; deployment uses five DPM-Solver++ steps to produce a 64-action chunk.
 [RDT-1B, §4.1, §5, and Appendix H](https://proceedings.iclr.cc/paper_files/paper/2025/file/49f80e4d2471ad4f2edf4f5f1ab62339-Paper-Conference.pdf)
 
 A central design is the Physically Interpretable Unified Action Space. It
@@ -107,33 +111,145 @@ The name should also be kept exact: the official model is **Dita**. Neither
 “DiTA” nor “DiT-Action” is the canonical title in its paper, project page, or
 repository.
 
-## Qwen-VLA
+## Qwen-VLA: the DiT action decoder
 
-Qwen-VLA extends a pretrained Qwen3.5-4B vision-language backbone with an
-approximately 1.15B-parameter, 16-block single-stream DiT action expert. VLM
-hidden states and the noised action chunk are concatenated and processed with
-joint self-attention; AdaLN supplies the flow timestep and multi-section RoPE
-distinguishes token axes. The expert learns a conditional flow field and uses a
-small number of Euler integration steps at inference.
-[Qwen-VLA, §§2.1-2.5](https://arxiv.org/abs/2605.30280)
+The important Qwen-VLA module is a **separate, single-stream DiT action
+decoder** after the Qwen3.5-4B VLM. The paper uses “action expert” as a loose
+functional label in §2.2, but the architecture is not a π0-style expert that
+routes robot tokens through alternate weights inside the VLM Transformer.
 
-Its unified output tensor has shape `H x K`. Real action channels occupy a
-prefix; unused channels/timesteps are padded and masked out of the loss. Text
-prompts describe embodiment and control conventions, while per-dataset
-percentile normalization preserves dataset-specific scaling. This unifies the
-network interface across manipulation, navigation, and trajectory prediction,
-not the physical semantics of all robots.
+Qwen-VLA has a serial boundary:
+
+```text
+images + instruction + embodiment/FPS/horizon prompt
+                         |
+                         v
+                  Qwen3.5-4B VLM
+                         |
+                 final hidden states
+                         |
+              linear projection to DiT width
+                         |
+                         +--------------------------+
+                                                    |
+noisy H x K action tensor -> action projection -> action tokens
+flow time tau ------------> timestep embedding -> AdaLN controls
+                                                    |
+                                                    v
+              concatenate [VLM context ; action tokens]
+                                                    |
+                 16 single-stream DiT blocks
+           joint self-attention + multi-section RoPE
+                                                    |
+              retain and project action positions
+                                                    |
+                                                    v
+                    H x K velocity field
+                                                    |
+                   several Euler updates
+                                                    |
+                                                    v
+                    continuous action chunk
+```
+
+The VLM is run to produce semantic context first. Its hidden states are mapped
+into the DiT channel dimension by a linear layer. The noised action vector at
+each future timestep is separately projected into an action token. These two
+token groups are concatenated and then processed together by the DiT.
+
+This serial forward boundary does not mean the VLM must stay frozen: Qwen-VLA's
+continued pretraining and supervised fine-tuning jointly update the backbone
+and decoder. It means the two modules retain separate blocks and parameter
+sets, with VLM hidden states serving as the DiT's conditioning tokens.
+
+“Joint self-attention” means that, inside the DiT, action positions can use the
+full projected visual-language context and can coordinate with other action
+timesteps. It does **not** mean the Qwen VLM and DiT share Transformer blocks or
+expert routing. The VLM has already produced its hidden states before the DiT
+decoder begins. [Qwen-VLA, §2.2](https://arxiv.org/abs/2605.30280)
+
+### What one DiT pass computes
+
+The DiT does not directly output the final action chunk in one pass. One call
+predicts a velocity field for the current noisy/intermediate action tensor.
+
+Let `Y0` be the clean demonstrated target and `Y1` Gaussian noise. Training
+samples a flow time `tau` and forms:
+
+```text
+Y_tau = (1 - tau) * Y0 + tau * Y1
+target velocity = Y1 - Y0
+```
+
+The DiT receives `Y_tau`, `tau`, and the projected VLM context. AdaLN injects
+the flow-time embedding into the Transformer computation, while multi-section
+RoPE provides position structure aligned with the multimodal backbone. The
+output action positions are mapped back to an `H x K` velocity tensor and
+optimized with masked MSE. [Qwen-VLA, §§2.2 and 2.5](https://arxiv.org/abs/2605.30280)
+
+At inference, generation begins at `tau=1` with Gaussian noise and integrates
+toward `tau=0`. For a decreasing Euler step `delta`, the conceptual update is:
+
+```text
+Y_(tau-delta) = Y_tau - delta * v_theta(Y_tau, tau, VLM_context)
+```
+
+Every Euler step reruns the 16-block DiT on the updated action tensor. The
+paper says “a few” Euler steps but does not disclose the exact default count, so
+the report does not assume ten steps from π0 or another model. The final tensor
+at `tau=0`, not the velocity from one DiT pass, is the generated action chunk.
+
+### What makes this a large DiT
+
+The approximately 1.15B decoder parameters are distributed as follows:
+
+| DiT component              |           Reported parameters | Role                                                        |
+| -------------------------- | ----------------------------: | ----------------------------------------------------------- |
+| 16 DiT blocks              | about 1.13B total, 70.8M each | Joint attention and transformation of context/action tokens |
+| Raw-action projection MLPs |                          4.9M | Map between the raw action dimension and DiT latent width   |
+| VLM-to-DiT projection      |                          3.9M | Map Qwen hidden states into the decoder channel space       |
+| Timestep embedding         |                          2.8M | Encode flow time for AdaLN conditioning                     |
+| Output AdaLN modulation    |                          4.7M | Condition the decoder's output path on flow time            |
+
+This scale is why Qwen-VLA fits the present family. The DiT is not a shallow
+head on one pooled VLM vector: it repeatedly processes all projected VLM context
+tokens together with the entire noisy trajectory. [Qwen-VLA, §2.2](https://arxiv.org/abs/2605.30280)
+
+### From one DiT to many embodiments
+
+The decoder always predicts a fixed tensor `Y in R^(H x K)`, but each dataset
+may use only `H_task <= H` timesteps and `c <= K` channels. Valid values occupy
+the leading region; the rest is zero-padded. A binary mask excludes padded
+channels and timesteps from the flow loss, with active channels averaged
+uniformly so embodiments with more dimensions do not automatically dominate.
+
+The one DiT is reused without embodiment-specific output heads. The control
+meaning instead comes from:
+
+- the VLM prompt describing robot type, arm configuration, control frequency,
+  action convention, and horizon;
+- the dataset's native channel semantics;
+- per-dataset 1st/99th-percentile normalization;
+- the validity mask selecting the real portion of `H x K`.
+
+Thus the shared DiT unifies the **tensor interface and decoder parameters**, not
+the physical semantics of delta end-effector motion, absolute joint commands,
+grippers, navigation waypoints, or human-pose trajectories.
+[Qwen-VLA, §§2.3-2.5](https://arxiv.org/abs/2605.30280)
 
 The default architecture does not use robot proprioception. The paper reports
-only a small gain from adding state in one RoboTwin-2.0 ablation and lists
-memory, failure recovery, force/tactile feedback, and stronger long-horizon
-evaluation among remaining gaps. These limits matter when comparing it with
-RDT-1B or π0, both of which condition their action path on robot state.
+only marginal gains from adding state in one RoboTwin-2.0 ablation and keeps
+the default interface vision-and-prompt conditioned. It also lists memory,
+failure recovery, force/tactile feedback, and stronger long-horizon evaluation
+among remaining gaps.
 
-**Important boundary.** Qwen-VLA is not a standalone DiT that replaces the VLM.
-The pretrained VLM performs perception, grounding, reasoning, and text
-generation; the DiT is a motor expert conditioned on its hidden states. It is
-placed here because its action expert itself is billion-scale.
+The exact boundary is therefore:
+
+```text
+Qwen3.5 VLM = visual-language representation and reasoning
+Qwen-VLA DiT = iterative flow-matching decoder over continuous trajectories
+controller   = denormalization, embodiment mapping, safety, and execution
+```
 
 **Current availability.** As checked on 2026-07-21, the official Qwen-VLA
 repository exposes the paper-facing README and assets but no implementation,
@@ -143,13 +259,13 @@ repository. [Official Qwen-VLA repository](https://github.com/QwenLM/Qwen-VLA)
 
 ## Cross-model comparison
 
-| Property | RDT-1B | Dita | Qwen-VLA |
-| --- | --- | --- | --- |
-| Continuous generator | Diffusion Transformer | DDPM causal Transformer | Flow-matching DiT expert |
-| Conditioning topology | Dedicated multimodal conditioning blocks | Raw multimodal tokens in one in-context sequence | Joint self-attention over VLM states and noisy actions |
-| Published horizon example | 64 actions | Trajectory length 16; current repo config predicts 15 actions | 16-action manipulation chunks; 8-waypoint navigation chunks in reported SFT/evaluation |
-| Embodiment mechanism | Physically interpretable unified action slots | Common 7D EEF representation in reported core setup | Text embodiment prompt + padded/masked tensor + per-dataset normalization |
-| Main classification caveat | Clearly large, but still uses external encoders | Decoder-centric, not billion-scale | Large expert attached to a VLM, also a flow-expert model |
+| Property                   | RDT-1B                                          | Dita                                                          | Qwen-VLA                                                                               |
+| -------------------------- | ----------------------------------------------- | ------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| Continuous generator       | Diffusion Transformer                           | DDPM causal Transformer                                       | 16-block flow-matching DiT decoder                                                     |
+| Conditioning topology      | Dedicated multimodal conditioning blocks        | Raw multimodal tokens in one in-context sequence              | Joint self-attention over VLM states and noisy actions                                 |
+| Published horizon example  | 64 actions                                      | Trajectory length 16; current repo config predicts 15 actions | 16-action manipulation chunks; 8-waypoint navigation chunks in reported SFT/evaluation |
+| Embodiment mechanism       | Physically interpretable unified action slots   | Common 7D EEF representation in reported core setup           | Text embodiment prompt + padded/masked tensor + per-dataset normalization              |
+| Main classification caveat | Clearly large, but still uses external encoders | Decoder-centric, not billion-scale                            | Separate downstream DiT; not π0-style token-routed expert weights                     |
 
 ## Trade-offs
 

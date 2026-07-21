@@ -1,4 +1,3 @@
-
 # Modern Action Space Representations in Vision-Language-Action (VLA) Models
 
 ## Overview
@@ -626,6 +625,18 @@ Disadvantages
 | DiffusionVLA | Continuous Action Chunk                                                        |
 | DexVLA       | Arm + Dexterous Hand Action Chunk                                              |
 | Qwen-VLA     | Unified Multi-Action Space (Joint, End-Effector, Navigation, Human Trajectory) |
+
+Notes on Continuous, Discretized:
+
+| Aspect         | Continuous Action                             | Discretized Action                                       |
+| -------------- | --------------------------------------------- | -------------------------------------------------------- |
+| Output         | Real numbers. Direct value of action control. | Discrete tokens/classes, each token is a defined action. |
+| .Example       | `[0.021, -0.14, 0.003, 0.8]`                | `[523, 112, 901, 45]`                                  |
+| Prediction     | Regression                                    | Classification / next-token prediction                   |
+| Loss           | MSE, L1, Flow Matching                        | Cross-Entropy                                            |
+| Typical models | π0, Diffusion Policy, ACT, OpenVLA           | RT-2, Qwen-VLA, RoboFlamingo variants                    |
+| Precision      | Very high                                     | Limited by quantization                                  |
+| Fits LLM       | Less naturally                                | Very naturally                                           |
 
 ---
 

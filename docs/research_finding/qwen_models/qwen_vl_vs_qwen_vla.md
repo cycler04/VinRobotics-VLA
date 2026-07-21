@@ -128,11 +128,7 @@ nó chưa chứng minh mức tăng tương tự trên mọi robot hoặc task.
 
 ### Continuous flow-matching action expert
 
-Action expert là single-stream DiT khoảng 1.15B tham số, gồm 16 DiT blocks. Nó
-concatenate VLM hidden states với noisy action chunk, dùng joint self-attention,
-AdaLN timestep conditioning và multi-section RoPE. Training học velocity field;
-inference tích phân từ noise về action bằng vài Euler steps. Cơ chế này phù hợp
-với action distribution đa mode và high-frequency hơn một LM head sinh token.
+Action expert là single-stream DiT khoảng 1.15B tham số, gồm 16 DiT blocks. Nó concatenate VLM hidden states với noisy action chunk, dùng joint self-attention, AdaLN timestep conditioning và multi-section RoPE. Training học velocity field; inference tích phân từ noise về action bằng vài Euler steps. Cơ chế này phù hợp với action distribution đa mode và high-frequency hơn một LM head sinh token.
 [Qwen-VLA, §2.2 và §2.5, pp.4–5][qwen-vla]
 
 ### Unified tensor interface, không ép cùng semantics

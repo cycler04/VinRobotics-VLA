@@ -100,13 +100,17 @@ part of training and the flow-expert family during low-level deployment.
 
 ## Relationship to Qwen-VLA
 
-Qwen-VLA follows the same broad separation—pretrained VLM plus continuous
-flow-matching DiT action expert—but scales the expert to roughly 1.15B
-parameters and uses a single-stream 16-block DiT with joint self-attention over
-VLM hidden states and noisy action slots. It is discussed in
-[large Diffusion Transformers](05_large_diffusion_transformer.md) because the
-requested taxonomy emphasizes decoder scale. Structurally, it also belongs
-here. [Qwen-VLA, §§2.2-2.5](https://arxiv.org/abs/2605.30280)
+Qwen-VLA should not be treated as another π0-style Transformer expert. In π0,
+VLM tokens and robot tokens select different weight sets inside one shared
+Transformer computation. Qwen-VLA first computes VLM hidden states, projects
+them into a separate 16-block DiT, concatenates them with noisy action tokens,
+and runs joint self-attention **inside that downstream decoder**.
+
+The Qwen-VLA paper sometimes calls this module an “action expert,” but its
+architectural boundary is a DiT action decoder rather than π0's token-routed
+expert weights. It is therefore documented under
+[large Diffusion Transformers](05_large_diffusion_transformer.md), not as a
+representative of this family. [Qwen-VLA, §§2.2-2.5](https://arxiv.org/abs/2605.30280)
 
 ## Strengths
 

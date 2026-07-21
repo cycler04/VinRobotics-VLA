@@ -2,406 +2,782 @@
 
 ## 1. The short version
 
-A modern VLA usually has two main halves:
+A modern VLA with an action expert usually has two connected parts:
 
-1. A **VLM backbone** turns images and language into a shared understanding of the situation.
-2. An **action generator** combines that understanding with the robot's current body state and produces a short sequence of continuous robot commands.
+1. A pretrained **vision-language model (VLM)** processes camera images and the language instruction.
+2. A robot-specific **action expert** combines the VLM's hidden features with proprioception, noisy candidate actions, and the flow timestep to generate a continuous action chunk.
 
-An explicit planner is useful for long tasks, but it is **not required in every VLA**. Planning may be:
+The VLM usually does **not** output a sentence before the robot acts. Its useful output is normally a sequence of continuous hidden vectors:
 
-- implicit inside the VLM features;
-- explicit as a textual subtask;
-- performed by a separate planner.
+$$
+H = [h_1, h_2, \ldots, h_N],
+\qquad
+H \in \mathbb{R}^{N \times d_{\text{VLM}}}
+$$
+
+Each row is the contextual hidden state of one visual or text position. These are not vocabulary token IDs and are not motor commands.
+
+Robot state is also not always inserted directly into the VLM. In many modern flow-based architectures, image and language go through the VLM first, while proprioception is projected separately and fused later inside the action expert.
 
 ```mermaid
 flowchart TD
-    subgraph R["1. Raw inputs"]
-        A1["RGB cameras (π0 and GR00T inputs)"]
-        A2["Instruction (Gemma or Qwen tokenizer)"]
-        A3["Proprioception (GR00T embodiment state)"]
+    subgraph RAW["1. Current observation"]
+        IMG["RGB camera images"]
+        TXT["Language instruction"]
+        STATE["Robot state / proprioception"]
     end
 
-    A1 --> B1["Vision encoder (π0: SigLIP in PaliGemma)"]
-    A2 --> B2["Text embeddings (π0: PaliGemma)"]
-    B1 --> C["VLM fusion backbone (π0: PaliGemma; GR00T: Eagle-2)"]
-    B2 --> C
-    C --> D["Semantic context H (VLM hidden features)"]
+    IMG --> VENC["Vision encoder"]
+    TXT --> TEMB["Text tokenizer and embeddings"]
+    VENC --> VLM["Pretrained VLM backbone"]
+    TEMB --> VLM
 
-    D --> E["Optional semantic planner (π0.5 high-level policy)"]
-    D --> G["Condition builder (π0 prefix context)"]
-    E --> G
-    A3 --> F["State projector (GR00T: embodiment MLP)"]
-    F --> G
+    VLM --> HCTX["VLM hidden sequence H<br/>contextual vectors, not generated words"]
 
-    G --> H["Current noisy action chunk (π0 or GR00T flow input)"]
-    H --> I["Flow action expert (π0 expert; GR00T or Xiaomi DiT)"]
-    I --> J["Updated action chunk (flow-sampler step)"]
-    J -->|"more refinement steps"| H
-    J -->|"final refinement"| K["Normalized continuous chunk (π0: up to 50 steps)"]
+    STATE --> SPROJ["State projector / embodiment encoder"]
+    SPROJ --> SCTX["State feature S"]
 
-    K --> L["Embodiment decoder and safety limits (GR00T adapter)"]
-    L --> M["Low-level controller executes first k actions (Franka or ALOHA)"]
-    M -->|"new images"| A1
-    M -->|"new robot state"| A3
+    HCTX --> PLAN["Optional semantic subtask or planner"]
+    HCTX --> EXPERT["Flow-matching action expert"]
+    PLAN --> EXPERT
+    SCTX --> EXPERT
+    NOISE["Noisy action chunk A_tau<br/>plus flow time tau"] --> EXPERT
+
+    EXPERT --> VEL["Predicted action velocity v_theta"]
+    VEL --> UPDATE["Update A_tau with ODE / sampler step"]
+    UPDATE -->|"more sampling steps"| EXPERT
+    UPDATE -->|"final step"| ACT["Continuous action chunk"]
+
+    ACT --> DECODE["De-normalize, embodiment decode,<br/>safety and workspace limits"]
+    DECODE --> CTRL["Low-level controller executes first k actions"]
+    CTRL -->|"new images"| IMG
+    CTRL -->|"new robot state"| STATE
 ```
 
-[100.89.98.89:7861/api/videos/download-zip?batch=0&amp;size=500](http://100.89.98.89:7861/api/videos/download-zip?batch=0&size=500)Read the diagram as two connected loops:
+**Important:** this is a logical dataflow diagram. Some implementations compute the VLM context first and then run a separate action Transformer, while others couple the VLM and action-expert Transformer layers more tightly.
 
-- The **inner generation loop** repeatedly changes a noisy action tensor into a coherent action chunk.
-- The **outer control loop** executes only part of that chunk, captures a new observation, and runs the VLA again.
+Read the diagram as two loops:
 
-The instruction usually stays fixed during one task, so it can be cached. Images and proprioception change after execution and must be refreshed.
+- The **inner flow-sampling loop** repeatedly converts a noisy action tensor into a coherent trajectory.
+- The **outer control loop** executes part of that trajectory, observes the robot again, and replaces the remaining plan with a corrected chunk.
 
-This is the recent mainstream pattern. Models such as **π0**, **π0.5**, **GR00T N1**, **Xiaomi-Robotics-0**, and **DeMaVLA** use a pretrained VLM together with a robot-oriented action module. Recent 2026 models still largely follow this division rather than making the language model directly spell out every motor value.
+An explicit planner is useful for long tasks, but it is not required in every VLA. Planning can remain implicit in hidden features, appear as a textual subtask, or be handled by a separate module.
 
-## 2. The modules
+---
 
-| Module                                      | What enters                                         | What it does                                                       | What leaves                                 | Example models                                                                         |
-| ------------------------------------------- | --------------------------------------------------- | ------------------------------------------------------------------ | ------------------------------------------- | -------------------------------------------------------------------------------------- |
-| **Input builder**                     | Images, instruction, robot state, sometimes history | Arranges all current information for the model                     | A multimodal input sample                   | π0, GR00T N1, Xiaomi-Robotics-0                                                       |
-| **Vision encoder**                    | Camera images                                       | Converts image patches into vectors                                | Visual tokens                               | OpenVLA, GR00T N1, DeMaVLA                                                             |
-| **Language encoder**                  | Instruction text                                    | Converts words into vectors                                        | Text tokens                                 | All VLM-based VLAs                                                                     |
-| **VLM backbone**                      | Visual and text tokens                              | Fuses scene information with task meaning                          | Context features                            | PaliGemma in π0/π0.5; Eagle-2 in GR00T N1; Qwen3-VL in Xiaomi-Robotics-0 and DeMaVLA |
-| **Planner / reasoner** *(optional)* | VLM context and overall task                        | Chooses the next semantic subtask or plan                          | Textual or hidden plan                      | π0.5; GR00T N1 System 2; legacy SayCan and VoxPoser                                   |
-| **State / embodiment adapter**        | Joint positions, end-effector pose, gripper state   | Maps robot-specific numbers into the model's internal vector size  | Robot-state features                        | π0, GR00T N1, DeMaVLA                                                                 |
-| **Action generator**                  | VLM context, robot state, optional subtask          | Produces one action or an action chunk                             | Continuous values or discrete action tokens | π0 action expert; GR00T N1 DiT; OpenVLA-OFT; FAST                                     |
-| **Action decoder and controller**     | Model action output                                 | Converts normalized predictions into commands for the actual robot | Joint or end-effector commands              | Present in every deployed VLA                                                          |
-| **Feedback loop**                     | New camera image and robot state                    | Runs the pipeline again after execution                            | Corrected next action                       | Closed-loop VLAs generally                                                             |
+## 2. Main modules
 
-## 3. From text and images to shared context
+| Module                           | Input                                              | Main function                                                           | Output                        |
+| -------------------------------- | -------------------------------------------------- | ----------------------------------------------------------------------- | ----------------------------- |
+| **Vision encoder**         | Camera images                                      | Converts image patches into visual embeddings                           | Visual token vectors          |
+| **Text embedding path**    | Instruction text                                   | Converts token IDs into text embeddings                                 | Text token vectors            |
+| **VLM backbone**           | Visual and text embeddings                         | Contextualizes vision according to the instruction                      | Hidden sequence\(H\)          |
+| **State adapter**          | Joint, gripper, end-effector, base, or force state | Normalizes and projects robot-specific numbers                          | State feature\(S\)            |
+| **Planner** *(optional)* | VLM context and task history                       | Selects the next semantic subtask                                       | Textual or hidden subtask     |
+| **Action expert**          | \(H\), \(S\), noisy actions, flow time             | Predicts how the noisy trajectory should move toward a valid trajectory | Action velocity field         |
+| **Action decoder**         | Normalized action chunk                            | Converts shared output format to the robot's command format             | Joint or end-effector targets |
+| **Low-level controller**   | Robot targets                                      | Executes commands under hardware control and safety limits              | Physical movement             |
 
-### 3.1 Images become visual tokens
+The exact boundary between these modules varies. In particular, **state fusion** and **VLM fine-tuning** are design choices rather than one universal rule.
 
-Each camera image is divided into patches and processed by a vision encoder, just as in a ViT. The result is a sequence of visual vectors. Multiple cameras produce multiple groups of visual tokens.
+---
 
-The visual encoder does not directly output “cup,” “handle,” or a movement command. It produces features from which the following Transformer can recover objects, spatial relationships, and task-relevant details.
+## 3. From image and language to VLM hidden space
 
-Examples:
+### 3.1 Images become visual embeddings
 
-- **OpenVLA** combines SigLIP and DINOv2 visual features before passing them to its language backbone.
-- **GR00T N1** uses the vision component of Eagle-2 and extracts VLM features for its action module.
-- **DeMaVLA** uses Qwen3-VL to process several camera views.
+Each camera image is divided into patches and processed by a vision encoder such as a Vision Transformer.
 
-### 3.2 The instruction becomes text tokens
+```text
+image
+  → patches
+  → vision encoder
+  → [v1, v2, ..., vm]
+```
+
+Multiple cameras produce multiple groups of visual embeddings. A front camera may describe the global scene, while a wrist camera provides a close view of the gripper and contact region.
+
+The vision encoder does not normally emit explicit symbols such as:
+
+```text
+object = mug
+grasp point = handle
+```
+
+Instead, it emits continuous vectors from which later Transformer layers can recover semantic and spatial information.
+
+### 3.2 Language becomes text embeddings
 
 The instruction is tokenized normally:
 
 ```text
 "put the red mug on the tray"
-    ↓
-[put] [the] [red] [mug] [on] [the] [tray]
-    ↓
-text embeddings
+    → token IDs
+    → [l1, l2, ..., ln]
 ```
 
-Language supplies the task goal and selects which visual information matters. The same image should produce different actions for “pick up the mug,” “move around the mug,” and “point at the mug.”
-
-### 3.3 The VLM fuses both modalities
-
-The visual and text embeddings enter the VLM Transformer. Through attention, the instruction can attend to relevant image regions and visual tokens can be interpreted in the context of the request.
-
-The important output is usually not a natural-language response. It is a sequence of **context features** containing information such as:
-
-- which object satisfies “red mug”;
-- where it is relative to the robot;
-- what kind of interaction the instruction requests;
-- which obstacles or destination areas are relevant.
-
-Modern action generators condition on these features. For example, GR00T N1 passes VLM outputs, robot state, and action encodings to its diffusion Transformer. Xiaomi-Robotics-0 conditions its action-generating DiT on the VLM's cached features and proprioception. [GR00T N1 paper](https://arxiv.org/abs/2503.14734), [Xiaomi-Robotics-0 paper](https://arxiv.org/abs/2602.12684)
-
-## 4. Planner and reasoning: required or optional?
-
-### 4.1 Implicit planning
-
-For short tasks, many end-to-end VLAs pass the VLM context directly to the action generator:
+Language determines which parts of the scene are relevant. The same image should lead to different actions for:
 
 ```text
-image + "pick up the cup" → shared context → action chunk
+"pick up the mug"
+"move around the mug"
+"point at the mug"
 ```
 
-There is no visible list of steps. Any task decomposition is stored implicitly in the hidden features and learned behavior. **π0**, standard **OpenVLA-OFT**, and **Xiaomi-Robotics-0** can be understood this way for their normal low-level inference.
+### 3.3 The VLM contextualizes all visual-language positions
 
-Advantages: fast, simple, and jointly trainable.
+The visual and text embeddings enter the VLM Transformer:
 
-Limitation: for a long task, it can forget progress, repeat a subtask, or choose locally reasonable movements that do not complete the overall goal.
+$$
+X_0 = [V;L]
+$$
 
-### 4.2 Explicit semantic planning
+After \(L\) Transformer layers:
 
-For long-horizon tasks, a high-level module may first predict a short semantic action:
+$$
+H = \operatorname{VLM}(X_0)
+  = [h_1,h_2,\ldots,h_N]
+$$
+
+where:
+
+- \(N\) is the number of retained visual and text positions;
+- \(d_{\text{VLM}}\) is the VLM hidden width;
+- each \(h_i \in \mathbb{R}^{d_{\text{VLM}}}\) is a contextual hidden vector.
+
+Through attention, a visual position corresponding to the mug can become related to the text position for “mug,” while the text representation for “put” can attend to the mug and tray regions.
+
+Conceptually, the hidden sequence can encode information corresponding to:
+
+- which object matches “red mug”;
+- which region corresponds to the tray;
+- which object is the task target;
+- which visual regions are obstacles;
+- what interaction the instruction requests.
+
+These facts are generally **distributed across vectors and dimensions**. The model does not necessarily store them as a readable object list or scene graph.
+
+### 3.4 “VLM then action expert” is sometimes only a conceptual boundary
+
+The simple diagram suggests:
 
 ```text
-overall task: "clean the kitchen"
-current scene: dirty plate on counter
-next semantic subtask: "pick up the dirty plate"
+VLM
+  → final hidden sequence H
+  → action expert
 ```
 
-The low-level action generator then acts under that subtask until the planner is called again.
+That is accurate for architectures such as GR00T N1, where the VLM output tokens are passed to a downstream DiT.
 
-**π0.5** is a clear recent example. The same model first predicts a textual subtask and then conditions its action expert on that subtask. The high-level prediction runs less frequently than low-level control. This is closer to hierarchical control than to printing a long chain of thought. [π0.5 paper](https://arxiv.org/abs/2504.16054)
-
-**GR00T N1** calls its VLM component “System 2” and its fast action module “System 1.” System 2 supplies semantic context while System 1 generates high-frequency movement. However, “reasoning module” does not necessarily mean that the model prints a human-readable plan on every step.
-
-### 4.3 Separate modular planning: the legacy route
-
-Earlier systems made the boundaries much more explicit:
-
-- **SayCan** used an LLM to propose high-level skills and learned value functions to prefer actions feasible for the current robot and scene.
-- **VoxPoser** used language and vision models to construct 3D interaction maps, then a motion planner converted those maps into trajectories.
-
-These systems are interpretable and can reuse existing controllers, but errors can accumulate between modules. They also depend heavily on the predefined skill library, interfaces, and planner assumptions. [SayCan paper](https://arxiv.org/abs/2204.01691), [VoxPoser paper](https://arxiv.org/abs/2307.05973)
-
-### 4.4 Reasoning is not always chain of thought
-
-In VLA papers, “reasoning” may refer to three different things:
-
-| Meaning                                    | Visible to a person? | Example                                             |
-| ------------------------------------------ | -------------------: | --------------------------------------------------- |
-| Semantic understanding inside VLM features |                   No | Recognizing that a sponge is appropriate for wiping |
-| Explicit subtask prediction                |                  Yes | “Pick up the sponge” in π0.5                     |
-| Textual chain of thought before acting     |                  Yes | Reasoning-enhanced RT-2 variants                    |
-
-A visible explanation is not automatically a better controller. The most important requirement is that task understanding changes the generated physical action correctly.
-
-## 5. How the action is generated
-
-### Important clarification: “action token” has two meanings
-
-The attached survey uses **action token** broadly for any action-related output or intermediate representation: text plans, target points, trajectories, goal images, hidden vectors, or raw actions.
-
-In implementation papers, **action token** often means a narrow technical object: a discrete integer in the language model vocabulary that later decodes into a motor value.
-
-Depending on the model, an action token may represent one action dimension, one complete action, part of a compressed action chunk, or an entire short behavior. A sequence of action tokens may also jointly represent an action chunk.
-
-Modern flow-based VLAs often generate continuous action vectors rather than literal vocabulary tokens. They still fit the survey's broad action-token framework, but saying that they “predict action tokens like words” would be misleading.
-
-### 5.1 Recent mainstream: a continuous action expert (policy)
-
-The common recent design is:
+However, tightly integrated models can couple the two streams more directly. In a π0-style architecture:
 
 ```text
-VLM context + robot state + noisy candidate actions
-                         ↓
-             diffusion/flow Transformer
-                         ↓
-            smooth continuous action chunk
+image and language prefix
+        ↕ attention across Transformer layers
+state, noised-action, and time suffix
 ```
 
-The process is:
+The VLM prefix and action-expert suffix are processed with coordinated Transformer layers. The policy-specific suffix can use prefix information throughout the network rather than waiting for one final VLM tensor to be exported.
 
-1. Reserve a short future window, such as the next 8, 16, or 50 control steps.
-2. Begin with a noisy candidate action chunk.
-3. Give the action module the VLM context, robot state, and noisy chunk.
-4. The action module predicts how the chunk should change to resemble a successful robot trajectory.
-5. Repeat the update several times.
-6. Obtain a continuous action chunk and execute part of it.
+Therefore, `H` should be understood as a useful abstraction:
 
-This approach is called **diffusion** or **flow matching**, depending on the exact training and generation formulation. It is useful because robot movement is continuous and several movements may be valid in the same situation.
+> all contextual vision-language features made available to the action policy.
 
-Similar to **Diffusion** in image: a noisy action chunk -> denoise and generate -> readable action chunk (Hence **Diffusion** in the name)
+Depending on the implementation, this can mean:
 
-Representative models:
+- the final VLM hidden sequence;
+- projected VLM output tokens;
+- cached per-layer key/value features;
+- prefix representations jointly attended by action-expert layers.
 
-- **π0:** PaliGemma VLM backbone plus a smaller flow-matching action expert; predicts high-frequency action chunks. [π0 paper](https://arxiv.org/abs/2410.24164)
-- **π0.5:** adds hybrid pretraining and high-level semantic subtask inference before continuous low-level generation.
-- **GR00T N1:** Eagle-2 VLM plus a DiT flow-matching policy with embodiment-specific state and action adapters.
-- **Xiaomi-Robotics-0:** Qwen3-VL plus a DiT conditioned on VLM features and robot state; emphasizes asynchronous, smooth real-time execution.
-- **DeMaVLA:** Qwen3-VL plus a robot-specific flow action expert for bimanual deformable-object manipulation. [DeMaVLA paper](https://arxiv.org/abs/2605.31286)
+---
 
-### 5.2 Parallel continuous regression
+## 4. What exactly is a hidden state?
 
-An action head can also predict all values in the chunk directly in one forward pass:
+### 4.1 It is the output vector at a token position
 
-An **end - to - end** direct action generator.
+Suppose the VLM input sequence contains:
 
 ```text
-context → [action t, action t+1, ..., action t+H] 
+[visual 1] [visual 2] ... [visual m] [put] [the] [mug]
 ```
 
-**OpenVLA-OFT** showed that parallel decoding, continuous action values, action chunking, and a simple regression loss can be both fast and strong. It avoids iterative flow sampling, though it may represent complex multi-choice action distributions less naturally. [OpenVLA-OFT paper](https://arxiv.org/abs/2502.19645)
-
-### 5.3 Discrete autoregressive action tokens
-
-The historically important approach makes motor values look like language tokens:
+At the input, every position is represented by an embedding. After self-attention and feed-forward layers, every position has an updated contextual vector:
 
 ```text
-continuous action → numeric bins → token IDs → next-token prediction
-predicted token IDs → numeric bins → continuous action
+visual position 17 → h17
+text position "mug" → hm+3
 ```
 
-- **RT-2** established the “actions as another language” formulation.
-- **OpenVLA** mapped each action dimension into one of 256 bins and trained the language model to predict those action tokens.
+A hidden state is therefore a vector such as:
 
-This reuses the standard LLM training objective and architecture, but token-by-token decoding can be slow and simple binning can be poor for smooth, high-frequency movement. [RT-2 paper](https://arxiv.org/abs/2307.15818), [OpenVLA paper](https://arxiv.org/abs/2406.09246)
+```text
+h17 = [0.31, -0.82, 1.14, ..., 0.07]
+```
 
-**FAST** is the modern improvement to this branch. Instead of independently tokenizing every value at every timestep, it first compresses the action sequence using a frequency transform and then tokenizes the compressed representation. This reduces repeated information and makes autoregressive action generation competitive on dexterous tasks. [FAST paper](https://arxiv.org/abs/2501.09747)
+The values themselves are not human-readable. Their meaning is learned and distributed.
 
-## 6. State adapters and embodiment
+### 4.2 Hidden vectors are not generated output tokens
 
-Images and language describe the task, but they do not fully tell the model where its own body currently is. The action module therefore also receives proprioception, such as:
+A language model normally converts a hidden state into vocabulary logits:
+
+$$
+\text{logits} = W_{\text{LM}}h_i
+$$
+
+and then selects a word token.
+
+```text
+hidden vector
+    → LM head
+    → vocabulary probabilities
+    → generated word
+```
+
+A flow-based VLA usually bypasses this language-generation step for low-level control:
+
+```text
+VLM hidden sequence H
+    → action expert
+    → continuous action trajectory
+```
+
+Therefore, saying that the action expert uses the VLM's “output tokens” can be ambiguous. A clearer statement is:
+
+> The action expert consumes the VLM's **output hidden vectors at the visual and text token positions**.
+
+### 4.3 The hidden space is usually a sequence, not one scene vector
+
+The context usually has shape:
+
+$$
+H \in \mathbb{R}^{B \times N \times d_{\text{VLM}}}
+$$
+
+where \(B\) is batch size.
+
+Keeping a sequence preserves location-specific information. A visual position covering the mug can remain distinct from a visual position covering the tray, even though attention allows them to exchange information.
+
+Some architectures pool or compress \(H\), but it should not be assumed that every VLA reduces the scene to a single vector.
+
+---
+
+## 5. How robot state is fused
+
+Images show the outside world, but they do not reliably specify the robot's exact internal configuration. A policy may additionally receive:
 
 ```text
 joint angles
 joint velocities
-end-effector position and rotation
+end-effector position and orientation
 gripper opening
 mobile-base velocity
+force or torque readings
 ```
 
-A small projection converts these numbers into model features. Cross-embodiment models may have separate input and output adapters for each robot because different robots have different numbers of joints and different command formats.
+Let the normalized robot state be:
 
-GR00T N1, for example, uses embodiment-specific state and action encoders/decoders around a shared action model. This lets semantic knowledge and behavior patterns be shared while respecting each robot's physical interface.
+$$
+s_t \in \mathbb{R}^{d_s}
+$$
 
-## 7. Decoding, execution, and feedback
+A learned projector converts it to one or more embeddings:
 
-The raw model output is usually normalized. Before execution, the system must:
+$$
+S = f_{\text{state}}(s_t)
+$$
 
-1. convert it back to physical units;
-2. select the correct robot-specific dimensions;
-3. apply safety limits and workspace constraints;
-4. send commands to the low-level controller.
+The important distinction is **where \(S\) is inserted**.
 
-The robot normally executes only part of the predicted chunk before observing again. This is **receding-horizon closed-loop control**:
+### 5.1 Late fusion inside the action expert
+
+This is common in modern flow-matching VLAs.
 
 ```text
-predict 16 actions → execute first few → observe again → predict a replacement chunk
+images + instruction
+    → VLM
+    → hidden context H
+
+robot state
+    → state projector
+    → S
+
+H + S + noisy actions + flow time
+    → action expert
 ```
 
-Recent work increasingly treats chunk timing as a core architectural problem. If inference is slow, the next chunk may be based on an old image. Xiaomi-Robotics-0 specifically trains and deploys for asynchronous execution so that consecutive chunks remain smooth while computation and robot motion overlap.
+In this design, the VLM itself may process only vision and language. Robot state first interacts with the VLM context inside the action expert.
 
-## 8. How the pipeline evolved
+Two representative patterns are:
 
-| Period / style                   | Main idea                                                                            | Representative models                               |
-| -------------------------------- | ------------------------------------------------------------------------------------ | --------------------------------------------------- |
-| Modular planning                 | LLM/VLM chooses symbolic skills or spatial targets; conventional controller executes | SayCan, VoxPoser                                    |
-| Early end-to-end VLA             | Turn each motor dimension into a discrete token and use next-token prediction        | RT-2, OpenVLA                                       |
-| Modern continuous VLA            | VLM builds semantic context; a specialized action module generates continuous chunks | π0, GR00T N1, Xiaomi-Robotics-0, DeMaVLA           |
-| Modern hierarchical VLA          | Slow semantic subtask prediction guides fast continuous control                      | π0.5; conceptually GR00T's System 2/System 1 split |
-| Efficient autoregressive revival | Compress trajectories before predicting discrete action tokens                       | FAST / π0-FAST                                     |
+- **π0-style prefix/suffix processing:** image and language form a VLM prefix. The projected state, noised action chunk, and flow-time information form policy-specific suffix inputs. The action expert uses attention to combine the suffix with the prefix context.
+- **GR00T-style cross-attention:** the VLM outputs a sequence of vision-language vectors. A DiT processes robot-state and noised-action encodings while cross-attending to the VLM output sequence.
 
-The dominant recent lesson is not that one representation has won permanently. It is that **semantic understanding and precise motor generation benefit from different computation**, even when both parts are trained together.
+This is more accurate than saying that every modern VLA simply appends a state token to the original VLM input.
 
-## Sources
+### 5.2 Early fusion inside the VLM
 
-The common action-token framework comes from the attached *A Survey on Vision-Language-Action Models: An Action Tokenization Perspective*. Current architecture details were checked against the original papers linked throughout the report, with recent examples current through July 2026.
+Another possible design inserts state embeddings before or during the VLM:
 
-## 9. Full example: raw input to robot output
+```text
+[visual tokens] [text tokens] [state tokens]
+                → VLM
+                → state-aware hidden sequence
+```
 
-The following numbers are illustrative rather than copied from one specific model.
+Now proprioception can influence visual-language reasoning throughout the VLM layers.
 
-### Task and raw inputs
+This approach can be useful, but it is not universal. Many action-expert architectures use late fusion because it keeps the pretrained VLM interface cleaner and isolates robot-specific dimensions inside the policy module.
+
+### 5.3 Multiple state tokens and embodiment adapters
+
+A state vector can be represented as:
+
+- one embedding for the entire state;
+- separate joint, gripper, force, or base embeddings;
+- a fixed-width padded representation;
+- an embodiment-specific encoder.
+
+Cross-embodiment policies often use separate state encoders and action decoders because robots have different numbers of joints and different control conventions.
+
+The shared action expert can then learn general behavior patterns while adapters handle robot-specific input and output formats.
+
+---
+
+## 6. Flow matching inside the action expert
+
+### 6.1 Action chunk
+
+Instead of predicting only the next command, the policy commonly predicts a horizon of \(T\) future actions:
+
+$$
+A =
+[a_t,a_{t+1},\ldots,a_{t+T-1}]
+\in \mathbb{R}^{T \times d_a}
+$$
+
+For a 7D end-effector controller:
+
+$$
+a_t =
+[\Delta x,\Delta y,\Delta z,
+ \Delta roll,\Delta pitch,\Delta yaw,
+ gripper]
+$$
+
+Other robots may use joint targets, joint deltas, base velocity, bimanual commands, or full-body targets.
+
+### 6.2 Training interpolation
+
+A simplified flow-matching formulation begins with:
+
+- demonstration action chunk \(A_1\);
+- Gaussian noise \(A_0 \sim \mathcal{N}(0,I)\);
+- sampled flow time \(\tau \in [0,1]\).
+
+Construct an intermediate noisy chunk:
+
+$$
+A_\tau = (1-\tau)A_0 + \tau A_1
+$$
+
+For this straight interpolation, the target velocity is:
+
+$$
+u_\tau = A_1 - A_0
+$$
+
+The action expert predicts:
+
+$$
+v_\theta =
+v_\theta(A_\tau,\tau,H,S,z)
+$$
+
+where \(z\) is an optional semantic subtask.
+
+A typical objective is:
+
+$$
+\mathcal{L}_{\text{flow}}
+=
+\mathbb{E}
+\left[
+\left\|
+v_\theta(A_\tau,\tau,H,S,z)-u_\tau
+\right\|_2^2
+\right]
+$$
+
+The precise path, weighting, and parameterization can differ across papers, but the central idea is the same: learn a vector field that moves noisy trajectories toward demonstrated robot trajectories.
+
+### 6.3 Inference
+
+At inference, begin with noise:
+
+$$
+A_0 \sim \mathcal{N}(0,I)
+$$
+
+Then integrate:
+
+$$
+\frac{dA_\tau}{d\tau}
+=
+v_\theta(A_\tau,\tau,H,S,z)
+$$
+
+using several numerical update steps until \(\tau=1\).
+
+```text
+random action chunk
+    → action-expert velocity
+    → update
+    → action-expert velocity
+    → update
+    → final continuous action chunk
+```
+
+The model is not denoising words. It is refining a tensor whose rows are future robot commands.
+
+---
+
+## 7. Does the VLM need to be retrained for VLA control?
+
+### 7.1 Usually initialized from a pretrained VLM
+
+A modern VLA normally does not train its visual-language knowledge from scratch.
+
+```text
+web-scale image-text pretraining
+    → pretrained VLM
+    → add state adapter and action expert
+    → train on robot demonstrations
+```
+
+The pretrained VLM supplies object, language, and visual-semantic knowledge. The action expert supplies the continuous control mechanism.
+
+At minimum, the newly added action module must be trained on robot data. Whether the VLM weights also change depends on the training recipe.
+
+### 7.2 Full or joint end-to-end training
+
+If the VLM is unfrozen, gradients from the action loss can propagate through:
+
+```text
+flow loss
+   ↑
+action expert
+   ↑
+VLM backbone
+   ↑
+vision encoder
+```
+
+This can make the VLM hidden sequence more useful for control. For example, features can become more sensitive to contact regions, object affordances, reachability, and task-relevant geometry.
+
+GR00T N1 explicitly describes its VLM and DiT as tightly coupled and jointly optimized end-to-end. π0 is built on pretrained PaliGemma and then trained as a robot policy with its action expert.
+
+Joint training does **not** mean that the VLM is trained from random initialization. It means pretrained weights continue to receive robot-training gradients.
+
+### 7.3 Partial fine-tuning
+
+A cheaper option updates only:
+
+- LoRA weights;
+- adapters;
+- selected upper Transformer layers;
+- the state projector and action expert.
+
+```text
+mostly frozen pretrained VLM
+    + trainable LoRA/adapters
+    + trainable action expert
+```
+
+This reduces memory and can preserve more of the original VLM knowledge.
+
+OpenVLA-OFT, for example, uses LoRA-based VLA fine-tuning rather than requiring full-parameter training.
+
+### 7.4 Frozen VLM
+
+The VLM can also remain fixed:
+
+```text
+frozen VLM → fixed hidden context H
+trainable action expert → learns how to use H
+```
+
+This is cheaper and protects the pretrained representation, but the VLM cannot reshape its hidden space in response to the action loss.
+
+A frozen backbone can still work when its existing features are sufficiently informative and the action module is expressive. GR00T N1.5 is an example in which the VLM is frozen while the downstream policy learns to use its embeddings.
+
+### 7.5 Correct conclusion
+
+The correct statement is not:
+
+> Every VLM must be fully retrained when converted into a VLA.
+
+It is:
+
+> A pretrained VLM is normally reused. The robot-specific adapters and action expert must be trained, while the VLM may be fully fine-tuned, partially adapted, or frozen depending on the architecture, data, compute budget, and need to preserve pretrained knowledge.
+
+---
+
+## 8. Planning and reasoning
+
+### 8.1 Implicit planning
+
+For short tasks, the VLM context can directly condition the action expert:
+
+```text
+image + "pick up the cup"
+    → hidden context H
+    → action chunk
+```
+
+There is no visible list of steps. Task decomposition may remain implicit in hidden features and learned control behavior.
+
+This is fast and simple, but long tasks can require stronger memory or explicit progress tracking.
+
+### 8.2 Explicit semantic subtask
+
+A hierarchical model may predict a short semantic subtask:
+
+```text
+overall task: "clean the kitchen"
+current scene: dirty plate on counter
+next subtask: "pick up the dirty plate"
+```
+
+The low-level action expert then generates movement conditioned on that subtask.
+
+π0.5 is a representative design that combines high-level semantic prediction with continuous low-level action generation.
+
+### 8.3 Separate planner
+
+Earlier modular systems used clearer boundaries:
+
+```text
+LLM/VLM planner
+    → symbolic skill or spatial target
+    → motion planner or skill controller
+    → robot
+```
+
+This can improve interpretability and reuse conventional control modules, but errors can accumulate across interfaces.
+
+Reasoning does not necessarily mean visible chain-of-thought text. It may refer to implicit semantic computation, a predicted subtask, or an external planning module.
+
+---
+
+## 9. Other action-generation approaches
+
+### 9.1 Parallel continuous regression
+
+An action head can predict the full chunk in one pass:
+
+$$
+\hat{A} = f_\theta(H,S)
+$$
+
+```text
+context
+    → [action t, action t+1, ..., action t+T-1]
+```
+
+OpenVLA-OFT shows that parallel continuous prediction with action chunking can be fast and effective without iterative flow sampling.
+
+### 9.2 Discrete autoregressive action tokens
+
+Earlier end-to-end VLAs often quantized motor values:
+
+```text
+continuous actions
+    → numeric bins
+    → vocabulary token IDs
+    → next-token prediction
+```
+
+The predicted IDs are then converted back into continuous numbers.
+
+This reuses the language-model output head and cross-entropy objective, but token-by-token decoding can be slow for high-frequency action chunks.
+
+### 9.3 FAST-style compressed tokens
+
+FAST compresses action trajectories before autoregressive tokenization, reducing repeated information and the number of generated tokens.
+
+Therefore, “action token” should be used carefully:
+
+- in a narrow implementation sense, it is a discrete vocabulary ID representing action information;
+- in some surveys, it is used more broadly for any action-related representation;
+- flow-based VLAs normally output continuous action tensors, not literal language tokens.
+
+---
+
+## 10. Decoding, execution, and feedback
+
+The generated action chunk is usually normalized. Before execution, the system must:
+
+1. convert values back to physical units;
+2. select the correct embodiment-specific dimensions;
+3. enforce joint, velocity, workspace, and safety limits;
+4. send targets to the low-level controller.
+
+The robot generally executes only part of the chunk:
+
+```text
+predict 16 actions
+    → execute first 2–8
+    → capture new images and state
+    → predict a replacement chunk
+```
+
+This is receding-horizon closed-loop control. It prevents the robot from blindly executing an old trajectory after the scene changes or a grasp deviates from expectation.
+
+The instruction may remain constant and can sometimes be cached. Images and proprioception must be refreshed after movement.
+
+---
+
+## 11. Full example: raw input to physical motion
+
+The numbers below are illustrative rather than copied from one model.
+
+### Step 1: raw observation
 
 ```text
 Instruction:
 "Put the red mug on the tray."
 
 Images:
-I_front = front camera RGB image
-I_wrist = wrist camera RGB image
+I_front = front RGB camera
+I_wrist = wrist RGB camera
 
 Robot state:
 s_t = [joint angles, joint velocities, gripper opening]
 ```
 
-### Step 1: encode text and images
+### Step 2: visual-language encoding
 
 ```text
-"Put the red mug on the tray"
-    → text token IDs
-    → text embeddings L = [l1, l2, ..., ln]
-
 I_front, I_wrist
-    → image patches
-    → visual embeddings V = [v1, v2, ..., vm]
-```
+    → patches
+    → visual embeddings V
 
-### Step 2: build visual-language context
+instruction
+    → token IDs
+    → text embeddings L
 
-```text
 [V ; L]
     → VLM Transformer
-    → context H
-
-H contains information corresponding to:
-- the red mug is left of the gripper;
-- the tray is farther to the right;
-- the requested object is the mug, not the nearby bowl;
-- the immediate interaction should begin with reaching and grasping.
+    → H = [h1, h2, ..., hN]
 ```
 
-### Step 3: optional high-level prediction
+`H` is a sequence of contextual vectors. It is not the sentence “the mug is on the left,” although its vectors may encode information needed to derive that relation.
 
-A π0.5-style hierarchical model may produce:
-
-```text
-z_high = "pick up the red mug"
-```
-
-A direct end-to-end model skips this visible text and carries the relevant intention inside `H`.
-
-### Step 4: encode the robot body state
+### Step 3: state encoding
 
 ```text
 s_t
-    → state projection
-    → state feature S
+    → normalize
+    → state projector
+    → S
 ```
 
-### Step 5: generate an action chunk
+In a late-fusion architecture, `S` has not yet changed `H`. Both are supplied to the action expert.
 
-For a modern flow-based model:
+### Step 4: flow input
 
 ```text
-initial noisy action chunk A_noise
-condition = [H, S, optional z_high]
+A_0 ~ Gaussian noise
+tau = current flow time
 
-(A_noise, condition)
-    → repeated action-expert updates
-    → normalized continuous chunk A
+condition:
+- VLM hidden sequence H
+- state feature S
+- optional semantic subtask z
 ```
 
-Assume each action is a 7-value end-effector command:
+### Step 5: action-expert refinement
+
+```text
+(A_tau, tau, H, S, z)
+    → action expert
+    → predicted velocity v_theta
+    → numerical update of A_tau
+    → repeat
+    → final chunk A
+```
+
+Assume each action uses:
 
 ```text
 [Δx, Δy, Δz, Δroll, Δpitch, Δyaw, gripper]
 ```
 
-An 8-step prediction might begin as follows:
+An action chunk may begin as:
 
 ```text
-a_t   = [+0.012, -0.004, +0.006,  0.000, +0.010, -0.020, 1.0]
-a_t+1 = [+0.011, -0.003, +0.005,  0.000, +0.008, -0.018, 1.0]
-a_t+2 = [+0.009, -0.002, +0.003,  0.000, +0.005, -0.012, 1.0]
+a_t   = [+0.012, -0.004, +0.006, 0.000, +0.010, -0.020, 1.0]
+a_t+1 = [+0.011, -0.003, +0.005, 0.000, +0.008, -0.018, 1.0]
+a_t+2 = [+0.009, -0.002, +0.003, 0.000, +0.005, -0.012, 1.0]
 ...
 ```
 
-Here, the hand moves toward the mug while keeping the gripper open. Later chunks close the gripper, lift the mug, move toward the tray, and release it.
+The early actions move toward the mug while the gripper remains open. Later replanning cycles close the gripper, lift the mug, move toward the tray, and release it.
 
-### Step 6: convert and execute
+### Step 6: execution and replanning
 
 ```text
-normalized action values
-    → de-normalize to metres, radians, and gripper command
-    → enforce robot limits
-    → send first few commands to controller
-    → robot moves
+normalized action chunk
+    → de-normalize
+    → embodiment decoder
+    → safety limits
+    → execute first k actions
+    → receive new images and state
+    → rerun the model
 ```
 
-### Step 7: close the loop
+The complete transformation is:
 
 ```text
-new images + new robot state
-    → run the entire pipeline again
-    → replace the remaining old actions with a corrected chunk
-```
+pixels + instruction
+    → contextual VLM hidden vectors H
 
-The complete transformation is therefore:
+robot body numbers
+    → projected state features S
 
-```text
-pixels + words + body numbers
-    → visual, text, and state embeddings
-    → shared task-aware VLM context
-    → optional semantic subtask
-    → continuous or discrete action representation
-    → physical robot commands
+H + S + noisy action chunk + flow time
+    → action expert
+    → continuous action chunk
+    → robot-specific commands
+    → physical movement
     → new pixels and body numbers
 ```
+
+---
+
+## 12. Architecture comparison
+
+| Design                                  | Where image and language are fused                  | Where robot state is fused                                   | How actions are generated        | Typical VLM training                                                             |
+| --------------------------------------- | --------------------------------------------------- | ------------------------------------------------------------ | -------------------------------- | -------------------------------------------------------------------------------- |
+| **π0-style flow VLA**            | PaliGemma/VLM prefix                                | Policy suffix/action expert                                  | Flow-matched continuous chunk    | Pretrained VLM adapted with robot policy; downstream freezing/LoRA options exist |
+| **GR00T N1-style dual system**    | Eagle VLM                                           | State/action encoders inside DiT; DiT attends to VLM outputs | DiT flow matching                | N1 jointly optimized end-to-end                                                  |
+| **Frozen-backbone action expert** | Frozen pretrained VLM                               | Downstream policy module                                     | Flow, diffusion, or regression   | VLM fixed; action module trained                                                 |
+| **OpenVLA-OFT**                   | OpenVLA backbone                                    | Optional proprioception projector in fine-tuning setup       | Parallel continuous action chunk | LoRA fine-tuning                                                                 |
+| **Early state-fusion VLA**        | Vision, language, and state enter a shared backbone | Inside VLM layers                                            | Any action head                  | Usually requires at least adapters or backbone tuning                            |
+
+The key architectural lesson is:
+
+> “VLM context” means contextual hidden vectors. “State fusion” describes how projected robot-state vectors interact with those hidden vectors. In many modern action-expert models, that interaction happens in the action expert rather than inside the original VLM.
+
+---
+
+## Sources
+
+- [π0: A Vision-Language-Action Flow Model for General Robot Control](https://arxiv.org/abs/2410.24164)
+- [π0.5: A Vision-Language-Action Model with Open-World Generalization](https://arxiv.org/abs/2504.16054)
+- [GR00T N1: An Open Foundation Model for Generalist Humanoid Robots](https://arxiv.org/abs/2503.14734)
+- [GR00T N1.5 architecture update](https://research.nvidia.com/labs/gear/gr00t-n1_5/)
+- [OpenVLA](https://arxiv.org/abs/2406.09246)
+- [OpenVLA-OFT](https://arxiv.org/abs/2502.19645)
+- [FAST: Efficient Action Tokenization for Vision-Language-Action Models](https://arxiv.org/abs/2501.09747)
