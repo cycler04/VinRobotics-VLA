@@ -7,8 +7,7 @@ with one fixed vocabulary.
 frequent variable-length byte sequences so ordinary text does not pay the full
 sequence-length cost of one token per byte.
 
-**Simple Explanation:** BBPE converts normalized text to UTF-8 bytes, starts from a base vocabulary that can represent every byte, and learns ranked pair merges that compress frequent byte sequences into larger tokens. It is therefore
-not a pure byte tokenizer and not merely ordinary BPE with a byte fallback.
+**Simple Explanation:** BBPE converts normalized text to UTF-8 bytes, starts from a base vocabulary that can represent every byte, and learns ranked pair merges that compress frequent byte sequences into larger tokens, make this tokenizer easily adapt with every languages and words.
 
 **Research date:** 2026-07-20
 **Scope:** the tokenizer algorithm, its architecture and dataflow, alternatives,

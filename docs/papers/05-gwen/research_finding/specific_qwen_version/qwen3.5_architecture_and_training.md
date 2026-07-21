@@ -116,15 +116,12 @@ Qwen3.5 tokenizer as byte-level BPE. [Qwen3.5-Omni, §2.3][qwen35-omni]
 
 - the visual patch embedder is a 3D convolution with kernel and stride
   `(temporal=2, height=16, width=16)`;
-- the vision tower has 27 blocks, hidden width 1,152, 16 attention heads, and an
-  MLP intermediate width of 4,304 with GELU-tanh;
+- the vision tower has 27 blocks, hidden width 1,152, 16 attention heads, and an MLP intermediate width of 4,304 with GELU-tanh;
 - a spatial merger combines each `2 x 2` group of vision patches, reducing the
   visual-token count by four, then projects the result to the language model's
   hidden width;
 - images and videos use the same vision tower;
-- each sampled video temporal patch is preceded in the serialized prompt by a
-  text timestamp such as `<1.5 seconds>`, followed by vision boundary and video
-  placeholder tokens.
+- each sampled video temporal patch is preceded in the serialized prompt by  a text timestamp such as `<1.5 seconds>`, followed by vision boundary and video placeholder tokens.
 
 For a visual grid `(T, H, W)`, the number of decoder-level visual placeholders is
 approximately:
@@ -245,10 +242,7 @@ query and 2 KV heads. This is GQA, not conventional equal-head MHA.
 ### Dense FFN versus sparse MoE
 
 The dense 0.8B, 2B, 4B, 9B, and 27B models put a SiLU-gated FFN after each token
-mixer. The MoE 35B-A3B, 122B-A10B, and 397B-A17B models replace it with a sparse
-expert block. The suffix `A3B`, for example, means roughly 3B language-model
-parameters are active per token, not that the entire checkpoint occupies 3B
-parameters.
+mixer. The MoE 35B-A3B, 122B-A10B, and 397B-A17B models replace it with a sparse expert block. The suffix `A3B`, for example, means roughly 3B language-model parameters are active per token, not that the entire checkpoint occupies 3B parameters.
 
 For 35B-A3B and 122B-A10B, a learned router selects eight of 256 routed experts
 per token and also runs one shared expert. For 397B-A17B it selects ten of 512
@@ -382,8 +376,7 @@ included during pre-training so later parameter-efficient tuning need not resize
 the unusually large embeddings. [Qwen3.5 release, Pretraining][qwen35-release]
 [35B-A3B-Base model card][qwen35-35b-base]
 
-The executable model is a causal language model conditioned on text and visual
-embeddings. The public checkpoint and model card also verify MTP parameters.
+The executable model is a causal language model conditioned on text and visual embeddings. The public checkpoint and model card also verify MTP parameters.
 Together these support the following training-flow interpretation:
 
 ```text
@@ -505,9 +498,7 @@ could not be found in the official Qwen sources or arXiv. The available
 3. **Native multimodality is a training claim plus a concrete fusion path.** The
    vision tower remains modality-specific, but its embeddings participate in
    the same decoder stream from pre-training onward.
-4. **Qwen3.5 is simpler than Qwen3-VL at the injection point.** It reuses the ViT
-   family but removes DeepStack and inserts only final merged visual features at
-   decoder input.
+4. **Qwen3.5 is simpler than Qwen3-VL at the injection point.** It reuses the ViT family but removes DeepStack and inserts only final merged visual features at decoder input.
 5. **Agent tools remain outside the model.** RL teaches tool-call behavior; an
    external runtime performs the actions and returns observations.
 6. **Training transparency is uneven.** Architecture, checkpoint dimensions,
