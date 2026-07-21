@@ -288,8 +288,10 @@ $$
 The main architectural improvements are not inside attention itself, but
 in training and preprocessing.
 
-Modern vision encoders are usually pretrained using image-text
-objectives (CLIP, SigLIP, SigLIP2) instead of only image classification.
+Many VLMs initialize their vision tower from an image-text encoder such as
+CLIP or SigLIP, but the exact checkpoint and training policy differ by model;
+some VLMs instead train the tower from scratch. See the verified
+[pretrained encoder-to-VLM map](pretrained_vision_encoders.md).
 
 ---
 

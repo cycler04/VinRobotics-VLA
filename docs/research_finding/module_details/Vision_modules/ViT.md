@@ -5,6 +5,8 @@
 >
 > **Scope:** the visual path from image/video patches to contextual visual
 > features. Position encoding and token compression are expanded separately in [pos_encode.md](pos_encode.md) and [patch_merger.md](patch_merger.md).
+> Exact pretrained-encoder-to-VLM mappings are catalogued separately in
+> [pretrained_vision_encoders.md](pretrained_vision_encoders.md).
 > Research date: 2026-07-21.
 
 ## Short answer
