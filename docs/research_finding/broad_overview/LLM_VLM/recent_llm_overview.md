@@ -1697,7 +1697,6 @@ The most authoritative sources for this comparison, in practical priority order,
 
 The highest-confidence comparative statements in this report are those about **Qwen and Llama architecture**, **GPT/Claude/Gemini deployment behavior**, and **context/tool/multimodal surfaces**. The lowest-confidence areas are exactly the ones the vendors do not document publicly for the newest closed families: dense vs MoE, detailed attention kernels, positional encodings, FFN activations, and normalization choices for GPT-5.6, Claude 5, and Gemini 3.x. Those are therefore intentionally labeled **unspecified publicly** throughout. citeturn28view3turn31view0turn25view0turn24view3turn37view
 
-
 # Latest Major LLM Families Compared
 
 ## Executive summary

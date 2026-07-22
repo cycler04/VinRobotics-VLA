@@ -1,4 +1,3 @@
-
 # Vision Transformer Architecture in Vision--Language Models
 
 > **Note:** This version is formatted with display LaTeX (`$$ ... $$`)
