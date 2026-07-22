@@ -42,18 +42,18 @@ corpus, SFT curriculum, RL algorithm, reward, or distillation method.
 The official model-card architecture tables are identical within each same-size
 pair. Direct config comparison gives the same conclusion.
 
-| Component | Qwen3.5-27B -> Qwen3.6-27B | Qwen3.5-35B-A3B -> Qwen3.6-35B-A3B |
-| --- | --- | --- |
-| Runtime architecture class | `qwen3_5`, unchanged | `qwen3_5_moe`, unchanged |
-| Decoder layout | 64 layers; `16 x (3 GDN + 1 full attention)` | 40 layers; `10 x (3 GDN + 1 full attention)` |
-| Hidden width | 5,120 | 2,048 |
-| Attention | 24 Q / 4 KV heads; head dim 256 | 16 Q / 2 KV heads; head dim 256 |
-| Gated DeltaNet | 48 V / 16 QK heads; head dim 128 | 32 V / 16 QK heads; head dim 128 |
-| FFN or MoE | dense FFN, intermediate 17,408 | 256 routed experts; top-8 + 1 shared; expert width 512 |
-| Vision encoder | same 27-layer, width-1,152 encoder and patch/merge settings | same |
-| Tokenizer and vocabulary | same tokenizer artifacts; padded vocabulary 248,320 | same |
-| Position and context | same multimodal RoPE; native 262,144 | same |
-| MTP | one MTP layer, trained with multiple steps | same topology |
+| Component                  | Qwen3.5-27B -> Qwen3.6-27B                                  | Qwen3.5-35B-A3B -> Qwen3.6-35B-A3B                     |
+| -------------------------- | ----------------------------------------------------------- | ------------------------------------------------------ |
+| Runtime architecture class | `qwen3_5`, unchanged                                      | `qwen3_5_moe`, unchanged                             |
+| Decoder layout             | 64 layers;`16 x (3 GDN + 1 full attention)`               | 40 layers;`10 x (3 GDN + 1 full attention)`          |
+| Hidden width               | 5,120                                                       | 2,048                                                  |
+| Attention                  | 24 Q / 4 KV heads; head dim 256                             | 16 Q / 2 KV heads; head dim 256                        |
+| Gated DeltaNet             | 48 V / 16 QK heads; head dim 128                            | 32 V / 16 QK heads; head dim 128                       |
+| FFN or MoE                 | dense FFN, intermediate 17,408                              | 256 routed experts; top-8 + 1 shared; expert width 512 |
+| Vision encoder             | same 27-layer, width-1,152 encoder and patch/merge settings | same                                                   |
+| Tokenizer and vocabulary   | same tokenizer artifacts; padded vocabulary 248,320         | same                                                   |
+| Position and context       | same multimodal RoPE; native 262,144                        | same                                                   |
+| MTP                        | one MTP layer, trained with multiple steps                  | same topology                                          |
 
 Sources: [Qwen3.5-27B model card][qwen35-27b],
 [Qwen3.6-27B model card][qwen36-27b],
@@ -125,18 +125,17 @@ training.
 
 Official sources consistently describe Qwen3.6 as a stability and real-world
 utility update centered on front-end workflows, repository-level reasoning, and
-iterative agent work. The strongest evidence is the matched same-size benchmark
-comparison published in the 3.6 model cards.
+iterative agent work. The strongest evidence is the matched same-size benchmark comparison published in the 3.6 model cards.
 
-| Benchmark | 27B: Qwen3.5 -> Qwen3.6 | Raw delta | 35B-A3B: Qwen3.5 -> Qwen3.6 | Raw delta |
-| --- | ---: | ---: | ---: | ---: |
-| SWE-bench Verified | 75.0 -> 77.2 | +2.2 | 70.0 -> 73.4 | +3.4 |
-| SWE-bench Pro | 51.2 -> 53.5 | +2.3 | 44.6 -> 49.5 | +4.9 |
-| SWE-bench Multilingual | 69.3 -> 71.3 | +2.0 | 60.3 -> 67.2 | +6.9 |
-| Terminal-Bench 2.0 | 41.6 -> 59.3 | +17.7 | 40.5 -> 51.5 | +11.0 |
-| SkillsBench Avg5 | 27.2 -> 48.2 | +21.0 | 4.4 -> 28.7 | +24.3 |
-| NL2Repo | 27.3 -> 36.2 | +8.9 | 20.5 -> 29.4 | +8.9 |
-| QwenWebBench | 1,068 -> 1,487 | +419 | 978 -> 1,397 | +419 |
+| Benchmark              | 27B: Qwen3.5 -> Qwen3.6 | Raw delta | 35B-A3B: Qwen3.5 -> Qwen3.6 | Raw delta |
+| ---------------------- | ----------------------: | --------: | --------------------------: | --------: |
+| SWE-bench Verified     |            75.0 -> 77.2 |      +2.2 |                70.0 -> 73.4 |      +3.4 |
+| SWE-bench Pro          |            51.2 -> 53.5 |      +2.3 |                44.6 -> 49.5 |      +4.9 |
+| SWE-bench Multilingual |            69.3 -> 71.3 |      +2.0 |                60.3 -> 67.2 |      +6.9 |
+| Terminal-Bench 2.0     |            41.6 -> 59.3 |     +17.7 |                40.5 -> 51.5 |     +11.0 |
+| SkillsBench Avg5       |            27.2 -> 48.2 |     +21.0 |                 4.4 -> 28.7 |     +24.3 |
+| NL2Repo                |            27.3 -> 36.2 |      +8.9 |                20.5 -> 29.4 |      +8.9 |
+| QwenWebBench           |          1,068 -> 1,487 |      +419 |                978 -> 1,397 |      +419 |
 
 Sources and evaluation notes: [Qwen3.6-27B benchmark table][qwen36-27b] and
 [Qwen3.6-35B-A3B benchmark table][qwen36-35b]. Raw deltas should be interpreted
@@ -161,9 +160,7 @@ general architectural leap.
 - Qwen3.6 has new weights while retaining the same architecture.
 - Qwen states that the models were additionally trained to preserve and use
   historical thinking traces.
-- Official release language and the benchmark pattern identify agentic coding,
-  front-end generation, repository reasoning, tool use, and stability as the
-  main capability targets.
+- Official release language and the benchmark pattern identify agentic coding, front-end generation, repository reasoning, tool use, and stability as the main capability targets.
 
 ### Not publicly disclosed
 

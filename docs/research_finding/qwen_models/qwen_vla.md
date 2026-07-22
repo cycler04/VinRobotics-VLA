@@ -298,7 +298,7 @@ The expert uses:
 - timestep conditioning;
 - multi-section RoPE aligned with the backbone.
 
-### AdaLN timestep conditioning
+### AdaLN (Adaptive Layer Normalization) timestep conditioning
 
 The denoising problem changes with $\tau$. At high noise, the network must infer
 the broad trajectory structure. Near the clean endpoint, it must refine details.
