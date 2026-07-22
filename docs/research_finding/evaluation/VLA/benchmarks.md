@@ -26,6 +26,8 @@ All values below are **author-reported**. No Qwen-VLA checkpoint or evaluation
 code was available in the official repository at the time checked, so the results
 have not been reproduced in this workspace. [Official repository][qwen-vla-repo]
 
+**Note: OOD** stands for  **Out-of-Distribution,** refers to  **testing a model on data that is meaningfully different from the data distribution it was trained on** . OOD evaluation measures a model's ability to generalize beyond its training experience.
+
 ## Benchmark protocol boundaries
 
 Formulas, direction and interpretation are isolated in
@@ -33,16 +35,16 @@ Formulas, direction and interpretation are isolated in
 task IDs, split, robot, cameras, controller, reset/timeout rules, success
 predicate, seeds and rollout count.
 
-| Suite | Protocol boundary needed to interpret the result |
-|---|---|
-| LIBERO / Simpler / RoboCasa / RoboTwin | Exact task variants, simulator revision, initial-state distribution, rollout denominator and success predicate |
-| ALOHA | Real robot setup, camera/calibration, operator reset/intervention policy, trial count and OOD-axis construction |
-| R2R / RxR VLN-CE | `Val-Unseen` release, language subset, sensor panorama, waypoint policy, geodesic distance and success threshold |
-| DOMINO | `DOMINO@alpha`, task level, embodiment, clean/randomized condition, current-frame/history input and zero-shot/fine-tuned status |
-| EVT-Bench | Single-target task, single-view setting and exact per-step tracking predicate |
-| NAVSIM | v1 PDMS rather than v2 EPDMS, `navtest`, sensor/history inputs and pseudo-simulator revision |
-| EBench | Revision, task-family selection, instance split, per-task partial-credit rubric, seeds and cross-task aggregation |
-| RobotWorld suites | Generation setup, evaluated subset, judge model/prompt and component aggregation |
+| Suite                                  | Protocol boundary needed to interpret the result                                                                                  |
+| -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| LIBERO / Simpler / RoboCasa / RoboTwin | Exact task variants, simulator revision, initial-state distribution, rollout denominator and success predicate                    |
+| ALOHA                                  | Real robot setup, camera/calibration, operator reset/intervention policy, trial count and OOD-axis construction                   |
+| R2R / RxR VLN-CE                       | `Val-Unseen` release, language subset, sensor panorama, waypoint policy, geodesic distance and success threshold                |
+| DOMINO                                 | `DOMINO@alpha`, task level, embodiment, clean/randomized condition, current-frame/history input and zero-shot/fine-tuned status |
+| EVT-Bench                              | Single-target task, single-view setting and exact per-step tracking predicate                                                     |
+| NAVSIM                                 | v1 PDMS rather than v2 EPDMS,`navtest`, sensor/history inputs and pseudo-simulator revision                                     |
+| EBench                                 | Revision, task-family selection, instance split, per-task partial-credit rubric, seeds and cross-task aggregation                 |
+| RobotWorld suites                      | Generation setup, evaluated subset, judge model/prompt and component aggregation                                                  |
 
 Qwen-RobotNav's NAVSIM result supplies ground-truth trajectories from the three
 previous frames as history. Its table calls the measures “closed-loop,” but
@@ -126,11 +128,11 @@ average, although absolute success remains low on both suites.
 
 RL rollouts are collected only in SimplerEnv with binary success reward.
 
-| Stage |        Simpler |       RoboCasa |         RoboTwin E/H |         LIBERO |    Simpler OOD |          DOMINO SR/MS |
-| ----- | -------------: | -------------: | -------------------: | -------------: | -------------: | --------------------: |
-| CPT   |           64.3 |           40.4 |          64.3 / 66.4 |           90.8 |           25.3 |           21.1 / 37.4 |
-| + SFT |           70.8 |           56.0 |          86.3 / 87.1 |           97.8 |           31.6 |           25.7 / 39.1 |
-| + RL  | **73.7** | **56.7** | 86.1 /**87.2** | **97.9** | **32.0** | **26.6 / 39.5** |
+| Stage |        Simpler |       RoboCasa |           RoboTwin E/H |         LIBERO |    Simpler OOD |          DOMINO SR/MS |
+| ----- | -------------: | -------------: | ---------------------: | -------------: | -------------: | --------------------: |
+| CPT   |           64.3 |           40.4 |            64.3 / 66.4 |           90.8 |           25.3 |           21.1 / 37.4 |
+| + SFT |           70.8 |           56.0 |            86.3 / 87.1 |           97.8 |           31.6 |           25.7 / 39.1 |
+| + RL  | **73.7** | **56.7** | 86.1 / **87.2** | **97.9** | **32.0** | **26.6 / 39.5** |
 
 **Verified:** SFT supplies most of the gain. RL adds +2.9 pp on its rollout
 environment and small changes elsewhere, including -0.2 pp on RoboTwin-Easy.

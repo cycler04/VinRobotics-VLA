@@ -4,9 +4,7 @@
 
 This report covers **Qwen-RobotNav**, the navigation specialist in the Qwen-Robot suite.
 It focuses on its waypoint policy, configurable observation interface, training datasets,
-batch-level task sampling, observation randomization, evaluations, and limitations. For the
-manipulation specialist, see [qwen_robotmanip.md](qwen_robotmanip.md). For the general model,
-see [qwen_vla.md](qwen_vla.md).
+batch-level task sampling, observation randomization, evaluations, and limitations. For the manipulation specialist, see [qwen_robotmanip.md](qwen_robotmanip.md). For the general model, see [qwen_vla.md](qwen_vla.md).
 
 > **Research date:** 2026-07-22. The primary source checked is Qwen-RobotNav v3
 > (2026-06-29). Dataset and evaluation numbers are author-reported and have not been
@@ -21,7 +19,9 @@ training mechanism is not diffusion but joint multi-task adaptation under an 85:
 trajectory-to-VL mixture, with dataset selection at batch granularity and observation
 configuration randomized independently for every trajectory sample.
 
-## 1. Main Tasks
+## 1. Model Overview
+
+### 1.1 Main Tasks
 
 Qwen-RobotNav supports five navigation task families:
 
@@ -33,7 +33,7 @@ Qwen-RobotNav supports five navigation task families:
 
 It can also serve as a reactive navigation executor beneath a higher-level LLM planner.
 
-## 2. Architecture
+### 1.2 Architecture
 
 ```mermaid
 flowchart LR
@@ -54,17 +54,13 @@ $$
 
 This is a 24-dimensional direct regression target.
 
-Unlike Qwen-VLA and RobotManip:
-
-- There is no diffusion process.
-- There is no noisy action sequence.
-- There is no Euler denoising loop.
-- The model does not directly output wheel torques or joint commands.
-- A lower-level controller converts waypoints into physical motion.
+Unlike Qwen-VLA and RobotManip using DiT matching actions. The action head using a 4-layer MLP to output waypoints for navigations.
 
 ![Qwen-RobotNav architecture overview](image/qwen_robotnav/architecture_overview.png)
 
-## 3. Model Inputs, Camera Angles, and Prompt Examples
+## 2. Inputs and Observation Encoding
+
+### 2.1 Model Inputs, Camera Angles, and Prompt Examples
 
 A RobotNav call combines an observation stream, language, task identity, and a configurable context
 policy. The input is best represented as:
@@ -80,35 +76,34 @@ navigation instruction plus embodiment preamble, \(\tau\) is the task mode, and 
 images survive and at what resolution. The base model returns eight \((x,y,\theta)\) waypoints; an
 external low-level controller executes them.
 
-| Input group | Contents | Required or optional |
-| --- | --- | --- |
-| RGB observations | Current and historical frames from one or more cameras | Required; camera count varies by platform/task |
-| Embodiment preamble | Natural-language identity such as robot or car | Required by the described prompt design |
-| Sub-goal/instruction | Route, point, object, tracking, or driving request | Required, but its task-specific fields vary |
-| Task mode | `VLN`, `PointNav`, `ObjNav`, or `Tracking` in the agent-facing interface | Required for configurable agent calls; autonomous driving is trained but is not listed as one of these four tool modes |
-| Observation configuration | Token budget, recency decay, camera weights, frame sampling mode, per-image token bounds | Externally configurable; several values usually use platform defaults |
-| Auxiliary navigation priors | Coordinates/bearing, target description, ego state, or prior trajectories depending on task | Optional/task-dependent |
+| Input group                 | Contents                                                                                    | Required or optional                                                                                                   |
+| --------------------------- | ------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| RGB observations            | Current and historical frames from one or more cameras                                      | Required; camera count varies by platform/task                                                                         |
+| Embodiment preamble         | Natural-language identity such as robot or car                                              | Required by the described prompt design                                                                                |
+| Sub-goal/instruction        | Route, point, object, tracking, or driving request                                          | Required, but its task-specific fields vary                                                                            |
+| Task mode                   | `VLN`, `PointNav`, `ObjNav`, or `Tracking` in the agent-facing interface            | Required for configurable agent calls; autonomous driving is trained but is not listed as one of these four tool modes |
+| Observation configuration   | Token budget, recency decay, camera weights, frame sampling mode, per-image token bounds    | Externally configurable; several values usually use platform defaults                                                  |
+| Auxiliary navigation priors | Coordinates/bearing, target description, ego state, or prior trajectories depending on task | Optional/task-dependent                                                                                                |
 
 [RobotNav paper v3, §§2.1-2.5 and 3.1-3.2](https://arxiv.org/abs/2606.18112v3)
 
-### Camera layouts and published angle information
+#### Camera layouts and published angle information
 
 RobotNav supports an arbitrary platform-dependent number \(N\) of cameras rather than one fixed rig.
 The paper documents these observation layouts:
 
-| Layout | Published views | Angle coverage and use |
-| --- | --- | --- |
-| Monocular | Front only | Forward-facing deployment and evaluation; no numeric field of view is fixed by the model interface |
-| Four-view panoramic | Current reasoning samples use front, right, back, left; R2R/RxR collection lists front, left, right, rear | Described as full 360-degree coverage; the paper does not assign a numeric azimuth to every view |
-| Six-camera example | Labels begin `Front`, `Front Right`, continue through intermediate views, and end `Front Left` | Demonstrates that semantic camera names extend beyond four views; exact calibrated azimuths are not enumerated |
-| Autonomous-driving multi-view | Multiple vehicle cameras | Exact count, order, and mounting angles are dataset/platform dependent and are not fixed in the model section |
+| Layout                        | Published views                                                                                           | Angle coverage and use                                                                                         |
+| ----------------------------- | --------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| Monocular                     | Front only                                                                                                | Forward-facing deployment and evaluation; no numeric field of view is fixed by the model interface             |
+| Four-view panoramic           | Current reasoning samples use front, right, back, left; R2R/RxR collection lists front, left, right, rear | Described as full 360-degree coverage; the paper does not assign a numeric azimuth to every view               |
+| Six-camera example            | Labels begin`Front`, `Front Right`, continue through intermediate views, and end `Front Left`       | Demonstrates that semantic camera names extend beyond four views; exact calibrated azimuths are not enumerated |
+| Autonomous-driving multi-view | Multiple vehicle cameras                                                                                  | Exact count, order, and mounting angles are dataset/platform dependent and are not fixed in the model section  |
 
 The paper tested numeric labels such as **`right 90 degrees`**, but descriptive labels performed slightly
 better. That is the only explicit azimuth example; assigning conventional values such as 0/90/180/270
 degrees to the four-view rig would be an inference, not a reported input contract.
 
-There is also no single published global camera order. Instruction-following data records `front, left,
-right, rear`; reasoning data serializes the current panorama as `front, right, back, left`; and the six-view
+There is also no single published global camera order. Instruction-following data records `front, left, right, rear`; reasoning data serializes the current panorama as `front, right, back, left`; and the six-view
 example begins `Front, Front Right, ...`. These are dataset/example orders, not a normative API contract.
 
 For the common four-view case, the example camera weights are:
@@ -124,10 +119,9 @@ aspect ratio. Training also augments simulator camera height over 0.5-1.5 m, hor
 90-120 degrees, and aspect ratio from 2:1 to 4:3; these are data augmentations, not mandatory inference
 settings. [RobotNav paper v3, §§2.2-2.3 and 4.2.1](https://arxiv.org/abs/2606.18112v3)
 
-### Exact image and time serialization example
+#### Exact image and time serialization example
 
-After frame selection, the model interleaves ordinary text tags with image tokens. The paper gives this
-two-timestep, six-camera pattern:
+After frame selection, the model interleaves ordinary text tags with image tokens. The paper gives this two-timestep, six-camera pattern:
 
 ```text
 Time step 0 Front View <image> Front Right View <image> ... Front Left View <image>
@@ -139,7 +133,7 @@ ID embedding or architecture change is required. The report does not publish the
 chat template, separators, token IDs, or the exact six-camera list hidden by the ellipsis.
 [RobotNav paper v3, §2.3](https://arxiv.org/abs/2606.18112v3)
 
-### Exact embodiment preambles
+#### Exact embodiment preambles
 
 The paper publishes two natural-language beginnings:
 
@@ -155,15 +149,15 @@ These are task priors rather than learned embodiment IDs. The authors propose th
 as a drone, wheeled robot, or quadruped could use a new text preamble without adding parameters, but do
 not publish validated templates for those platforms. [RobotNav paper v3, §2.4](https://arxiv.org/abs/2606.18112v3)
 
-### What the instruction contains for each task
+#### What the instruction contains for each task
 
-| Task family | Language/auxiliary input described in the paper | Typical visual history |
-| --- | --- | --- |
-| VLN | Natural-language route instruction | Global episode coverage to reconnect landmarks with earlier instruction steps |
-| PointNav | Relative target coordinates plus current pose, distance, and bearing; or primitives such as `Move forward 2.0 meters`, `Turn left 90 degrees`, `Move forward`, and `Turn left` | Current view plus uniformly sampled navigation history |
-| ObjNav | Templates include `navigate to the {goal_object}` and `find and reach the {goal_object}` | Broad, history-covering sampling to remember explored regions and backtracking |
-| Tracking | Textual target description; the paper's representative query is `Follow the man in the blue t-shirt` | Current egocentric image plus a short, recent, high-resolution history |
-| Autonomous driving | Multi-view images in all variants; optional navigation instruction, ego-vehicle state, and/or short history of ground-truth trajectories | Short driving history; NAVSIM evaluation supplies the previous three ground-truth trajectories |
+| Task family        | Language/auxiliary input described in the paper                                                                                                                                       | Typical visual history                                                                         |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| VLN                | Natural-language route instruction                                                                                                                                                    | Global episode coverage to reconnect landmarks with earlier instruction steps                  |
+| PointNav           | Relative target coordinates plus current pose, distance, and bearing; or primitives such as`Move forward 2.0 meters`, `Turn left 90 degrees`, `Move forward`, and `Turn left` | Current view plus uniformly sampled navigation history                                         |
+| ObjNav             | Templates include`navigate to the {goal_object}` and `find and reach the {goal_object}`                                                                                           | Broad, history-covering sampling to remember explored regions and backtracking                 |
+| Tracking           | Textual target description; the paper's representative query is`Follow the man in the blue t-shirt`                                                                                 | Current egocentric image plus a short, recent, high-resolution history                         |
+| Autonomous driving | Multi-view images in all variants; optional navigation instruction, ego-vehicle state, and/or short history of ground-truth trajectories                                              | Short driving history; NAVSIM evaluation supplies the previous three ground-truth trajectories |
 
 These are different input renderings for one shared model. In the agent interface, the upper planner can
 change \(L\), \(\tau\), and \(\Phi\) between calls without changing weights.
@@ -176,7 +170,7 @@ annotation-time action/trajectory statistics. The statistics supervise textual `
 continuous waypoint policy. This distinction prevents training-only labels from being mistaken for
 deployable sensor inputs. [RobotNav paper v3, §4.3](https://arxiv.org/abs/2606.18112v3)
 
-### Illustrative assembled navigation call
+#### Illustrative assembled navigation call
 
 The paper defines the abstract call \(W_i=\operatorname{nav\_qwennav}(L_i,\tau_i,\Phi_i)\), but it
 does not release a literal JSON API. The following is a **reconstruction** from published fields:
@@ -221,7 +215,7 @@ The action head maps a final trajectory hidden state \(E_A\) to 24 numbers, but 
 which exact chat token/sequence position produces \(E_A\), whether a dedicated query token is used, or
 the production prompt delimiters. Those details remain **unknown** without released code.
 
-## 4. Task-Adaptive Observation Encoding
+### 2.2 Task-Adaptive Observation Encoding
 
 Navigation history can grow indefinitely, so the model cannot preserve every frame at full resolution.
 
@@ -257,7 +251,7 @@ Object search:
 
 Camera identity and time order are communicated with natural-language tags rather than new architectural modules.
 
-## 5. Hierarchical Agent Interface
+## 3. Agentic Navigation System
 
 The paper's broader proposal is an **agentic robot**, not merely a standalone navigation policy. A
 general-purpose upper-level LLM receives the user's long-horizon goal, reasons about progress, chooses
@@ -292,7 +286,7 @@ flowchart TD
     NB --> LLM
 ```
 
-### Qwen-RobotNav as the movement tool
+### 3.1 Qwen-RobotNav as the Movement Tool
 
 For every navigation call, the planner supplies:
 
@@ -301,29 +295,42 @@ $$
 $$
 
 where \(L_i\) is a local sub-goal, \(\tau_i\) selects navigation behavior, and \(\Phi_i\) controls the
-observation strategy. The movement tool exposes four named modes using the same RobotNav weights:
+observation strategy. The movement tool exposes four named modes using the same RobotNav weights.
 
-| Mode | Planner intent | Typical context strategy |
-| --- | --- | --- |
-| `VLN` | Follow a language route | Retain broad history so earlier landmarks can be checked against the instruction |
-| `ObjNav` | Search for an object category or instance | Larger token budget and history-covering/random frame sampling |
-| `PointNav` | Move to a coordinate, waypoint-like target, or nearby visible goal | More local context; can become recency-focused during approach |
-| `Tracking` | Maintain lock on a moving or recently seen target | Latest-frame sampling, stronger recency bias, and high recent-frame fidelity |
+#### All agent-facing `task_mode` values
+
+| Illustrative YAML field | Behavior selected | Goal or instruction supplied by the planner | Typical observation strategy | Representative input form |
+| --- | --- | --- | --- | --- |
+| `task_mode: VLN` | Follow a language-described route and ground its ordered landmarks in the observations | A procedural natural-language route instruction | Retain broad episode history so earlier landmarks can be checked against later instruction steps | `Go to the living room, turn left, and stop near the kitchen.` |
+| `task_mode: PointNav` | Move toward a spatial target, coordinate, or waypoint-like local goal | Relative target coordinates, pose/distance/bearing, or a textual motion primitive | Use local or uniformly sampled history; increase recency near the target for a smooth approach | `Go to (2.2, 2.4).` or `Move forward 2.0 meters.` |
+| `task_mode: ObjNav` | Search for an object category or a particular instance using accumulated visual evidence | Object name, category, or referring expression | Use a larger token budget with broad/random history during exploration; switch toward recent frames when approaching a visible candidate | `Search the kitchen area for a mug.` |
+| `task_mode: Tracking` | Maintain lock on a moving or recently observed target | A textual target description | Prefer latest-frame sampling, strong recency bias, and high fidelity for recent observations | `Follow the man in the blue t-shirt.` |
+
+The four mode values are named explicitly by the paper. The `task_mode: <value>` serialization and the
+input strings in the last column are representative paper examples or faithful renderings of its published
+templates; they are not a released API schema. In particular, `task_mode: ObjNav` selects
+**search behavior**. The planner may later switch the same model call to `PointNav` for the final local
+approach or to `Tracking` if the target moves.
+
+Qwen-RobotNav is trained on **five task families**: instruction following, point-goal navigation,
+object-goal navigation, target tracking, and autonomous driving. However, the agent-facing interface in
+§§3.1-3.2 names only the four `task_mode` values above. **Autonomous driving is therefore a training and
+evaluation family, not a documented `task_mode: Driving` tool-call value.**
 
 RobotNav returns a waypoint trajectory, not motor torques and not a natural-language plan. A lower-level
 controller executes the waypoints. The planner may change mode, sub-goal, and observation configuration
 between calls without loading another navigation policy.
 [RobotNav paper v3, §§3.1-3.2](https://arxiv.org/abs/2606.18112v3)
 
-### Other tools around RobotNav
+### 3.2 Other Tools Around RobotNav
 
 The paper explicitly names three **auxiliary visual-evidence tools**:
 
-| Tool | Role in the agent loop | What it does not do |
-| --- | --- | --- |
-| Object detection | Locate candidate objects in current observations or stored key frames | Does not generate movement waypoints |
-| Scene understanding | Summarize rooms, layout, landmarks, and other scene-level evidence | Does not replace the planner or navigation executor |
-| Semantic grounding | Connect a textual target or referring expression to visual evidence | Does not execute the grounded target |
+| Tool                | Role in the agent loop                                                | What it does not do                                 |
+| ------------------- | --------------------------------------------------------------------- | --------------------------------------------------- |
+| Object detection    | Locate candidate objects in current observations or stored key frames | Does not generate movement waypoints                |
+| Scene understanding | Summarize rooms, layout, landmarks, and other scene-level evidence    | Does not replace the planner or navigation executor |
+| Semantic grounding  | Connect a textual target or referring expression to visual evidence   | Does not execute the grounded target                |
 
 These tools answer perceptual questions when the planner needs more evidence before choosing its next
 sub-goal. The paper does not disclose their model backbones, APIs, prompts, training data, or standalone
@@ -342,7 +349,7 @@ The system also provides two supporting capabilities that are not new movement p
 
 [RobotNav paper v3, §§3.1 and 3.3](https://arxiv.org/abs/2606.18112v3)
 
-### Evidence notebook and context compression
+### 3.3 Evidence Notebook and Context Compression
 
 Returning every image and low-level control trace to the planner would quickly exhaust its context
 window, while returning only `success/failure` would discard useful evidence. The harness instead emits
@@ -372,7 +379,7 @@ The paper's illustrative notebook entry is:
 Corridor shelf remains a possible candidate region from key frame #12.
 ```
 
-### Example long-horizon tool loop
+### 3.4 Example Long-Horizon Tool Loop
 
 The following sequence is **illustrative but directly follows the paper's mug-search example**:
 
@@ -394,7 +401,9 @@ motion. The paper evaluates one system-level instantiation for embodied question
 release a complete general robot-agent software stack.
 [RobotNav paper v3, §§3 and 5.3](https://arxiv.org/abs/2606.18112v3)
 
-## 6. Training Datasets
+## 4. Training Data
+
+### 4.1 Corpus Composition
 
 The reported training set contains approximately **15.6 million samples**:
 
@@ -419,21 +428,82 @@ The sources are more specific than the aggregate ratio suggests:
 | Discrete VLN conversations    |             362K | CVDN, SOON, REVERIE, SRDF, and other graph-based VLN data reformatted as multi-round four-view action questions              |
 | T2V-generated navigation      |              40K | Synthetic instruction-following and tracking videos converted to 2-D trajectories and filtered for visual/kinematic validity |
 
-The named trajectory categories sum to about **13.357M**, while the named VL/reasoning components sum
-to about **2.235M**, giving 15.592M and reconciling with the rounded headline. They must not be read as
-15.6M independent raw episodes. R2R/RxR counts include view and language augmentations, while the
-3.216M driving items are **conditioning variants**: one trajectory can appear with or without an
-instruction, ego state, or prior trajectory context.
+The counts reconcile with the rounded headline:
+
+- **Trajectory categories:** about 13.357M samples.
+- **VL/reasoning categories:** about 2.235M samples.
+- **Combined:** about 15.592M samples, reported as 15.6M.
+
+These are training samples, not 15.6M independent raw episodes:
+
+- R2R/RxR counts include camera-view and language augmentations.
+- Driving counts include multiple conditioning variants of the same trajectory.
+- A driving trajectory may be rendered with or without an instruction, ego state, or prior trajectory
+  context.
+
 [RobotNav paper v3, §4 and Figure 5](https://arxiv.org/abs/2606.18112v3)
 
-R2R/RxR clips are teacher-forced into step samples, instructions receive three paraphrases after
-trajectory-ID deduplication, and images are refined. PointNav deliberately emphasizes harder 6-10 m
-routes; forward steps are retained at 45% while turns/stops are always kept to reduce action imbalance.
-ObjectNav uses branch-and-backtrack exploration on a skeletonized navigability map rather than only
-shortest paths, then spline-smooths trajectories at 0.25 m waypoint spacing. The 40K T2V pipeline uses
-`LLM prompt -> video generation -> VLM quality filter -> monocular pose/depth trajectory -> kinematic filter`.
-Camera augmentation samples height from 0.5-1.5 m, horizontal field of view from 90-120 degrees, and
-aspect ratio between 2:1 and 4:3. [RobotNav paper v3, §§4.1-4.2](https://arxiv.org/abs/2606.18112v3)
+### 4.2 How Each Navigation Dataset Is Constructed
+
+#### Instruction following: R2R and RxR
+
+- Unroll ground-truth trajectories with **teacher forcing**.
+- Convert each route into step-level training samples.
+- Deduplicate instructions by trajectory ID.
+- Generate three paraphrases for every unique instruction.
+- Train both front-only and multi-camera view configurations.
+- Apply image-quality refinement to rendered observations.
+
+#### PointNav
+
+- Emphasize harder **6-10 m** routes instead of allowing easy short routes to dominate.
+- Retain forward steps with a **45% inclusion rate** to reduce action imbalance.
+- Always retain turn and stop actions.
+- Include coordinate goals, short/long-range routes, and command primitives.
+
+#### ObjectNav
+
+- Skeletonize the navigable environment into an exploration graph.
+- Randomly select branches and backtrack at dead ends instead of following only shortest paths.
+- Smooth the resulting path with cubic splines.
+- Sample trajectory waypoints every **0.25 m**.
+- Attach open-vocabulary object goals and varied language templates.
+
+#### Target tracking
+
+- Use EVT-Bench's Single Target Tracking split without distractors.
+- Pair the current egocentric image and short recent history with a textual target description.
+- Supervise the same eight-waypoint future-trajectory format used by other navigation tasks.
+
+#### Autonomous driving
+
+- Use nuScenes and OpenScene multi-view driving trajectories.
+- Create different input variants from the same path by optionally adding:
+  - navigation instructions;
+  - current ego-vehicle state;
+  - prior ground-truth trajectory context.
+
+#### Text-to-video navigation data
+
+The 40K synthetic pipeline is:
+
+1. Generate a first-person scene prompt and navigation instruction with an LLM.
+2. Render a short egocentric video with a text-to-video model.
+3. Filter visual and instruction consistency with a VLM.
+4. Recover camera motion using monocular depth and pose estimation.
+5. Convert the camera path into a 2-D navigation trajectory.
+6. Remove physically implausible samples with a kinematic filter.
+
+#### Shared camera and motion augmentation
+
+- Camera height: uniformly sampled from **0.5-1.5 m**.
+- Horizontal field of view: sampled from **90-120 degrees**.
+- Aspect ratio: sampled between **2:1 and 4:3**.
+- PointNav additionally varies initial heading, viewpoint, and low-speed motion.
+
+[RobotNav paper v3, §§4.1-4.2](https://arxiv.org/abs/2606.18112v3)
+
+### 4.3 Vision-Language Preservation Data
 
 The VL portion preserves:
 
@@ -443,6 +513,17 @@ The VL portion preserves:
 - Interpretation of camera and temporal tags
 - Generalization to unseen instructions and environments
 
+Its three main groups are:
+
+- **General VL, about 1.0M:** VQA, captioning, grounding, instruction following, multi-image
+  reasoning, landmark recognition, and STEM.
+- **Navigation reasoning, 873K:** history summaries, scene analysis, progress tracking, and action
+  reasoning derived from navigation trajectories.
+- **Discrete VLN conversations, 362K:** CVDN, SOON, REVERIE, SRDF, and related graph-based
+  navigation data reformatted as multi-round, four-view action questions.
+
+### 4.4 Interpretation and Split Caveats
+
 The evaluation suites reuse several **dataset families** seen in training—R2R/RxR, EVT-Bench,
 Matterport3D/HM3D, and HM3D-OVON—under held-out labels such as Val-Unseen, test, or unseen-object
 splits. The paper does not publish a sample-level deduplication or contamination audit across those
@@ -450,7 +531,9 @@ splits. This does not prove leakage, but it means the split definitions, not dat
 generalization claim. AlpaSim is the clear exception: the paper explicitly reports zero-shot evaluation
 without training on its 920 PhysicalAI-AV NuRec scenarios.
 
-## 7. Training Objective
+## 5. Training Procedure
+
+### 5.1 Training Objective
 
 RobotNav uses a composite loss:
 
@@ -482,7 +565,7 @@ $$
 
 Unlike flow matching, this is deterministic direct regression: one forward pass predicts all eight waypoints.
 
-## 8. Configuration Randomization
+### 5.2 Configuration Randomization
 
 No observation configuration remains fixed during training.
 
@@ -498,7 +581,7 @@ This prevents the network from overfitting to one camera layout or one context s
 
 The resulting policy can switch observation strategies at inference without architecture changes or task-specific retraining.
 
-## 9. How Tasks Alternate During Co-Training
+### 5.3 How Tasks Alternate During Co-Training
 
 RobotNav has two distinct sources of variation that should not be conflated:
 
@@ -511,30 +594,38 @@ independently randomize token budget, temporal decay, camera weights,
 per-frame bounds, and random/latest history mode
 ```
 
-The top-level corpus target is **85% trajectory and 15% VL/reasoning**. Datasets are selected at the
-**batch level** using rates stored in a registry so every navigation family remains exposed. This is the
-mechanism intended to prevent large sources such as driving or RxR from overwhelming smaller tasks.
-The paper does not publish the registry rates or exact batch ordering. Although selecting one dataset at
-batch granularity implies that a batch follows that dataset's target type, it does not establish a literal
-sequence such as `85 trajectory batches -> 15 VL batches`.
+The task-mixture behavior is:
+
+- **Top-level target:** 85% trajectory data and 15% VL/reasoning data.
+- **Sampling granularity:** select a dataset at the batch level from a registry.
+- **Balancing goal:** keep all five navigation families visible instead of allowing large RxR or driving
+  sources to dominate.
+- **Not disclosed:** per-dataset registry rates and exact batch ordering.
+- **Do not infer:** a literal repeating sequence such as `85 trajectory batches -> 15 VL batches`.
 
 Once a trajectory sample is chosen, the observation configuration is randomized independently:
 
-| Parameter | Training distribution |
-| --- | --- |
-| Visual-token budget \(B\) | Uniform from 2,048 to 4,096 |
-| Temporal decay \(\gamma\) | Uniform from 1 to 3 |
-| Camera weight \(w_c\) | Camera-specific uniform ranges |
-| Minimum tokens per frame \(b_{min}\) | Discrete uniform from 1 to 8 |
-| Maximum tokens per frame \(b_{max}\) | Discrete uniform from 128 to 256 |
-| Frame-history mode | `random` or `latest`, each with 50% probability |
+| Parameter                           | Training distribution                               |
+| ----------------------------------- | --------------------------------------------------- |
+| Visual-token budget \(B\)            | Uniform from 2,048 to 4,096                         |
+| Temporal decay \(\gamma\)            | Uniform from 1 to 3                                 |
+| Camera weight \(w_c\)                | Camera-specific uniform ranges                      |
+| Minimum tokens per frame \(b_{min}\) | Discrete uniform from 1 to 8                        |
+| Maximum tokens per frame \(b_{max}\) | Discrete uniform from 128 to 256                    |
+| Frame-history mode                  | `random` or `latest`, each with 50% probability |
 
-Trajectory batches activate waypoint MSE; VL batches activate next-token prediction. Both use the same
-VLM policy network, and the reported total loss uses \(\lambda=1\). Co-training matters because the
-authors observe that trajectory-only tuning collapses toward reactive action-sequence mapping and loses
-general spatial/language reasoning. [RobotNav paper v3, §§2.2 and 2.6](https://arxiv.org/abs/2606.18112v3)
+The objective alternation is equally simple:
 
-## 10. End-to-End Fine-Tuning
+- **Trajectory batch:** activate waypoint MSE.
+- **VL batch:** activate next-token prediction.
+- **Shared parameters:** both use the same VLM policy network.
+- **Loss weight:** \(\lambda=1\).
+- **Reason for co-training:** trajectory-only tuning tends to collapse toward reactive action-sequence
+  mapping and lose general spatial/language reasoning.
+
+[RobotNav paper v3, §§2.2 and 2.6](https://arxiv.org/abs/2606.18112v3)
+
+### 5.4 End-to-End Fine-Tuning
 
 RobotNav is initialized from Qwen3-VL and fine-tuned end-to-end:
 
@@ -553,32 +644,44 @@ Warm-up: first 3% of steps
 Gradient clipping: 1.0
 ```
 
-## 11. Evaluation
+## 6. Evaluation
+
+### 6.1 Benchmark Matrix
 
 RobotNav is evaluated across all five training task families plus an agentic embodied-QA system. These
 are not one common benchmark: metrics, sensors, split semantics, controller assumptions, and access to
 history differ, so scores should be compared only within a row.
 
-| Evaluation | Protocol and metrics | Main Qwen-RobotNav result | Important interpretation |
-| --- | --- | ---: | --- |
-| VLN-CE R2R Val-Unseen | Monocular and panoramic; NE, OSR, nDTW, SR, SPL | Panoramic 8B: 72.1 SR / 66.6 SPL | Instruction-following family also supplies training data; unseen split is the operative boundary |
-| VLN-CE RxR Val-Unseen | Same metrics, multilingual instructions | Panoramic 8B: 76.5 SR / 65.7 SPL | Paper reports +12.1 SR over NavFoM in its comparison |
-| VLNVerse test | Fine- and coarse-grained instruction tracks; SR/SPL | 8B fine: 63.75 / 57.93; coarse: 46.59 / 41.54 | Coarse instructions are materially harder |
-| VLN-PE R2R Val-Unseen | Flash low-level controller; SR/SPL and fall rate | 8B: 65.50 SR / 61.19 SPL / 4.05 falls | Higher fall rate than InternVLA-N1's 0.45 exposes controller-safety trade-off |
-| MP3D / HM3D ObjectNav | Closed vocabulary; SR/SPL | RGB-only 4B: MP3D 52.2/16.0; HM3D-v2 75.6/30.6 | Several baselines use HM3D-v1, limiting direct ranking |
-| HM3D-OVON | Seen, synonym, unseen objects; SR/SPL; one front camera | 4B SR: 57.7 / 60.1 / 53.1 | Search-style training improves reach but produces longer, less efficient paths |
-| EVT-Bench STT | Single target, single view; tracking, collision and success rates | 4B: 90.0 tracking / 77.4 success | Best tracking rate does not become best episode success; specialists reach 86+ SR |
-| NAVSIM navtest | Closed-loop driving metrics; prompt includes ground-truth trajectories from previous three frames | 4B PDMS 91.4; 79.5 without history prior | The historical ground-truth prior is a major part of the score |
-| AlpaSim on NuRec | 920 zero-shot scenarios; close encounter, off-road and aggregate score | 8B: 22 / 27 / 0.17 | Far behind Alpamayo-R1-10B at 4 / 16 / 0.72; measures OOD transfer, not specialist parity |
+| Evaluation            | Protocol and metrics                                                                              |                      Main Qwen-RobotNav result | Important interpretation                                                                         |
+| --------------------- | ------------------------------------------------------------------------------------------------- | ---------------------------------------------: | ------------------------------------------------------------------------------------------------ |
+| VLN-CE R2R Val-Unseen | Monocular and panoramic; NE, OSR, nDTW, SR, SPL                                                   |               Panoramic 8B: 72.1 SR / 66.6 SPL | Instruction-following family also supplies training data; unseen split is the operative boundary |
+| VLN-CE RxR Val-Unseen | Same metrics, multilingual instructions                                                           |               Panoramic 8B: 76.5 SR / 65.7 SPL | Paper reports +12.1 SR over NavFoM in its comparison                                             |
+| VLNVerse test         | Fine- and coarse-grained instruction tracks; SR/SPL                                               |  8B fine: 63.75 / 57.93; coarse: 46.59 / 41.54 | Coarse instructions are materially harder                                                        |
+| VLN-PE R2R Val-Unseen | Flash low-level controller; SR/SPL and fall rate                                                  |          8B: 65.50 SR / 61.19 SPL / 4.05 falls | Higher fall rate than InternVLA-N1's 0.45 exposes controller-safety trade-off                    |
+| MP3D / HM3D ObjectNav | Closed vocabulary; SR/SPL                                                                         | RGB-only 4B: MP3D 52.2/16.0; HM3D-v2 75.6/30.6 | Several baselines use HM3D-v1, limiting direct ranking                                           |
+| HM3D-OVON             | Seen, synonym, unseen objects; SR/SPL; one front camera                                           |                      4B SR: 57.7 / 60.1 / 53.1 | Search-style training improves reach but produces longer, less efficient paths                   |
+| EVT-Bench STT         | Single target, single view; tracking, collision and success rates                                 |               4B: 90.0 tracking / 77.4 success | Best tracking rate does not become best episode success; specialists reach 86+ SR                |
+| NAVSIM navtest        | Closed-loop driving metrics; prompt includes ground-truth trajectories from previous three frames |       4B PDMS 91.4; 79.5 without history prior | The historical ground-truth prior is a major part of the score                                   |
+| AlpaSim on NuRec      | 920 zero-shot scenarios; close encounter, off-road and aggregate score                            |                             8B: 22 / 27 / 0.17 | Far behind Alpamayo-R1-10B at 4 / 16 / 0.72; measures OOD transfer, not specialist parity        |
 
 [RobotNav paper v3, Tables 1-6 and 8-9](https://arxiv.org/abs/2606.18112v3)
 
-The embodied-QA results are **system-level**, not standalone policy results. Qwen3.6-Plus acts as the
-upper planner and Qwen-RobotNav-8B executes navigation. The combination reports 76.7 accuracy with
-0.15 normalized steps on HM-EQA, 54.4/0.19 on the benchmark called MT-HM3D in prose but MT-EQA
-in Table 7, and a 79.27 LLM score with 33.96 Epath on EXPRESS-Bench. The naming inconsistency and
-planner contribution should be preserved when citing these values.
+### 6.2 Agent-System EQA Results
+
+These are **system-level** results, not standalone RobotNav policy scores:
+
+- **Planner:** Qwen3.6-Plus.
+- **Movement executor:** Qwen-RobotNav-8B.
+- **HM-EQA:** 76.7 accuracy and 0.15 normalized steps.
+- **MT benchmark:** 54.4 accuracy and 0.19 normalized steps.
+  - The prose calls this benchmark `MT-HM3D`.
+  - Table 7 calls it `MT-EQA`.
+- **EXPRESS-Bench:** 79.27 LLM score and 33.96 Epath.
+
+The planner contribution and naming inconsistency must be preserved when citing these values.
 [RobotNav paper v3, §5.2.4 and Table 7](https://arxiv.org/abs/2606.18112v3)
+
+### 6.3 Scaling and Context Ablations
 
 Evaluation ablations expose several non-monotonic effects:
 
@@ -591,12 +694,21 @@ Evaluation ablations expose several non-monotonic effects:
 - Removing the three-frame ground-truth driving history prior reduces NAVSIM PDMS by more than 11
   points for both reported model sizes.
 
-Real-robot Go2, exhibition-hall, apartment, and coffee-store demonstrations are qualitative. The paper
-reports about 196 ms remote latency (5.1 Hz) and 204 ms on Jetson Thor (4.9 Hz), but no repeated-trial
-success rate. Therefore, “zero-shot real-world generalization” is demonstrated by examples rather than a
-statistical real-world protocol. [RobotNav paper v3, §§5.5-5.6 and Figures 14-15](https://arxiv.org/abs/2606.18112v3)
+### 6.4 Real-World Evidence and Caveats
 
-## 12. How RobotNav Differs from Qwen-VLA
+- Demonstrations cover Unitree Go2, an exhibition hall, an apartment, and a coffee-store scenario.
+- Reported latency:
+  - remote inference: about **196 ms**, or **5.1 Hz**;
+  - Jetson Thor: about **204 ms**, or **4.9 Hz**.
+- The paper does not report repeated-trial success rates for these deployments.
+- “Zero-shot real-world generalization” is therefore qualitative evidence, not a statistical real-world
+  evaluation protocol.
+
+[RobotNav paper v3, §§5.5-5.6 and Figures 14-15](https://arxiv.org/abs/2606.18112v3)
+
+## 7. Comparison and Conclusion
+
+### 7.1 How RobotNav Differs from Qwen-VLA
 
 | Aspect                    | Qwen-VLA                                          | Qwen-RobotNav                                                |
 | ------------------------- | ------------------------------------------------- | ------------------------------------------------------------ |
@@ -613,7 +725,7 @@ statistical real-world protocol. [RobotNav paper v3, §§5.5-5.6 and Figures 14-
 | Main robustness technique | Broad co-pretraining and progressive stages       | Randomization of observation configurations                  |
 | Agent integration         | General policy                                    | Designed as a reactive module under an upper planner         |
 
-## 13. Core Training Philosophy
+### 7.2 Core Training Philosophy
 
 > **Keep the action head simple and train the VLM to become the navigator.**
 

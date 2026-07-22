@@ -20,7 +20,9 @@ camera-relative end-effector coordinates, and conditions on recent behavior for 
 adaptation. A flow-matching DiT generates action chunks while separate manipulation and
 vision-language batches preserve both control and multimodal reasoning.
 
-## 1. Main Tasks
+## 1. Model Overview
+
+### 1.1 Main Tasks
 
 Qwen-RobotManip focuses on manipulation rather than the full set of embodied tasks.
 
@@ -38,7 +40,7 @@ Target capabilities include:
 
 Unlike Qwen-VLA, it does not need one action decoder to also model navigation waypoints or autonomous-driving trajectories.
 
-## 2. Architecture
+### 1.2 Architecture
 
 ![Qwen-RobotManip architecture overview](image/qwen_robotmanip/architecture_overview.png)
 
@@ -76,7 +78,11 @@ The action expert contains:
 
 This differs from Qwen-VLA's larger single-stream DiT, where VLM-derived and action tokens are processed jointly through self-attention.
 
-## 3. Model Inputs, Camera Views, and Prompt Examples
+The output contain a chunk of **16 continuos actions**, with **80 dims**.
+
+## 2. Inputs and Cross-Embodiment Representation
+
+### 2.1 Model Inputs, Camera Views, and Prompt Examples
 
 One RobotManip decision consumes more than images and an instruction. The complete conceptual input is:
 
@@ -98,7 +104,7 @@ vision/language features. They join the state/action tokens, cross-attend to fin
 participate in DiT self-attention; their outputs are discarded rather than decoded as actions. The paper
 does not disclose their count or initialization. [RobotManip paper v2, §6.4 and Figure 20](https://arxiv.org/abs/2606.17846v2)
 
-### Camera views and “angles”
+#### Camera views and “angles”
 
 RobotManip does **not** prescribe a fixed camera count or a universal list of yaw angles. It consumes
 whatever synchronized views a source embodiment provides. The paper and Figure 3 use these semantic
@@ -136,7 +142,7 @@ example receives only the current multi-view images and task instruction, with t
 as its target. They should not be added to the runtime policy input contract.
 [RobotManip paper v2, §2.5](https://arxiv.org/abs/2606.17846v2)
 
-### Exact structured embodiment prompt
+#### Exact structured embodiment prompt
 
 The paper publishes this exact example:
 
@@ -162,7 +168,7 @@ During training, `embodiment`, `speed`, and `fps` are randomly dropped with 15% 
 the policy can tolerate missing metadata. The paper does not say that the instruction or camera-direction
 field is dropped. [RobotManip paper v2, §3.4](https://arxiv.org/abs/2606.17846v2)
 
-### Behavioral-history input
+#### Behavioral-history input
 
 One historical chunk is the triplet \((o_h,s_h,a_h)\): what the robot saw, its proprioceptive state, and
 the complete \(K\)-step action chunk it executed. For \(H\) chunks:
@@ -180,7 +186,7 @@ window from a random position in the same episode; deployment uses the most rece
 The paper uses symbolic \(H\) and \(K\) in the method description but does not publish one universal
 history length or literal image-count annotation string. [RobotManip paper v2, §3.5](https://arxiv.org/abs/2606.17846v2)
 
-### Illustrative assembled input
+#### Illustrative assembled input
 
 The following is a **reconstruction for explanation**, not a released API schema or verbatim chat
 template:
@@ -220,7 +226,7 @@ history:
 This example shows the information relationships. The paper does not release these YAML keys, the
 exact tensor serialization, or an inference API.
 
-## 4. Canonical 80-Dimensional State and Action Space
+### 2.2 Canonical 80-Dimensional State and Action Space
 
 RobotManip maps many embodiments into a fixed 80-dimensional template:
 
@@ -240,15 +246,15 @@ Each 29-dimensional arm block includes:
 12 dexterous-hand dimensions
 ```
 
-The reserved dimensions can represent additional degrees of freedom such as mobile-base motion.
+The reserved dimensions can represent additional degrees of freedom such as mobile-base motion and humanoid robot actions.
 
 Different robots activate different subsets of this space. Binary masks ensure that only valid dimensions contribute to training.
 
-## 5. Three Forms of Cross-Embodiment Alignment
+### 2.3 Three Forms of Cross-Embodiment Alignment
 
 RobotManip's main innovation is not simply a larger manipulation dataset. It makes data from different robots numerically and behaviorally compatible.
 
-### A. Representation Alignment
+#### A. Representation Alignment
 
 All robots are converted into the same 80-D template.
 
@@ -265,7 +271,7 @@ Per-dimension masks prevent:
 - Single-arm robots from supervising the unused arm
 - Dexterous-hand robots from dominating simpler gripper embodiments
 
-### B. Motion Alignment
+#### B. Motion Alignment
 
 End-effector actions are expressed as **camera-frame relative deltas** rather than only robot-base-frame coordinates.
 
@@ -280,7 +286,7 @@ Although the two robots may have different base frames and kinematics, the targe
 
 Camera positional encoding and learned camera embeddings provide information about viewpoint and camera geometry.
 
-### C. Behavior Alignment
+#### C. Behavior Alignment
 
 The policy receives:
 
@@ -300,7 +306,9 @@ Recent history acts as an implicit description of:
 
 This enables **in-context policy adaptation** without changing model parameters.
 
-## 6. Training Datasets
+## 3. Training Data
+
+### 3.1 Dataset Composition
 
 RobotManip is more data-centric than Qwen-VLA.
 
@@ -332,6 +340,8 @@ examples**. [RobotManip paper v2, §2 and Table 1](https://arxiv.org/abs/2606.17
 | Egocentric human hands    |         1,933 h | EgoDex 732 h used, VITRA 247 h, EgoVerse 954 h                                                                 |
 | Human-to-Robot synthetic  |        24,808 h | Derived from the human videos and rendered across 15 dual-arm platforms                                        |
 
+#### Direct robot demonstrations
+
 The **11,420 direct-robot hours** come from nine named open sources:
 
 | Source                    |       Amount used or reported | What it contributes                                                                    |
@@ -350,50 +360,231 @@ These individually rounded source figures do not reconcile exactly with the embo
 and the paper does not publish a post-curation episode manifest. They are therefore composition evidence,
 not an exact accounting ledger. [RobotManip paper v2, §§2.1-2.2](https://arxiv.org/abs/2606.17846v2)
 
-The **1,933 human hours** are also filtered subsets rather than each source's full release: RobotManip
-uses 732 of EgoDex's 829 hours, 247 hours from VITRA's Ego4D and EPIC-KITCHENS subsets, and 954
-of EgoVerse's 1,362 hours. At training time, the sources are temporally subsampled to better match robot
-motion: EgoDex retains 60% of frames, EgoVerse 45%, and VITRA 25%.
+#### Egocentric human video
+
+The **1,933 human hours** are filtered subsets rather than each source's full release:
+
+- **EgoDex:** use 732 of 829 available hours; retain 60% of frames during training.
+- **VITRA:** use 247 hours from its Ego4D and EPIC-KITCHENS subsets; retain 25% of frames.
+- **EgoVerse:** use 954 of 1,362 available hours; retain 45% of frames.
+
+Temporal subsampling slows the faster human-hand motion so its speed distribution better matches robot
+teleoperation data.
 [RobotManip paper v2, §§2.2-2.3](https://arxiv.org/abs/2606.17846v2)
 
-The Human-to-Robot pipeline retargets MANO hand poses into end-effector pose and gripper width,
-smooths translation and rotation, removes hands with segmentation and inpainting, searches feasible
-robot base poses, solves inverse kinematics in MuJoCo, renders the robot, and composites it using estimated
-depth. It expands **1,933 source hours into 24,808 derived hours** across 15 bimanual morphologies, so
-those hours are useful training scale but not independent human experience. The paper does not explain
-why 1,933 hours multiplied by 15 does not equal the stated synthetic total; filtering or failed conversions
-are plausible but remain **unknown**. [RobotManip paper v2, §2.3](https://arxiv.org/abs/2606.17846v2)
+#### Human-to-Robot synthesis
+
+The conversion pipeline:
+
+1. Retarget MANO hand poses into end-effector pose and gripper width.
+2. Smooth translation and rotation trajectories.
+3. Segment and remove visible human hands.
+4. Inpaint the removed hand regions.
+5. Search for feasible robot-base placements.
+6. Solve inverse kinematics in MuJoCo.
+7. Render the selected robot morphology.
+8. Composite the robot into the source video using estimated depth.
+
+The result expands **1,933 source hours into 24,808 derived hours** across 15 bimanual morphologies.
+These hours increase training scale but are not independent human experience.
+
+**Unknown:** the paper does not explain why \(1,933\times15\) differs from the stated synthetic total.
+Filtering or failed conversion is plausible, but not documented.
+[RobotManip paper v2, §2.3](https://arxiv.org/abs/2606.17846v2)
 [Official RobotManip repository](https://github.com/QwenLM/Qwen-RobotManip)
 
-The separate 28M-example VL stream contains general visual understanding, spatial perception and
-reasoning, OCR/document understanding, multimodal specialist knowledge, instruction following, and
-embodied chain-of-thought data. Named sources include RoboPoint, RefSpatial, PixMo, and CapsFusion,
-but the paper also discloses proprietary and synthesized VL data without a complete source-by-source
-breakdown. The “open-source data only” claim therefore applies to the **manipulation corpus**, not to
-every VL co-training example. The paper also reports no global benchmark-contamination audit for that
-web/proprietary mixture. [RobotManip paper v2, §2.5](https://arxiv.org/abs/2606.17846v2)
+#### Vision-language co-training stream
 
-## 7. Data Curation
+The separate **28M-example VL stream** covers:
 
-The curation pipeline harmonizes:
+- general visual understanding;
+- spatial perception and reasoning;
+- OCR and document understanding;
+- multimodal specialist knowledge;
+- multilingual instruction following;
+- embodied chain-of-thought and ego-video understanding.
 
-- Video timing
-- Robot state and action timestamps
-- Kinematic validity
-- Episode boundaries
-- Language annotations
-- Camera streams
-- Missing or occluded hands
-- Invalid action steps
+Named sources include RoboPoint, RefSpatial, PixMo, and CapsFusion. However:
+
+- the mixture also contains proprietary and synthesized VL data;
+- the paper does not give a complete source-by-source breakdown;
+- “open-source data only” applies to the manipulation corpus, not every VL example;
+- no global benchmark-contamination audit is reported for the web/proprietary mixture.
+
+[RobotManip paper v2, §2.5](https://arxiv.org/abs/2606.17846v2)
+
+### 3.2 ECoT: What It Is and Where It Is Used
+
+**Embodied chain-of-thought (ECoT)** is language reasoning grounded in the robot's visual scene and physical state. The original ECoT policy generates task, plan, subtask, motion, gripper-position, andobject-grounding text before predicting an action. 
+
+Qwen-RobotManip adopts the underlying idea but uses it differently: its ECoT examples are an **auxiliary vision-language training task**, not a documented mandatory text prefix for the continuous action policy at deployment.
+[Original ECoT paper, §§4.1-4.3](https://arxiv.org/abs/2407.08693)
+[RobotManip paper v2, §§2.5, 4.1.2 and 5](https://arxiv.org/abs/2606.17846v2)
+
+#### Where ECoT enters the pipeline
+
+```mermaid
+flowchart TD
+    subgraph OFFLINE[Offline annotation only]
+        TRAJ[Robot trajectory at timestamp t]
+        PRIV[Past-memory summary<br/>six future frames<br/>coarse episode progress]
+        TEACHER[Qwen3.6-Plus<br/>thinking mode]
+        TRAJ --> TEACHER
+        PRIV --> TEACHER
+        TEACHER --> TARGET[Three-part ECoT text target]
+    end
+
+    subgraph PRETRAIN[RobotManip pretraining]
+        INPUT[Current multi-view images<br/>and task instruction]
+        VLM[Qwen3.5 VLM backbone]
+        INPUT --> VLM
+        TARGET -->|next-token supervision| VLM
+        VLM --> REP[Embodied visual-language<br/>representations]
+        REP --> DIT[DiT action expert]
+    end
+
+    subgraph DEPLOY[Default deployment path]
+        LIVE[Live observation, state,<br/>prompt, optional history]
+        POLICY[VLM plus DiT]
+        ACT[16-step continuous<br/>canonical action chunk]
+        LIVE --> POLICY --> ACT
+    end
+```
+
+At a sampled trajectory time `t`, the annotation pipeline gives a teacher VLM more information than
+the eventual student sees:
+
+1. synchronized current images from all available views;
+2. a summary of earlier episode frames and visible state changes;
+3. six future frames sampled at one-second intervals from `t`;
+4. a coarse estimate of how far the episode has progressed;
+5. the task instruction.
+
+The teacher, reported as **Qwen3.6-Plus in thinking mode**, writes one target with three fields:
+
+1. **Scene Description** — objects, spatial relations, robot-arm positions, and gripper states;
+2. **Task Progress Assessment** — completed subgoals plus the literal judgment `Task complete.` or
+   `Task not yet complete.`;
+3. **Next Action** — one atomic action from the paper's taxonomy, such as reach-and-grasp, move-and-release,
+   rotate, open, push, insert, or handover.
+
+The privileged past/future/progress context is used only to improve annotation quality. The resulting
+training example contains **current multi-view images + task instruction as input** and the three-part
+ECoT response as its text target. It is trained with the VLM next-token loss as part of the separate VL
+batch stream. The paper reports an overall **9:1 manipulation-to-VL pretraining mixture**, but does not
+publish what fraction of the roughly 28M VL examples is ECoT.
+[RobotManip paper v2, §2.5 and §4.1](https://arxiv.org/abs/2606.17846v2)
+
+#### How ECoT affects actions
+
+ECoT supervision directly updates the **VLM backbone**, encouraging its hidden states to encode scene
+state, task progress, and useful next-action semantics. Action batches separately backpropagate the
+flow-matching loss through both the backbone and the DiT, so the continuous action expert can use those
+richer visual-language representations. This is an indirect representation-transfer path; the paper does
+not say that the DiT consumes the generated three-part ECoT text.
+
+The phase distinction is important:
+
+| Phase                                | ECoT role                           | What the model receives or produces                                                                         |
+| ------------------------------------ | ----------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| Data synthesis                       | Create text supervision             | Teacher sees current views plus privileged past, future, and progress cues and writes the three-part target |
+| Foundation pretraining, VL batch     | Train embodied representations      | Student sees only current views and instruction and predicts ECoT text with next-token loss                 |
+| Foundation pretraining, action batch | Transfer representations to control | VLM and DiT predict continuous actions with flow matching; no ECoT text target is documented in this batch  |
+| Default domain SFT                   | No explicit ECoT objective          | Flow-matching action loss only                                                                              |
+| Default deployment                   | No documented ECoT decoding         | VLM hidden states condition the DiT, which produces a 16-step continuous action chunk                       |
+
+This differs from the original 2024 ECoT design, where the policy autoregressively emits its reasoning chain before its action. Qwen-RobotManip's design is closer to the **reasoning pretraining/co-training** family studied by ECoT-Lite: use reasoning to shape internal representations while avoiding mandatory
+test-time text generation. 
+
+This is a conceptual comparison, not a claim that RobotManip implements the
+published ECoT-Lite recipe exactly.
+[ECoT-Lite project, “Policy Variants”](https://ecot-lite.github.io/)
+
+#### Worked example
+
+The paper does not publish a complete generated RobotManip ECoT sample. The following is therefore an **illustrative reconstruction** that obeys its documented three-field schema and atomic-action taxonomy; it is not a verbatim model output.
+
+**Student training input:**
+
+```yaml
+images:
+  - <front-camera image at time t>
+  - <left-wrist-camera image at time t>
+  - <right-wrist-camera image at time t>
+instruction: "Take the toy off the table and put it on the mat."
+```
+
+**ECoT text target:**
+
+```text
+Scene Description: A red toy is on the left side of the table. The blue mat is
+to its right. Both grippers are open, and the left gripper is closer to the toy.
+
+Task Progress Assessment: The toy has not yet been grasped and is not on the mat.
+Task not yet complete.
+
+Next Action: Reach the left gripper toward the red toy and grasp it.
+```
+
+The teacher may have used the hidden annotation-only context below to make that target reliable:
+
+```yaml
+annotation_only:
+  memory_summary: "No manipulation has yet been completed."
+  future_preview: "The left gripper approaches and closes around the toy."
+  sampled_future_frames: 6
+  sampling_interval_seconds: 1
+  coarse_episode_progress: "early"
+```
+
+None of `annotation_only` belongs in the student input or default deployment API. During robot control,
+the policy instead uses the live observation, proprioceptive state, structured embodiment prompt, and
+optional behavior history; the DiT then emits the numeric action chunk. The textual `Next Action` above
+teaches semantic action selection but is not itself the motor command.
+
+#### Evidence limits
+
+- The paper does not disclose the ECoT subset size, exact synthesis prompt, annotation filtering rate,
+  or a released ECoT dataset manifest.
+- It reports an ablation for removing the **entire VL mixture**, not ECoT alone. The reported performance
+  drops therefore cannot be attributed specifically to ECoT.
+- One architecture comparison excludes the embodiment prompt, ECoT, and context together, so it also
+  does not isolate ECoT's causal effect.
+- “Qwen3.6-Plus with thinking mode” names the annotation teacher configuration. Its internal thinking
+  is not the same artifact as the structured ECoT target used to train RobotManip.
+- The public paper and repository do not document inference-time generation, display, correction, or
+  reuse of RobotManip ECoT text. Treating it as a deployed planner would go beyond the evidence.
+
+### 3.3 Data Curation
+
+The curation pipeline is easier to read as four checks:
+
+- **Temporal alignment**
+  - synchronize video, robot state, and action timestamps;
+  - preserve valid episode boundaries.
+- **Motion and kinematic validity**
+  - reject discontinuities and invalid action steps;
+  - correct incompatible kinematic conventions.
+- **Cross-modal consistency**
+  - verify that language matches the demonstrated behavior;
+  - check agreement between video and state/action signals.
+- **Visual validity**
+  - harmonize camera streams;
+  - remove unusable frames, missing hands, and occluded hand trajectories.
 
 This is crucial because mixed robot data can create contradictory gradients when the same physical behavior is encoded differently.
 
-## 8. Pretraining and Task Alternation
+## 4. Training Procedure
 
-RobotManip uses **dual-stream co-training** at a reported **9:1 robot/manipulation-to-VL
-ratio**. Figure 3 defines the action stream broadly enough to include robot demonstrations,
-egocentric hands, and Human-to-Robot trajectories, but §4.1.1 calls the numerator “robot data.”
-The exact denominator used by the data loader is therefore not fully specified:
+### 4.1 Pretraining and Task Alternation
+
+RobotManip uses dual-stream co-training:
+
+- **Reported ratio:** 9:1 robot/manipulation-to-VL.
+- **Action-stream contents in Figure 3:** robot demonstrations, egocentric hands, and Human-to-Robot
+  trajectories.
+- **Terminology ambiguity:** §4.1.1 calls the numerator “robot data.”
+- **Unknown:** the exact loader-level interpretation of that numerator is not fully specified.
 
 ```text
 Approximately 90% manipulation/VLA data
@@ -425,13 +616,18 @@ DiT block 2 -> cross-attend to visual tokens
 ...
 ```
 
-The paper confirms that a batch belongs to one stream, but does **not** publish a deterministic
-`9 VLA -> 1 VL` cycle, probabilistic scheduler, per-source weights, epoch construction, or a method for
-correcting the large raw-hour imbalance between robot, human, and H2R data. “Alternating tasks” is
-therefore best understood as **sampling separate task batches under a mixture ratio**, not as a documented
-fixed sequence. [RobotManip paper v2, Figure 3 and §4.1.1](https://arxiv.org/abs/2606.17846v2)
+What is and is not known:
 
-### Flow-Matching Objective
+- **Known:** every batch belongs to either the VLA stream or the VL stream.
+- **Known:** the streams are sampled under a reported 9:1 mixture.
+- **Not published:** a deterministic `9 VLA -> 1 VL` cycle.
+- **Not published:** probabilistic scheduler details, per-source weights, or epoch construction.
+- **Not published:** correction for the raw-hour imbalance between robot, human, and H2R data.
+
+“Alternating tasks” therefore means **sampling separate task batches under a mixture ratio**, not a
+documented fixed sequence. [RobotManip paper v2, Figure 3 and §4.1.1](https://arxiv.org/abs/2606.17846v2)
+
+#### Flow-Matching Objective
 
 For a ground-truth action chunk \(a\), Gaussian noise \(\epsilon\), and
 \(t\sim\operatorname{Beta}(1,1.5)\):
@@ -458,7 +654,7 @@ $$
 
 where \(s\) is robot state and \(o\) is the visual-language observation.
 
-### Masked Flow-Matching Loss
+#### Masked Flow-Matching Loss
 
 RobotManip applies three masks:
 
@@ -468,7 +664,7 @@ RobotManip applies three masks:
 
 The loss is normalized per sample over valid entries so that robots with more active dimensions do not automatically produce larger gradients.
 
-### VLM Preservation Loss
+#### VLM Preservation Loss
 
 Vision-language samples use standard autoregressive next-token prediction:
 
@@ -484,13 +680,13 @@ The report uses \(\lambda=0.1\). Because only the corresponding loss is active f
 coefficient weights the VL update when the selected batch is a VL batch; it does not imply that every
 training example simultaneously has both targets.
 
-### Repeated Noise Sampling
+#### Repeated Noise Sampling
 
 For one action chunk, the action expert draws multiple independent noise and timestep samples. The reported setup repeats the diffusion training calculation eight times while reusing the expensive VLM representation.
 
 This improves action-expert training efficiency without requiring eight separate visual forward passes.
 
-## 9. Stochastic Context Sampling
+### 4.2 Stochastic Context Sampling
 
 Always providing the immediately preceding action chunk can cause a shortcut: the model may copy the latest action instead of learning the robot's broader behavior.
 
@@ -508,7 +704,7 @@ This forces the model to infer stable behavioral characteristics instead of expl
 
 At deployment, a normal rolling recent-history window can be used.
 
-## 10. Post-Training
+### 4.3 Post-Training
 
 RobotManip uses domain-specific **generalist SFT**:
 
@@ -523,7 +719,9 @@ post-training samples; a further mixed setting makes auxiliary pretraining VLA 7
 the remaining source-level scheduler is not disclosed. No dedicated reinforcement-learning stage is
 reported as the main pipeline. [RobotManip paper v2, §§4.2 and 6.5.1](https://arxiv.org/abs/2606.17846v2)
 
-## 11. Evaluation
+## 5. Evaluation
+
+### 5.1 Benchmark Coverage
 
 The paper deliberately separates familiar in-distribution benchmarks from tests intended to measure
 generalization. All values below are author-reported success rates unless another metric is named.
@@ -539,6 +737,8 @@ generalization. All values below are author-reported success rates unless anothe
 | EBench               | 26 task types; SR and composite score                  |                 45.6 SR / 60 score | Covers tabletop, mobile pick-and-place, and long-horizon tasks                         |
 | RoboTwin-IF          | Held-out instruction templates; average SR             |                               72.2 | Tests language-conditioned action selection in similar scenes                          |
 | RoboTwin-XE          | Train on AgileX ALOHA, zero-shot to ARX/UR5/Franka; SR | 23.9 average with camera-frame EEF | Joint-space transfer remains poor; result supports camera-frame alignment              |
+
+### 5.2 Real-Robot Evaluation
 
 Real-world evaluation uses the RoboChallenge Table30 v1 generalist track: **30 tasks across AgileX
 ALOHA, Franka, UR, and ARX**. The paper reports first place, **45% task success**, and a **59.83
@@ -557,6 +757,8 @@ Additional real-robot protocols show what the aggregate benchmark number hides:
 
 [RobotManip paper v2, Tables 10-14](https://arxiv.org/abs/2606.17846v2)
 
+### 5.3 Training and Context Ablations
+
 The most relevant ablations for interpreting the training recipe are:
 
 - Removing VL pretraining lowers RoboTwin-Clean2Rand Hard from 62.6 to 54.4 and
@@ -572,14 +774,21 @@ The most relevant ablations for interpreting the training recipe are:
 
 [RobotManip paper v2, Tables 15-18](https://arxiv.org/abs/2606.17846v2)
 
-Two evaluation cautions matter. First, these results are reported by the model authors and no repeated-run
-variance or confidence interval is given. Second, the context variant is not uniformly better: it improves
-LIBERO-Plus and RoboTwin-Clean2Rand but is lower on EBench and RoboCasa365, and it needs a larger
-denoising budget to avoid jitter. The paper additionally flags H2R rendering artifacts, mainly simulated
-OOD tests, fixed action chunks, and inference latency as limitations; its broader real-world evidence still
-covers a finite set of platforms and tasks.
+### 5.4 Evaluation Caveats
 
-## 12. How RobotManip Differs from Qwen-VLA
+- Results are author-reported and have no repeated-run variance or confidence intervals.
+- The context variant is not uniformly better:
+  - it improves LIBERO-Plus and RoboTwin-Clean2Rand;
+  - it is lower on EBench and RoboCasa365;
+  - it requires a larger denoising budget to avoid jitter.
+- Human-to-Robot data can contain retargeting, rendering, or inpainting artifacts.
+- Most controlled OOD tests remain simulation-based.
+- Fixed action chunks and iterative inference limit highly reactive behavior.
+- Real-world validation still covers a finite set of platforms and tasks.
+
+## 6. Comparison and Conclusion
+
+### 6.1 How RobotManip Differs from Qwen-VLA
 
 | Aspect                     | Qwen-VLA                                               | Qwen-RobotManip                                                     |
 | -------------------------- | ------------------------------------------------------ | ------------------------------------------------------------------- |
@@ -594,7 +803,7 @@ covers a finite set of platforms and tasks.
 | RL                         | Included                                               | Not a central reported stage                                        |
 | Main design philosophy     | Build a universal action generator progressively       | Align heterogeneous manipulation data, then scale it                |
 
-## 13. Core Training Philosophy
+### 6.2 Core Training Philosophy
 
 > **Alignment first, then scale.**
 
@@ -612,3 +821,10 @@ RobotManip treats inconsistent robot representations as the main bottleneck. The
 2. Wang et al. *Qwen-VLA: A Vision-Language-Action Model for General Embodied Intelligence*.
    [arXiv](https://arxiv.org/abs/2605.30280v2) ·
    [local PDF](../../papers/05-gwen/vla-specific/qwen_vla_2605.30280.pdf)
+3. Zawalski et al. *Robotic Control via Embodied Chain-of-Thought Reasoning*, 2024.
+   [arXiv](https://arxiv.org/abs/2407.08693) ·
+   [project page](https://embodied-cot.github.io/) ·
+   [official repository](https://github.com/MichalZawalski/embodied-CoT)
+4. Chen et al. *Training Strategies for Efficient Embodied Reasoning*, 2025.
+   [arXiv](https://arxiv.org/abs/2505.08243) ·
+   [project page](https://ecot-lite.github.io/)
