@@ -1,36 +1,36 @@
-# Qwen-RobotManip: Presentation Summary
+# Qwen-RobotManip: Tóm tắt bài thuyết trình
 
-> **Full source of truth:** [Qwen-RobotManip complete report](qwen_robotmanip_details.md). This short version
-> intentionally omits implementation details, complete dataset accounting, equations, and benchmark caveats. Primary paper: [Qwen-RobotManip v2](https://arxiv.org/abs/2606.17846v2).
+> **Nguồn đầy đủ sự thật:** [Báo cáo đầy đủ Qwen-RobotManip](qwen_robotmanip_details.md). Phiên bản ngắn này
+> cố tình bỏ qua các chi tiết triển khai, tính toán dữ liệu đầy đủ, các phương trình và cảnh báo benchmark. Bài viết chính: [Qwen-RobotManip v2](https://arxiv.org/abs/2606.17846v2).
 
-## Main Message
+## Thông điệp chính
 
-> **Qwen-RobotManip aligns heterogeneous robot representations, motions, and behaviors before scaling
-> manipulation training.**
+> **Qwen-RobotManip sắp xếp các biểu tượng, chuyển động và hành vi không đồng nhất của robot trước khi mở rộng quy mô
+> huấn luyện thao tác.**
 
-- Supports single-arm, dual-arm, gripper, dexterous-hand, mobile, and humanoid embodiments.
-- Uses Qwen3.5-4B for multimodal reasoning.
-- Uses a flow-matching DiT to generate continuous action chunks.
-- Represents state and action in a shared, masked 80-D template.
-- Uses camera-frame end-effector deltas to improve cross-robot transfer.
+- Hỗ trợ các phương án một cánh tay, hai cánh tay, dụng cụ kẹp, bàn tay khéo léo, di động và hình người.
+- Sử dụng Qwen3.5-4B để suy luận đa phương thức.
+- Sử dụng DiT phù hợp với luồng để tạo ra các khối hành động liên tục.
+- Thể hiện trạng thái và hành động trong mẫu 80-D được che dấu, được chia sẻ.
+- Sử dụng deltas của bộ end-effector khung máy ảnh để cải thiện khả năng truyền giữa các robot.
 
-## Architecture
+## Kiến trúc
 
-![Qwen-RobotManip architecture](Image/architecture_overview.png)
+![Cấu trúc Qwen-RobotManip](Image/architecture_overview.png)
 
-| Component       | Presentation takeaway                                                                                       |
+| Thành phần | Bài thuyết trình mang đi |
 | --------------- | ----------------------------------------------------------------------------------------------------------- |
-| Inputs          | Multi-view RGB, structured embodiment prompt, current proprioception, camera geometry, and optional history |
-| VLM backbone    | Qwen3.5-4B jointly processes vision, language, and historical context                                       |
-| Action expert   | 10 DiT blocks, width 768, 12 heads                                                                          |
-| Cross-attention | Alternates visual and language conditioning across DiT blocks                                               |
-| Output          | Continuous action chunk in the canonical 80-D space                                                         |
-| Inference       | Four Euler integration steps in the reported default setup                                                  |
+| Đầu vào | RGB nhiều chế độ xem, prompt phương án có cấu trúc, khả năng nhận biết hiện tại, hình học camera và lịch sử tùy chọn |
+| Xương sống VLM | Qwen3.5-4B cùng xử lý tầm nhìn, ngôn ngữ và bối cảnh lịch sử |
+| Action expert | 10 khối DiT, rộng 768, 12 đầu |
+| Chú ý chéo | Thay thế điều hòa hình ảnh và ngôn ngữ trên các khối DiT |
+| Đầu ra | Đoạn hành động liên tục trong không gian 80-D chuẩn |
+| Suy luận | Bốn bước tích hợp Euler trong thiết lập mặc định được báo cáo |
 
-### Worked Example: Input to Robot Action
+### Ví dụ thực tế: Đầu vào cho hành động của robot
 
-The following is a **presentation reconstruction**, not a released API schema. It shows how one
-dual-arm decision could be assembled:
+Sau đây là **bản trình bày được tái tạo**, không phải lược đồ API được phát hành. Nó cho thấy làm thế nào một
+quyết định hai cánh tay có thể được tập hợp:
 
 ```yaml
 images:
@@ -57,33 +57,33 @@ history: <earlier images, states, and executed action chunks>
 
 ```mermaid
 flowchart LR
-    I[Three RGB views] --> V[Qwen3.5 visual tokens]
-    P[Instruction and embodiment prompt] --> L[Qwen3.5 language tokens]
-    H[Optional visual history] --> V
-    S[Masked 80-D state and action history] --> SM[State and history MLPs]
-    N[Noisy 80-D action chunk] --> D[10-block flow-matching DiT]
-    C[Camera geometry and flow time] --> D
+    I[Ba chế độ xem RGB] --> V[Token trực quan Qwen3.5]
+    P[Hướng dẫn và prompt thực hiện] --> L[Token ngôn ngữ Qwen3.5]
+    H[Lịch sử trực quan tùy chọn] --> V
+    S[Lịch sử hành động và trạng thái 80-D được che giấu] --> SM[MLP trạng thái và lịch sử]
+    N[Đoạn hành động 80-D ồn ào] --> D[DiT phù hợp với dòng chảy 10 khối]
+    C[Hình dạng camera và thời gian dòng chảy] --> D
     V --> D
     L --> D
     SM --> D
-    D --> E[Four Euler denoising steps]
-    E --> A[Masked 80-D action chunk]
-    A --> X[Decode active slots and execute]
+    D --> E[Bốn bước khử nhiễu Euler]
+    E --> A[Đoạn hành động 80-D được che giấu]
+    A --> X[Giải mã các khe hoạt động và thực thi]
 ```
 
-Inside the DiT, successive blocks alternate cross-attention to visual and language features. The output
-is a **chunk of future actions**, not natural-language robot commands. A simplified illustrative decode is:
+Bên trong DiT, các khối liên tiếp xen kẽ nhau chú ý đến các đặc điểm hình ảnh và ngôn ngữ. Đầu ra
+là **một đoạn hành động trong tương lai**, không phải lệnh của robot bằng ngôn ngữ tự nhiên. Một giải mã minh họa đơn giản hóa là:
 
-| Output step | Active canonical fields                               | Physical interpretation |
+| Bước đầu ra | Các trường chuẩn đang hoạt động | Giải thích vật lý |
 | ----------- | ----------------------------------------------------- | ----------------------- |
-| (t+1)       | Left EEF`(+0.02, 0.00, -0.01)`; gripper `open`    | Approach the toy        |
-| (t+2)       | Left EEF`(0.00, 0.00, -0.02)`; gripper `close`    | Descend and grasp       |
-| (t+3)       | Left EEF`(+0.04, +0.03, +0.05)`; gripper `closed` | Move toward the mat     |
+| (t+1) | Còn lại EEF`(+0.02, 0.00, -0.01)`; kẹp `open` | Tiếp cận đồ chơi |
+| (t+2) | Còn lại EEF`(0.00, 0.00, -0.02)`; kẹp `close` | Đi xuống và nắm bắt |
+| (t+3) | Còn lại EEF`(+0.04, +0.03, +0.05)`; kẹp `closed` | Di chuyển về phía tấm thảm |
 
-The values above only illustrate camera-frame deltas. The paper does not publish this sample's tensor,
-chunk length, API field names, or controller commands.
+Các giá trị ở trên chỉ minh họa vùng delta của khung máy ảnh. Bài báo không công bố tensor của mẫu này,
+độ dài đoạn, tên trường API hoặc lệnh điều khiển.
 
-## Why the 80-D Representation Matters
+## Tại sao Biểu diễn 80-D lại quan trọng
 
 ```text
 Left arm:   29 dimensions
@@ -92,34 +92,34 @@ Reserved:   22 dimensions
 Total:      80 dimensions
 ```
 
-Each 29-D arm block contains:
+Mỗi khối cánh tay 29-D chứa:
 
-| Field              | Dimensions |
+| Lĩnh vực | Kích thước |
 | ------------------ | ---------: |
-| Joint positions    |          7 |
-| End-effector state |          9 |
-| Gripper            |          1 |
-| Dexterous hand     |         12 |
+| Vị trí chung |          7 |
+| Trạng thái end-effector |          9 |
+| Kẹp |          1 |
+| Bàn tay khéo léo |         12 |
 
-Key point: masks prevent missing joints or unused arms from becoming false zero-valued supervision.
+Điểm mấu chốt: mặt nạ ngăn ngừa các khớp bị thiếu hoặc cánh tay không được sử dụng trở thành giám sát giả có giá trị bằng 0.
 
-## Three Alignment Layers
+## Ba lớp căn chỉnh
 
 ```mermaid
 flowchart LR
-    D[Heterogeneous robot data] --> R[Representation alignment]
-    R --> M[Motion alignment]
-    M --> B[Behavior alignment]
-    B --> P[Shared manipulation policy]
+    D[Dữ liệu robot không đồng nhất] --> R[Căn chỉnh biểu diễn]
+    R --> M[Căn chỉnh chuyển động]
+    M --> B[Căn chỉnh hành vi]
+    B --> P[Chính sách thao túng chia sẻ]
 ```
 
-| Alignment      | What changes                                                                    | Why it helps                                                              |
+| Căn chỉnh | Thay đổi gì | Tại sao nó giúp ích |
 | -------------- | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| Representation | Map every robot into the same 80-D template                                     | Equivalent joints and end effectors occupy consistent slots               |
-| Motion         | Express end-effector deltas in a selected camera frame                          | Visually similar movement becomes numerically similar                     |
-| Behavior       | Condition on robot ID, FPS, episode speed, camera direction, and recent history | Policy can adapt to kinematics and execution style without weight updates |
+| Đại diện | Ánh xạ mọi robot vào cùng một mẫu 80-D | Các khớp tương đương và bộ phận end-effector chiếm các khe nhất quán |
+| Chuyển động | Thể hiện vùng delta của bộ end-effector trong khung máy ảnh đã chọn | Chuyển động giống nhau về mặt trực quan trở nên giống nhau về mặt số lượng |
+| Hành vi | Điều kiện về ID robot, FPS, tốc độ tập, hướng camera và lịch sử gần đây | Chính sách có thể thích ứng với động học và phong cách thực thi mà không cần cập nhật trọng lượng |
 
-## Example Embodiment Prompt
+## Prompt về phương án mẫu
 
 ```text
 embodiment: robot_aloha
@@ -129,63 +129,63 @@ fps: 30
 camera view direction: arm side
 ```
 
-Presentation caution: `speed` means episode length in 500-step bins, not physical metres/second.
+Thận trọng khi trình bày: `speed` có nghĩa là độ dài tập tính theo thùng 500 bước, không phải mét/giây vật lý.
 
-## Training Data
+## Dữ liệu huấn luyện
 
-![Qwen-RobotManip training corpus](Image/training_data_corpus.png)
+![Khối huấn luyện Qwen-RobotManip](Image/training_data_corpus.png)
 
-| Data group                  |     Reported scale | Key interpretation                                                       |
+| Nhóm dữ liệu |     Quy mô báo cáo | Giải thích chính |
 | --------------------------- | -----------------: | ------------------------------------------------------------------------ |
-| Direct robot demonstrations |           11,420 h | Nine open robot-data sources across several embodiments                  |
-| Egocentric human video      |            1,933 h | Filtered EgoDex, VITRA, and EgoVerse subsets                             |
-| Human-to-Robot synthetic    |           24,808 h | Derived from the same human videos across 15 robot morphologies          |
-| Total manipulation corpus   |           38,161 h | Rounded by the authors to about 38,100 h                                 |
-| VL co-training              | About 28M examples | Preserves perception, language, spatial reasoning, and ECoT capabilities |
+| Trình diễn robot trực tiếp |           11.420 giờ | Chín nguồn dữ liệu rô-bốt mở theo nhiều phương án |
+| Video con người ích kỷ |            1.933 giờ | Các tập hợp con EgoDex, VITRA và EgoVerse được lọc |
+| Tổng hợp từ người sang robot |           24.808 giờ | Bắt nguồn từ các video giống nhau của con người trên 15 hình thái robot |
+| Tổng số thao tác |           38.161 giờ | Được tác giả làm tròn lên khoảng 38.100 h |
+| VL đồng huấn luyện | Khoảng 28 triệu ví dụ | Duy trì nhận thức, ngôn ngữ, lý luận không gian và khả năng ECoT |
 
-The synthetic hours are derived scale, not independent human experience.
+Giờ tổng hợp có nguồn gốc từ thang đo chứ không phải trải nghiệm độc lập của con người.
 
-## Training Flow
+## Luồng huấn luyện
 
 ```mermaid
 flowchart LR
-    R[Robot demonstrations] --> C[Curate and align]
-    H[Human video] --> S[Human-to-Robot synthesis]
+    R[Trình diễn robot] --> C[Sắp xếp và căn chỉnh]
+    H[Video con người] --> S[Tổng hợp từ người sang robot]
     S --> C
-    C --> VLA[VLA batches]
-    VL[VL and reasoning data] --> VLB[VL batches]
-    VLA --> T[9:1 dual-stream pretraining]
+    C --> VLA[Lô VLA]
+    VL[VL và dữ liệu lý luận] --> VLB[lô VL]
+    VLA --> T[Huấn luyện trước luồng kép 9:1]
     VLB --> T
-    T --> SFT[Domain-generalist SFT]
+    T --> SFT[SFT tổng hợp tên miền]
 ```
 
-| Batch type | Objective                             | Reported share |
+| Loại hàng loạt | Mục tiêu | Báo cáo chia sẻ |
 | ---------- | ------------------------------------- | -------------: |
-| VLA        | Masked flow matching on action chunks |      About 90% |
-| VL         | Autoregressive next-token prediction  |      About 10% |
+| VLA | Kết hợp luồng mặt nạ trên các khối hành động |      Khoảng 90% |
+| VL | Dự đoán token tiếp theo tự động hồi quy |      Khoảng 10% |
 
-The paper reports the ratio but not a fixed repeating batch order or complete per-source sampling policy.
+Bài viết báo cáo tỷ lệ nhưng không phải là thứ tự lô lặp lại cố định hoặc chính sách lấy mẫu hoàn chỉnh theo từng nguồn.
 
-## Evaluation Highlights
+## Điểm nổi bật của đánh giá
 
-| Evaluation               |                  Main reported result | What it demonstrates                                         |
+| Đánh giá |                  Kết quả báo cáo chính | Nó thể hiện điều gì |
 | ------------------------ | ------------------------------------: | ------------------------------------------------------------ |
-| LIBERO                   |                 99.1 SR; context 99.2 | Strong in-distribution performance, but near saturation      |
-| LIBERO-Plus              |                    89.0; context 91.4 | Robustness to seven OOD perturbation axes                    |
-| RoboTwin-Clean2Rand Hard |                    62.6; context 69.4 | Context helps under combined scene shift                     |
-| RoboCasa365              |                         35.9 total SR | Long-horizon and compositional manipulation remain difficult |
-| RoboTwin-IF              |                       72.2 average SR | Held-out language-template following                         |
-| RoboTwin-XE              |                       23.9 average SR | Zero-shot cross-embodiment transfer remains challenging      |
-| RoboChallenge Table30 v1 | 45% task success; 59.83 process score | Multi-platform real-robot evaluation                         |
+| LIBERO |                 99,1 SR; bối cảnh 99,2 | Hiệu suất phân phối mạnh mẽ nhưng gần bão hòa |
+| LIBERO-Plus |                    89,0; bối cảnh 91,4 | Mạnh mẽ đối với bảy trục nhiễu loạn OOD |
+| RoboTwin-Clean2Rand Hard |                    62,6; bối cảnh 69,4 | Bối cảnh giúp theo chuyển cảnh kết hợp |
+| RoboCasa365 |                         tổng 35,9 SR | Thao tác với đường chân trời dài và bố cục vẫn còn khó khăn |
+| RoboTwin-IF |                       SR trung bình 72,2 | Mẫu ngôn ngữ được tổ chức sau đây |
+| RoboTwin-XE |                       SR trung bình 23,9 | Chuyển giao theo phương án chéo không bắn vẫn còn nhiều thách thức |
+| Bảng RoboChallenge30 v1 | 45% nhiệm vụ thành công; 59,83 điểm quá trình | Đánh giá robot thực đa nền tảng |
 
-## Action Coverage
+## Bảo hiểm hành động
 
-![Qwen-RobotManip atomic action taxonomy](Image/atomic_action_taxonomy.png)
+![Phân loại hành động nguyên tử Qwen-RobotManip](Image/atomic_action_taxonomy.png)
 
-## Final Slide: Five Points
+## Trang trình bày cuối cùng: Năm điểm
 
-1. The main innovation is **cross-embodiment alignment**, not only a larger dataset.
-2. The 80-D template and masks make different robot morphologies train together.
-3. Camera-frame deltas align action coordinates with visual observations.
-4. History acts as an implicit description of robot behavior and kinematics.
-5. OOD and cross-robot results are promising, but synthetic artifacts, latency, and reactive control remain limitations.
+1. Cải tiến chính là **căn chỉnh nhiều phương án**, không chỉ là tập dữ liệu lớn hơn.
+2. Mẫu và mặt nạ 80-D giúp các hình thái robot khác nhau được huấn luyện cùng nhau.
+3. Đồng bằng khung máy ảnh căn chỉnh tọa độ hành động với các quan sát trực quan.
+4. Lịch sử đóng vai trò như một mô tả ngầm về hành vi và động học của robot.
+5. Kết quả OOD và robot chéo đầy hứa hẹn nhưng các tạo tác tổng hợp, độ trễ và kiểm soát phản ứng vẫn còn hạn chế.

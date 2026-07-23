@@ -1,4 +1,4 @@
-# Qwen3.5 — Training stages
+# Qwen3.5 — Các giai đoạn huấn luyện
 
 > Qwen công khai pipeline ở mức khái quát, không công khai toàn bộ recipe. Bảng dưới đây phân biệt `✓` xác nhận, `△` diễn giải hợp lý từ công bố, `?` chưa công bố.
 
@@ -8,9 +8,9 @@
 | Early-fusion multimodal | Image-text, video-text, documents, chart/OCR/UI cùng chuỗi token       | ✓           |
 | Long-context            | Continued training cho tài liệu, video, repository và trajectory dài | △           |
 | SFT                     | Instruction, hội thoại, reasoning, code, multimodal và tool-use       | ✓/△        |
-| Reasoning RL            | Rollout, verifier/environment reward, policy optimization                | ✓/△        |
-| Agentic post-training   | Multi-step plan → tool call → observation → answer                    | ✓/△        |
-| Specialized behavior    | Thinking/non-thinking, format, multilingual, tool reliability            | △           |
+| Lý luận RL | Triển khai, người xác minh/phần thưởng môi trường, tối ưu hóa chính sách | ✓/△ |
+| Đại lý sau huấn luyện | Kế hoạch nhiều bước → gọi công cụ → quan sát → trả lời | ✓/△ |
+| Hành vi chuyên biệt | Suy nghĩ/không suy nghĩ, định dạng, đa ngôn ngữ, độ tin cậy của công cụ | △ |
 
 ## 1. Foundation và multimodal pre-training
 
@@ -27,7 +27,7 @@ Unified token sequence (text + visual tokens)
 
 Objective cơ bản là `L = -Σ log p(x_t | x_<t)`. Qwen nhấn mạnh early-fusion multimodal training và hiệu suất gần text-only training. Chưa có số chính thức đầy đủ về tổng token, tỷ lệ modality, curriculum, resolution và video hours.
 
-## 2. Long-context continued training
+## 2. Tiếp tục huấn luyện theo bối cảnh dài
 
 Pipeline có thể trình bày như sau:
 
@@ -43,7 +43,7 @@ Long-context instruction tuning
 
 Đây là diễn giải từ năng lực công bố, không phải recipe từng bước đã được Qwen xác nhận. Cần phân biệt model nhận được 256K/1M input với việc model luôn truy xuất và suy luận tốt ở độ dài đó.
 
-## 3. Supervised post-training
+## 3. Có giám sát sau huấn luyện
 
 ```text
 Base model
@@ -79,7 +79,7 @@ Reward có thể liên quan đến unit tests, mathematical checkers, tool succe
 
 GSPO từng được Qwen giới thiệu cho RL sequence-level, nhưng không được tự động kết luận rằng mọi checkpoint Qwen3.5 đều dùng đúng cùng recipe nếu model card không xác nhận.
 
-## 5. Agent loop sau post-training
+## 5. Vòng lặp đại lý sau huấn luyện
 
 ```text
 User request → plan → tool call → observation
@@ -98,5 +98,5 @@ User request → plan → tool call → observation
 - Không có optimizer, schedule, global batch và compute budget cho mọi model.
 - Không có danh sách đầy đủ reward model, environment và reward function.
 
-![TODO: pipeline training stages](Image/qwen35_training_pipeline.png)
-![TODO: agentic RL loop](Image/qwen35_agentic_rl_loop.png)
+![TODO: giai đoạn huấn luyện quy trình](Image/qwen35_training_pipeline.png)
+![TODO: vòng lặp RL agent](Image/qwen35_agentic_rl_loop.png)

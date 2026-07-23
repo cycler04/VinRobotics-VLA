@@ -1,4 +1,4 @@
-# Qwen3.6-35B-A3B — Datasets
+# Qwen3.6-35B-A3B — Bộ dữ liệu
 
 ## 1. Kết luận về mức độ công khai
 
@@ -11,7 +11,7 @@ Qwen3.6 là open-weight nhưng chưa phải open-training. Model card không đ�
 | Foundation | Text, code, math, multilingual | Nền tảng kế thừa |
 | Multimodal | Image-text, video-text, documents | Công bố qua model type/capability |
 | Coding | Repository, bug, patch, diff, frontend | Suy ra từ agentic coding focus |
-| Tool use | Terminal, browser, filesystem, MCP/tool calls | Capability/post-training domain |
+| Sử dụng công cụ | Thiết bị đầu cuối, trình duyệt, hệ thống tập tin, lệnh gọi MCP/công cụ | Miền năng lực/sau huấn luyện |
 | RL environments | Code execution, browser, agent tasks | Mô tả ở mức environment |
 | Thinking traces | Historical reasoning và multi-turn trajectories | Gắn với Thinking Preservation |
 | Synthetic/verifier data | Teacher outputs, tests, tool feedback | Có thể có, nhưng recipe chưa public |
@@ -27,6 +27,6 @@ Repository/patch/tool trajectory là dạng dữ liệu hợp lý cho post-train
 | Khía cạnh | Qwen3.5 | Qwen3.6 |
 |---|---|---|
 | Foundation modalities | Text, code, math, image/video, documents | Kế thừa |
-| Data emphasis | General multimodal + agents | Coding agent, frontend, repository, tool workflows |
+| Nhấn mạnh dữ liệu | Tổng hợp đa phương thức + đại lý | Agent mã hóa, giao diện người dùng, kho lưu trữ, quy trình làm việc của công cụ |
 | Thinking history | Chưa có công bố tương đương | Historical thinking trajectories/behavior |
 | Dataset names/ratios | Chưa public đầy đủ | Chưa public đầy đủ |

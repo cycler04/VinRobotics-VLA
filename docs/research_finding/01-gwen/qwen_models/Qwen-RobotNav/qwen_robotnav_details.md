@@ -1,71 +1,71 @@
-# Qwen-RobotNav: Architecture, Training Data, and Evaluation
+# Qwen-RobotNav: Kiến trúc, Dữ liệu huấn luyện và Đánh giá
 
-## Scope
+## Phạm vi
 
-This report covers **Qwen-RobotNav**, the navigation specialist in the Qwen-Robot suite.
-It focuses on its waypoint policy, configurable observation interface, training datasets,
-batch-level task sampling, observation randomization, evaluations, and limitations. For the
-manipulation specialist, see [Qwen-RobotManip](../Qwen-RobotManip/qwen_robotmanip_details.md).
-For the general model, see [Qwen-VLA](../Qwen-VLA/qwen_vla_details.md).
+Báo cáo này bao gồm **Qwen-RobotNav**, chuyên gia điều hướng trong bộ Qwen-Robot.
+Nó tập trung vào chính sách điểm tham chiếu, giao diện quan sát có thể định cấu hình, bộ dữ liệu huấn luyện,
+lấy mẫu nhiệm vụ cấp lô, ngẫu nhiên quan sát, đánh giá và hạn chế. Đối với
+chuyên gia thao tác, xem [Qwen-RobotManip](../Qwen-RobotManip/qwen_robotmanip_details.md).
+Để biết mẫu chung, hãy xem [Qwen-VLA](../Qwen-VLA/qwen_vla_details.md).
 
-> **Research date:** 2026-07-22. The primary source checked is Qwen-RobotNav v3
-> (2026-06-29). Dataset and evaluation numbers are author-reported and have not been
-> reproduced in this workspace. The official repositories currently state that there is no
-> plan to release the model weights.
+> **Ngày nghiên cứu:** 22-07-2026. Nguồn chính được kiểm tra là Qwen-RobotNav v3
+> (2026-06-29). Tập dữ liệu và số lượng đánh giá là do tác giả báo cáo và chưa được
+> được sao chép trong không gian làm việc này. Các kho lưu trữ chính thức hiện tuyên bố rằng không có
+> lên kế hoạch giải phóng trọng lượng của mô hình.
 
-## Core Idea
+## Ý tưởng cốt lõi
 
-Qwen-RobotNav keeps the action head deliberately simple: Qwen3-VL encodes configurable
-multi-camera history, and a four-layer MLP directly regresses eight future waypoints. Its main
-training mechanism is not diffusion but joint multi-task adaptation under an 85:15
-trajectory-to-VL mixture, with dataset selection at batch granularity and observation
-configuration randomized independently for every trajectory sample.
+Qwen-RobotNav giữ cho đầu hành động đơn giản một cách có chủ ý: Qwen3-VL mã hóa có thể định cấu hình
+lịch sử nhiều camera và MLP bốn lớp trực tiếp hồi quy tám điểm tham chiếu trong tương lai. chính của nó
+Cơ chế huấn luyện không phải là phổ biến mà là thích ứng đa nhiệm chung theo tỷ lệ 85:15
+hỗn hợp quỹ đạo-VL, với lựa chọn tập dữ liệu ở mức độ chi tiết và quan sát hàng loạt
+cấu hình ngẫu nhiên độc lập cho mọi mẫu quỹ đạo.
 
-## 1. Model Overview
+## 1. Tổng quan về mô hình
 
-### 1.1 Main Tasks
+### 1.1 Nhiệm vụ chính
 
-Qwen-RobotNav supports five navigation task families:
+Qwen-RobotNav hỗ trợ năm nhóm nhiệm vụ điều hướng:
 
-- Vision-language instruction following
-- Point-goal navigation
-- Object search
-- Target tracking
-- Autonomous driving
+- Hướng dẫn ngôn ngữ thị giác sau đây
+- Điều hướng mục tiêu điểm
+- Tìm kiếm đối tượng
+- Theo dõi mục tiêu
+- Lái xe tự động
 
-It can also serve as a reactive navigation executor beneath a higher-level LLM planner.
+Nó cũng có thể đóng vai trò là người thực thi điều hướng phản ứng bên dưới trình lập kế hoạch LLM cấp cao hơn.
 
-### 1.2 Architecture
+### 1.2 Kiến trúc
 
 ```mermaid
 flowchart LR
-    M[Multi-camera history] --> ENC[Task-adaptive observation encoding]
-    C[Token budget, temporal decay, camera weights, sampling mode] --> ENC
+    M[Lịch sử nhiều camera] --> ENC[Mã hóa quan sát thích ứng với nhiệm vụ]
+    C[Ngân sách token, phân rã theo thời gian, trọng lượng máy ảnh, chế độ lấy mẫu] --> ENC
     ENC --> VLM[Qwen3-VL]
-    P[Navigation instruction and embodied prompt] --> VLM
-    VLM --> H[Trajectory hidden state]
-    H --> MLP[4-layer MLP action head]
-    MLP --> W[Eight waypoints: x, y, heading]
+    P[Hướng dẫn điều hướng và prompt thể hiện] --> VLM
+    VLM --> H[Trạng thái ẩn quỹ đạo]
+    H --> MLP[Đầu hành động MLP 4 lớp]
+    MLP --> W[Tám điểm tham chiếu: x, y, tiêu đề]
 ```
 
-The model outputs:
+Các đầu ra mô hình:
 
 $$
-W=\{(x_k,y_k,\theta_k)\}_{k=1}^{8}
+W=\{(x_k,y_k,\theta_k)\__{k=1}^{8}
 $$
 
-This is a 24-dimensional direct regression target.
+Đây là mục tiêu hồi quy trực tiếp 24 chiều.
 
-Unlike Qwen-VLA and RobotManip using DiT matching actions. The action head using a 4-layer MLP to output waypoints for navigations.
+Không giống như Qwen-VLA và RobotManip sử dụng các hành động khớp DiT. Đầu hành động sử dụng MLP 4 lớp để xuất ra các điểm tham chiếu cho việc điều hướng.
 
-![Qwen-RobotNav architecture overview](Image/architecture_overview.png)
+![Tổng quan về kiến trúc Qwen-RobotNav](Image/architecture_overview.png)
 
-## 2. Inputs and Observation Encoding
+## 2. Mã hóa đầu vào và quan sát
 
-### 2.1 Model Inputs, Camera Angles, and Prompt Examples
+### 2.1 Đầu vào mô hình, Góc máy ảnh và Ví dụ gợi ý
 
-A RobotNav call combines an observation stream, language, task identity, and a configurable context
-policy. The input is best represented as:
+Cuộc gọi RobotNav kết hợp luồng quan sát, ngôn ngữ, nhận dạng nhiệm vụ và bối cảnh có thể định cấu hình
+chính sách. Đầu vào được thể hiện tốt nhất dưới dạng:
 
 $$
 \left(I_{1:T}^{1:N},\;L,\;\tau,\;\Phi\right),
@@ -73,71 +73,71 @@ $$
 \Phi=(B,\gamma,\{w_c\},m,b_{min},b_{max}),
 $$
 
-where \(I_{1:T}^{1:N}\) is RGB history from \(N\) cameras over \(T\) timesteps, \(L\) is the
-navigation instruction plus embodiment preamble, \(\tau\) is the task mode, and \(\Phi\) controls which
-images survive and at what resolution. The base model returns eight \((x,y,\theta)\) waypoints; an
-external low-level controller executes them.
+trong đó \(I_{1:T}^{1:N}\) là lịch sử RGB từ máy ảnh \(N\) qua \(T\) dấu thời gian, \(L\) là
+hướng dẫn điều hướng cộng với lời mở đầu phương án, \(\tau\) là chế độ tác vụ và \(\Phi\) kiểm soát chế độ nào
+hình ảnh tồn tại và ở độ phân giải nào. Mô hình cơ sở trả về tám điểm tham chiếu \((x,y,\theta)\); một
+bộ điều khiển cấp thấp bên ngoài thực hiện chúng.
 
-| Input group                 | Contents                                                                                    | Required or optional                                                                                                   |
+| Nhóm đầu vào | Nội dung | Bắt buộc hoặc tùy chọn |
 | --------------------------- | ------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| RGB observations            | Current and historical frames from one or more cameras                                      | Required; camera count varies by platform/task                                                                         |
-| Embodiment preamble         | Natural-language identity such as robot or car                                              | Required by the described prompt design                                                                                |
-| Sub-goal/instruction        | Route, point, object, tracking, or driving request                                          | Required, but its task-specific fields vary                                                                            |
-| Task mode                   | `VLN`, `PointNav`, `ObjNav`, or `Tracking` in the agent-facing interface            | Required for configurable agent calls; autonomous driving is trained but is not listed as one of these four tool modes |
-| Observation configuration   | Token budget, recency decay, camera weights, frame sampling mode, per-image token bounds    | Externally configurable; several values usually use platform defaults                                                  |
-| Auxiliary navigation priors | Coordinates/bearing, target description, ego state, or prior trajectories depending on task | Optional/task-dependent                                                                                                |
+| quan sát RGB | Khung hình hiện tại và lịch sử từ một hoặc nhiều camera | Yêu cầu; số lượng camera thay đổi tùy theo nền tảng/nhiệm vụ |
+| Lời mở đầu của phương án | Nhận dạng ngôn ngữ tự nhiên như robot hay ô tô | Yêu cầu thiết kế nhắc nhở được mô tả |
+| Mục tiêu phụ/hướng dẫn | Yêu cầu về tuyến đường, điểm, đối tượng, theo dõi hoặc lái xe | Bắt buộc, nhưng các trường dành riêng cho nhiệm vụ của nó khác nhau |
+| Chế độ nhiệm vụ | `VLN`, `PointNav`, `ObjNav` hoặc `Tracking` trong giao diện đối mặt với agent | Cần thiết cho các cuộc gọi đại lý có thể định cấu hình; lái xe tự động được huấn luyện nhưng không được liệt kê là một trong bốn chế độ công cụ này |
+| Cấu hình quan sát | Ngân sách token, mức giảm gần đây, trọng lượng máy ảnh, chế độ lấy mẫu khung, giới hạn token trên mỗi hình ảnh | Cấu hình bên ngoài; một số giá trị thường sử dụng giá trị mặc định của nền tảng |
+| Ưu tiên điều hướng phụ trợ | Tọa độ/phương hướng, mô tả mục tiêu, trạng thái bản ngã hoặc quỹ đạo trước đó tùy thuộc vào nhiệm vụ | Tùy chọn/phụ thuộc vào nhiệm vụ |
 
-[RobotNav paper v3, §§2.1-2.5 and 3.1-3.2](https://arxiv.org/abs/2606.18112v3)
+[RobotNav paper v3, §§2.1-2.5 và 3.1-3.2](https://arxiv.org/abs/2606.18112v3)
 
-#### Camera layouts and published angle information
+#### Bố cục camera và thông tin góc được công bố
 
-RobotNav supports an arbitrary platform-dependent number \(N\) of cameras rather than one fixed rig.
-The paper documents these observation layouts:
+RobotNav hỗ trợ số lượng camera \(N\) phụ thuộc vào nền tảng tùy ý thay vì một giàn cố định.
+Bài viết ghi lại các bố cục quan sát này:
 
-| Layout                        | Published views                                                                                           | Angle coverage and use                                                                                         |
+| Bố cục | Lượt xem đã xuất bản | Góc bao phủ và sử dụng |
 | ----------------------------- | --------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| Monocular                     | Front only                                                                                                | Forward-facing deployment and evaluation; no numeric field of view is fixed by the model interface             |
-| Four-view panoramic           | Current reasoning samples use front, right, back, left; R2R/RxR collection lists front, left, right, rear | Described as full 360-degree coverage; the paper does not assign a numeric azimuth to every view               |
-| Six-camera example            | Labels begin`Front`, `Front Right`, continue through intermediate views, and end `Front Left`       | Demonstrates that semantic camera names extend beyond four views; exact calibrated azimuths are not enumerated |
-| Autonomous-driving multi-view | Multiple vehicle cameras                                                                                  | Exact count, order, and mounting angles are dataset/platform dependent and are not fixed in the model section  |
+| Một mắt | Chỉ mặt trước | Triển khai và đánh giá hướng tới tương lai; không có trường nhìn số nào được cố định bởi giao diện mô hình |
+| Toàn cảnh bốn góc nhìn | Các mẫu lý luận hiện tại sử dụng trước, phải, sau, trái; Danh sách bộ sưu tập R2R/RxR phía trước, bên trái, bên phải, phía sau | Được mô tả là bao phủ toàn bộ 360 độ; bài báo không ấn định góc phương vị số cho mọi góc nhìn |
+| Ví dụ sáu camera | Nhãn bắt đầu`Front`, `Front Right`, tiếp tục qua các chế độ xem trung gian và kết thúc `Front Left` | Chứng minh rằng tên camera ngữ nghĩa mở rộng ra ngoài bốn chế độ xem; góc phương vị hiệu chỉnh chính xác không được liệt kê |
+| Lái xe tự động đa góc nhìn | Nhiều camera xe | Số lượng, thứ tự và góc lắp chính xác phụ thuộc vào tập dữ liệu/nền tảng và không cố định trong phần mô hình |
 
-The paper tested numeric labels such as **`right 90 degrees`**, but descriptive labels performed slightly
-better. That is the only explicit azimuth example; assigning conventional values such as 0/90/180/270
-degrees to the four-view rig would be an inference, not a reported input contract.
+Bài báo đã thử nghiệm các nhãn số như **`right 90 degrees`**, nhưng các nhãn mô tả hoạt động hơi kém
+tốt hơn. Đó là ví dụ về góc phương vị rõ ràng duy nhất; gán các giá trị thông thường như 0/90/180/270
+độ đối với giàn khoan bốn góc nhìn sẽ là một suy luận chứ không phải là một hợp đồng đầu vào được báo cáo.
 
-There is also no single published global camera order. Instruction-following data records `front, left, right, rear`; reasoning data serializes the current panorama as `front, right, back, left`; and the six-view
-example begins `Front, Front Right, ...`. These are dataset/example orders, not a normative API contract.
+Cũng không có đơn đặt hàng máy ảnh toàn cầu nào được công bố. Bản ghi dữ liệu theo lệnh `front, left, right, rear`; dữ liệu lý luận tuần tự hóa ảnh toàn cảnh hiện tại dưới dạng `front, right, back, left`; và sáu góc nhìn
+ví dụ bắt đầu `Front, Front Right, ...`. Đây là các đơn đặt hàng tập dữ liệu/ví dụ, không phải là hợp đồng API quy chuẩn.
 
-For the common four-view case, the example camera weights are:
+Đối với trường hợp bốn góc nhìn thông thường, trọng lượng của máy ảnh mẫu là:
 
 ```text
 front = 2.0, right = 1.0, back = 0.5, left = 1.0
 ```
 
-The weights control visual-token allocation, not physical camera angles. The front view receives the
-largest share because it usually contains paths, obstacles, and goal landmarks; the rear view receives the
-smallest. Each selected image is dynamically resized to its allocated token/pixel budget while preserving
-aspect ratio. Training also augments simulator camera height over 0.5-1.5 m, horizontal field of view over
-90-120 degrees, and aspect ratio from 2:1 to 4:3; these are data augmentations, not mandatory inference
-settings. [RobotNav paper v3, §§2.2-2.3 and 4.2.1](https://arxiv.org/abs/2606.18112v3)
+Trọng số kiểm soát việc phân bổ token trực quan chứ không phải góc camera vật lý. Chế độ xem phía trước nhận được
+chia sẻ lớn nhất vì nó thường chứa các con đường, chướng ngại vật và các mốc mục tiêu; nhìn phía sau nhận được
+nhỏ nhất. Mỗi hình ảnh đã chọn được thay đổi kích thước động theo ngân sách token/pixel được phân bổ trong khi vẫn duy trì
+tỷ lệ khung hình. Việc huấn luyện cũng làm tăng chiều cao của camera mô phỏng trên 0,5-1,5 m, trường nhìn ngang trên
+90-120 độ và tỷ lệ khung hình từ 2:1 đến 4:3; đây là những phần bổ sung dữ liệu, không phải là suy luận bắt buộc
+cài đặt. [RobotNav paper v3, §§2.2-2.3 và 4.2.1](https://arxiv.org/abs/2606.18112v3)
 
-#### Exact image and time serialization example
+#### Ví dụ về tuần tự hóa hình ảnh và thời gian chính xác
 
-After frame selection, the model interleaves ordinary text tags with image tokens. The paper gives this two-timestep, six-camera pattern:
+Sau khi chọn khung, mô hình sẽ xen kẽ các thẻ văn bản thông thường bằng token hình ảnh. Bài báo đưa ra mẫu hai dấu thời gian, sáu camera này:
 
 ```text
 Time step 0 Front View <image> Front Right View <image> ... Front Left View <image>
 Time step 1 Front View <image> ...
 ```
 
-The groups are temporal, and every image is preceded by its semantic viewpoint label. No learned camera
-ID embedding or architecture change is required. The report does not publish the complete production
-chat template, separators, token IDs, or the exact six-camera list hidden by the ellipsis.
+Các nhóm là tạm thời và mỗi hình ảnh đều được đặt trước bởi nhãn quan điểm ngữ nghĩa của nó. Không có máy ảnh đã học
+Cần phải nhúng ID hoặc thay đổi kiến trúc. Báo cáo không công bố sản phẩm hoàn chỉnh
+mẫu trò chuyện, dấu phân cách, ID token hoặc danh sách sáu camera chính xác được ẩn bởi dấu chấm lửng.
 [RobotNav paper v3, §2.3](https://arxiv.org/abs/2606.18112v3)
 
-#### Exact embodiment preambles
+#### Lời mở đầu của phương án chính xác
 
-The paper publishes two natural-language beginnings:
+Bài viết xuất bản hai phần mở đầu bằng ngôn ngữ tự nhiên:
 
 ```text
 Imagine you are a robot programmed for navigation tasks
@@ -147,35 +147,35 @@ Imagine you are a robot programmed for navigation tasks
 Imagine you are a car programmed for autonomous driving
 ```
 
-These are task priors rather than learned embodiment IDs. The authors propose that a new platform such
-as a drone, wheeled robot, or quadruped could use a new text preamble without adding parameters, but do
-not publish validated templates for those platforms. [RobotNav paper v3, §2.4](https://arxiv.org/abs/2606.18112v3)
+Đây là các nhiệm vụ ưu tiên chứ không phải là ID phương án đã học. Các tác giả đề xuất rằng một nền tảng mới như
+vì máy bay không người lái, rô-bốt có bánh xe hoặc xe bốn chân có thể sử dụng phần mở đầu văn bản mới mà không cần thêm tham số, nhưng phải làm như vậy
+không xuất bản các mẫu đã được xác thực cho các nền tảng đó. [RobotNav paper v3, §2.4](https://arxiv.org/abs/2606.18112v3)
 
-#### What the instruction contains for each task
+#### Nội dung hướng dẫn cho mỗi nhiệm vụ
 
-| Task family        | Language/auxiliary input described in the paper                                                                                                                                       | Typical visual history                                                                         |
+| Họ mô hình nhiệm vụ | Ngôn ngữ/đầu vào phụ trợ được mô tả trong bài báo | Lịch sử hình ảnh điển hình |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| VLN                | Natural-language route instruction                                                                                                                                                    | Global episode coverage to reconnect landmarks with earlier instruction steps                  |
-| PointNav           | Relative target coordinates plus current pose, distance, and bearing; or primitives such as`Move forward 2.0 meters`, `Turn left 90 degrees`, `Move forward`, and `Turn left` | Current view plus uniformly sampled navigation history                                         |
-| ObjNav             | Templates include`navigate to the {goal_object}` and `find and reach the {goal_object}`                                                                                           | Broad, history-covering sampling to remember explored regions and backtracking                 |
-| Tracking           | Textual target description; the paper's representative query is`Follow the man in the blue t-shirt`                                                                                 | Current egocentric image plus a short, recent, high-resolution history                         |
-| Autonomous driving | Multi-view images in all variants; optional navigation instruction, ego-vehicle state, and/or short history of ground-truth trajectories                                              | Short driving history; NAVSIM evaluation supplies the previous three ground-truth trajectories |
+| VLN | Hướng dẫn lộ trình bằng ngôn ngữ tự nhiên | Phạm vi phủ sóng toàn cầu để kết nối lại các mốc với các bước hướng dẫn trước đó |
+| ĐiểmNav | Tọa độ mục tiêu tương đối cộng với tư thế, khoảng cách và hướng hiện tại; hoặc nguyên thủy như`Move forward 2.0 meters`, `Turn left 90 degrees`, `Move forward` và `Turn left` | Chế độ xem hiện tại cộng với lịch sử điều hướng được lấy mẫu thống nhất |
+| ObjNav | Các mẫu bao gồm`navigate to the {goal_object}` và `find and reach the {goal_object}` | Lấy mẫu rộng, bao quát lịch sử để ghi nhớ các khu vực đã khám phá và quay lại |
+| Theo dõi | Mô tả mục tiêu bằng văn bản; truy vấn đại diện của bài báo is`Follow the man in the blue t-shirt` | Hình ảnh lấy cái tôi làm trung tâm hiện tại cộng với lịch sử ngắn, gần đây, có độ phân giải cao |
+| Lái xe tự động | Hình ảnh nhiều chế độ xem ở tất cả các biến thể; hướng dẫn điều hướng tùy chọn, trạng thái phương tiện bản ngã và/hoặc lịch sử ngắn gọn về quỹ đạo thực tế | Lịch sử lái xe ngắn; Đánh giá NAVSIM cung cấp ba quỹ đạo thực tế cơ bản trước đó |
 
-These are different input renderings for one shared model. In the agent interface, the upper planner can
-change \(L\), \(\tau\), and \(\Phi\) between calls without changing weights.
-[RobotNav paper v3, §§3.1-3.2, 4.1 and 5.4](https://arxiv.org/abs/2606.18112v3)
+Đây là các kết xuất đầu vào khác nhau cho một mô hình được chia sẻ. Trong giao diện agent, người lập kế hoạch cấp trên có thể
+thay đổi \(L\), \(\tau\) và \(\Phi\) giữa các cuộc gọi mà không thay đổi trọng số.
+[RobotNav paper v3, §§3.1-3.2, 4.1 và 5.4](https://arxiv.org/abs/2606.18112v3)
 
-Navigation reasoning co-training has another, more specific format: up to eight uniformly sampled
-historical **front-view** frames, the current `front, right, back, left` panorama, the instruction, and
-annotation-time action/trajectory statistics. The statistics supervise textual `History`, `Scene Analysis`,
-`Instruction Progress`, and `Action Reasoning` targets; they are not all required at runtime by the
-continuous waypoint policy. This distinction prevents training-only labels from being mistaken for
-deployable sensor inputs. [RobotNav paper v3, §4.3](https://arxiv.org/abs/2606.18112v3)
+Đồng huấn luyện lý luận điều hướng có một định dạng khác cụ thể hơn: tối đa tám mẫu được lấy mẫu thống nhất
+khung **xem trước** lịch sử, ảnh toàn cảnh `front, right, back, left` hiện tại, hướng dẫn và
+thống kê hành động/quỹ đạo theo thời gian chú thích. Số liệu thống kê giám sát văn bản `History`, `Scene Analysis`,
+Các mục tiêu `Instruction Progress` và `Action Reasoning`; không phải tất cả chúng đều được yêu cầu trong thời gian chạy bởi
+chính sách điểm tham chiếu liên tục. Sự khác biệt này giúp các nhãn chỉ dành cho huấn luyện không bị nhầm lẫn với
+đầu vào cảm biến có thể triển khai. [RobotNav paper v3, §4.3](https://arxiv.org/abs/2606.18112v3)
 
-#### Illustrative assembled navigation call
+#### Cuộc gọi điều hướng được lắp ráp minh họa
 
-The paper defines the abstract call \(W_i=\operatorname{nav\_qwennav}(L_i,\tau_i,\Phi_i)\), but it
-does not release a literal JSON API. The following is a **reconstruction** from published fields:
+Bài viết định nghĩa cách gọi trừu tượng \(W_i=\operatorname{nav\_qwennav}(L_i,\tau_i,\Phi_i)\), nhưng nó
+không phát hành API JSON theo nghĩa đen. Sau đây là **bản dựng lại** từ các trường đã xuất bản:
 
 ```yaml
 system_preamble: Imagine you are a robot programmed for navigation tasks
@@ -209,35 +209,35 @@ observations:
       left: <image>
 ```
 
-An upper planner could later switch the same model to `Tracking` or local `PointNav`, choose
-`latest` sampling, increase \(\gamma\), and reduce \(B\) for a more reactive call. The YAML field names
-and ordering above are explanatory, not an official interface.
+Người lập kế hoạch cấp trên sau này có thể chuyển mô hình tương tự sang `Tracking` hoặc `PointNav` cục bộ, chọn
+Lấy mẫu `latest`, tăng \(\gamma\) và giảm \(B\) để có cuộc gọi phản ứng nhanh hơn. Tên trường YAML
+và thứ tự ở trên mang tính giải thích, không phải là giao diện chính thức.
 
-The action head maps a final trajectory hidden state \(E_A\) to 24 numbers, but the paper does not state
-which exact chat token/sequence position produces \(E_A\), whether a dedicated query token is used, or
-the production prompt delimiters. Those details remain **unknown** without released code.
+Đầu hành động ánh xạ trạng thái ẩn quỹ đạo cuối cùng \(E_A\) thành 24 số, nhưng bài báo không nêu rõ
+vị trí trình tự/token trò chuyện chính xác nào tạo ra \(E_A\), liệu token truy vấn chuyên dụng có được sử dụng hay không
+dấu phân cách nhắc nhở sản xuất. Những chi tiết đó vẫn **không xác định** nếu không có mã được phát hành.
 
-### 2.2 Task-Adaptive Observation Encoding
+### 2.2 Mã hóa quan sát thích ứng với nhiệm vụ
 
-Navigation history can grow indefinitely, so the model cannot preserve every frame at full resolution.
+Lịch sử điều hướng có thể phát triển vô tận nên mô hình không thể duy trì mọi khung hình ở độ phân giải đầy đủ.
 
-RobotNav exposes configurable observation parameters:
+RobotNav hiển thị các tham số quan sát có thể định cấu hình:
 
-- Total visual-token budget \(B\)
-- Temporal-decay coefficient \(\gamma\)
-- Per-camera weights \(w_c\)
-- Minimum and maximum allocation per frame
-- Frame sampling mode
-- Task mode
+- Tổng ngân sách token trực quan \(B\)
+- Hệ số suy giảm theo thời gian \(\gamma\)
+- Trọng lượng trên mỗi camera \(w_c\)
+- Phân bổ tối thiểu và tối đa cho mỗi khung
+- Chế độ lấy mẫu khung
+- Chế độ nhiệm vụ
 
-These controls determine:
+Các biện pháp kiểm soát này xác định:
 
-- Which time steps are retained
-- Which cameras receive more tokens
-- Which frames are encoded at higher resolution
-- Whether recent observations or broad episode coverage are prioritized
+- Những bước thời gian nào được giữ lại
+- Camera nào nhận được nhiều token hơn
+- Những khung hình nào được mã hóa ở độ phân giải cao hơn
+- Liệu những quan sát gần đây hoặc mức độ bao phủ tập phim rộng có được ưu tiên hay không
 
-Example:
+Ví dụ:
 
 ```text
 Target tracking:
@@ -251,111 +251,111 @@ Object search:
 - more balanced camera allocation
 ```
 
-Camera identity and time order are communicated with natural-language tags rather than new architectural modules.
+Nhận dạng camera và thứ tự thời gian được truyền đạt bằng thẻ ngôn ngữ tự nhiên thay vì các mô-đun kiến trúc mới.
 
-## 3. Agentic Navigation System
+## 3. Hệ thống Định vị Agentic
 
-The paper's broader proposal is an **agentic robot**, not merely a standalone navigation policy. A
-general-purpose upper-level LLM receives the user's long-horizon goal, reasons about progress, chooses
-which tool to call, and maintains compact memory. Qwen-RobotNav is one of those tools: it is the
-movement executor that converts a local navigation sub-goal into eight waypoints.
+Đề xuất rộng hơn của bài báo là một **robot đặc vụ**, không chỉ đơn thuần là một chính sách điều hướng độc lập. A
+LLM cấp trên có mục đích chung nhận mục tiêu dài hạn của người dùng, lý do về tiến độ, lựa chọn
+công cụ nào để gọi và duy trì bộ nhớ nhỏ gọn. Qwen-RobotNav là một trong những công cụ đó: nó là
+người thực thi chuyển động chuyển đổi mục tiêu phụ điều hướng cục bộ thành tám điểm tham chiếu.
 
-This distinction also clarifies two different uses of “head”:
+Sự khác biệt này cũng làm rõ hai cách sử dụng khác nhau của “đầu”:
 
-- The **upper planner LLM**—for example Qwen3.6-Plus in the reported embodied-QA system—is a
-  separate reasoning component that decomposes tasks and dispatches tools.
-- The **four-layer MLP action head** is internal to Qwen-RobotNav. It only maps RobotNav's final
-  hidden state to waypoint coordinates; it is not the agent's planner or tool-calling head.
+- **LLM lập kế hoạch cấp cao**—ví dụ Qwen3.6-Plus trong hệ thống QA được thể hiện đã báo cáo—là một
+  thành phần lý luận riêng biệt phân rã các nhiệm vụ và gửi công cụ.
+- **Đầu hành động MLP bốn lớp** nằm bên trong Qwen-RobotNav. Nó chỉ lập bản đồ cuối cùng của RobotNav
+  trạng thái ẩn tới tọa độ điểm tham chiếu; nó không phải là người lập kế hoạch hoặc người đứng đầu gọi công cụ của đại lý.
 
-[RobotNav paper v3, §§3.1-3.3 and 5.3](https://arxiv.org/abs/2606.18112v3)
+[RobotNav paper v3, §§3.1-3.3 và 5.3](https://arxiv.org/abs/2606.18112v3)
 
-![Qwen-RobotNav agentic navigation system](Image/agentic_navigation_system.png)
+![Hệ thống định vị agent Qwen-RobotNav](Image/agentic_navigation_system.png)
 
 ```mermaid
 flowchart TD
-    G[Long-horizon user goal] --> LLM[Upper planner LLM]
-    LLM -->|navigation call| NAV[Qwen-RobotNav tool]
-    LLM -->|visual evidence call| VT[Vision tools]
+    G[Mục tiêu người dùng dài hạn] --> LLM[Người lập kế hoạch cấp trên LLM]
+    LLM -->|cuộc gọi điều hướng| NAV[Công cụ Qwen-RobotNav]
+    LLM -->|cuộc gọi bằng chứng trực quan| VT[Công cụ thị giác]
 
-    NAV --> WP[Eight future waypoints]
-    WP --> CTRL[Low-level motion controller]
-    CTRL --> R[Executed rollout]
+    NAV --> WP[Tám điểm tham chiếu trong tương lai]
+    WP --> CTRL[Bộ điều khiển chuyển động cấp thấp]
+    CTRL --> R[Đã thực hiện triển khai]
 
-    VT --> VE[Detection or grounded visual evidence]
-    R --> H[Trajectory-to-evidence harness]
-    H --> NB[Evidence notebook and key-frame index]
+    VT --> VE[Phát hiện hoặc bằng chứng trực quan có căn cứ]
+    R --> H[Khai thác quỹ đạo thành bằng chứng]
+    H --> NB[Sổ ghi chép bằng chứng và chỉ mục khung chính]
     VE --> NB
     NB --> LLM
 ```
 
-### 3.1 Qwen-RobotNav as the Movement Tool
+### 3.1 Qwen-RobotNav là Công cụ Di chuyển
 
-For every navigation call, the planner supplies:
+Đối với mỗi cuộc gọi điều hướng, người lập kế hoạch cung cấp:
 
 $$
 (L_i,\tau_i,\Phi_i),
 $$
 
-where \(L_i\) is a local sub-goal, \(\tau_i\) selects navigation behavior, and \(\Phi_i\) controls the
-observation strategy. The movement tool exposes four named modes using the same RobotNav weights.
+trong đó \(L_i\) là mục tiêu phụ cục bộ, \(\tau_i\) chọn hành vi điều hướng và \(\Phi_i\) điều khiển
+chiến lược quan sát. Công cụ chuyển động hiển thị bốn chế độ được đặt tên bằng cách sử dụng cùng trọng số RobotNav.
 
-#### All agent-facing `task_mode` values
+#### Tất cả các giá trị `task_mode` đối mặt với agent
 
-| Illustrative YAML field | Behavior selected | Goal or instruction supplied by the planner | Typical observation strategy | Representative input form |
+| Trường YAML minh họa | Hành vi đã chọn | Mục tiêu hoặc hướng dẫn do người lập kế hoạch cung cấp | Chiến lược quan sát điển hình | Mẫu đầu vào đại diện |
 | --- | --- | --- | --- | --- |
-| `task_mode: VLN` | Follow a language-described route and ground its ordered landmarks in the observations | A procedural natural-language route instruction | Retain broad episode history so earlier landmarks can be checked against later instruction steps | `Go to the living room, turn left, and stop near the kitchen.` |
-| `task_mode: PointNav` | Move toward a spatial target, coordinate, or waypoint-like local goal | Relative target coordinates, pose/distance/bearing, or a textual motion primitive | Use local or uniformly sampled history; increase recency near the target for a smooth approach | `Go to (2.2, 2.4).` or `Move forward 2.0 meters.` |
-| `task_mode: ObjNav` | Search for an object category or a particular instance using accumulated visual evidence | Object name, category, or referring expression | Use a larger token budget with broad/random history during exploration; switch toward recent frames when approaching a visible candidate | `Search the kitchen area for a mug.` |
-| `task_mode: Tracking` | Maintain lock on a moving or recently observed target | A textual target description | Prefer latest-frame sampling, strong recency bias, and high fidelity for recent observations | `Follow the man in the blue t-shirt.` |
+| `task_mode: VLN` | Đi theo một lộ trình được mô tả bằng ngôn ngữ và đặt các mốc theo thứ tự của nó trong các quan sát | Hướng dẫn lộ trình ngôn ngữ tự nhiên theo thủ tục | Giữ lại lịch sử tập rộng để có thể kiểm tra các mốc trước đó theo các bước hướng dẫn sau | `Go to the living room, turn left, and stop near the kitchen.` |
+| `task_mode: PointNav` | Di chuyển tới mục tiêu không gian, tọa độ hoặc mục tiêu cục bộ giống như điểm tham chiếu | Tọa độ mục tiêu tương đối, tư thế/khoảng cách/hướng hoặc chuyển động nguyên thủy bằng văn bản | Sử dụng lịch sử được lấy mẫu cục bộ hoặc thống nhất; tăng mức độ gần đây gần mục tiêu để có cách tiếp cận suôn sẻ | `Go to (2.2, 2.4).` hoặc `Move forward 2.0 meters.` |
+| `task_mode: ObjNav` | Tìm kiếm một danh mục đối tượng hoặc một trường hợp cụ thể bằng cách sử dụng bằng chứng trực quan tích lũy | Tên đối tượng, danh mục hoặc biểu thức giới thiệu | Sử dụng ngân sách token lớn hơn với lịch sử rộng/ngẫu nhiên trong quá trình khám phá; chuyển sang các khung hình gần đây khi tiếp cận một ứng viên rõ ràng | `Search the kitchen area for a mug.` |
+| `task_mode: Tracking` | Duy trì khóa mục tiêu đang di chuyển hoặc được quan sát gần đây | Mô tả mục tiêu bằng văn bản | Ưu tiên lấy mẫu khung hình mới nhất, độ lệch gần đây mạnh và độ chính xác cao cho các quan sát gần đây | `Follow the man in the blue t-shirt.` |
 
-The four mode values are named explicitly by the paper. The `task_mode: <value>` serialization and the
-input strings in the last column are representative paper examples or faithful renderings of its published
-templates; they are not a released API schema. In particular, `task_mode: ObjNav` selects
-**search behavior**. The planner may later switch the same model call to `PointNav` for the final local
-approach or to `Tracking` if the target moves.
+Bốn giá trị chế độ được đặt tên rõ ràng trong bài báo. Việc xê-ri hóa `task_mode: <value>` và
+các chuỗi đầu vào ở cột cuối cùng là các ví dụ giấy tiêu biểu hoặc các bản trình bày trung thực của nó đã được xuất bản.
+mẫu; chúng không phải là lược đồ API được phát hành. Đặc biệt, `task_mode: ObjNav` chọn
+**hành vi tìm kiếm**. Người lập kế hoạch sau đó có thể chuyển lệnh gọi mô hình tương tự sang `PointNav` cho địa phương cuối cùng
+tiếp cận hoặc tới `Tracking` nếu mục tiêu di chuyển.
 
-Qwen-RobotNav is trained on **five task families**: instruction following, point-goal navigation,
-object-goal navigation, target tracking, and autonomous driving. However, the agent-facing interface in
-§§3.1-3.2 names only the four `task_mode` values above. **Autonomous driving is therefore a training and
-evaluation family, not a documented `task_mode: Driving` tool-call value.**
+Qwen-RobotNav được huấn luyện về **năm nhóm nhiệm vụ**: làm theo hướng dẫn, điều hướng điểm mục tiêu,
+điều hướng mục tiêu, theo dõi mục tiêu và lái xe tự động. Tuy nhiên, giao diện hướng tới agent trong
+§§3.1-3.2 chỉ nêu tên bốn giá trị `task_mode` ở trên. **Do đó, lái xe tự động là một quá trình huấn luyện và
+họ đánh giá, không phải giá trị lệnh gọi công cụ `task_mode: Driving` được ghi lại.**
 
-RobotNav returns a waypoint trajectory, not motor torques and not a natural-language plan. A lower-level
-controller executes the waypoints. The planner may change mode, sub-goal, and observation configuration
-between calls without loading another navigation policy.
-[RobotNav paper v3, §§3.1-3.2](https://arxiv.org/abs/2606.18112v3)
+RobotNav trả về quỹ đạo điểm tham chiếu, không phải mô men xoắn của động cơ và không phải kế hoạch ngôn ngữ tự nhiên. Cấp độ thấp hơn
+bộ điều khiển thực hiện các điểm tham chiếu. Người lập kế hoạch có thể thay đổi chế độ, mục tiêu phụ và cấu hình quan sát
+giữa các cuộc gọi mà không tải chính sách điều hướng khác.
+[Giấy RobotNav v3, §§3.1-3.2](https://arxiv.org/abs/2606.18112v3)
 
-### 3.2 Other Tools Around RobotNav
+### 3.2 Các công cụ khác xung quanh RobotNav
 
-The paper explicitly names three **auxiliary visual-evidence tools**:
+Bài viết nêu tên rõ ràng ba **công cụ bằng chứng trực quan phụ trợ**:
 
-| Tool                | Role in the agent loop                                                | What it does not do                                 |
+| Công cụ | Vai trò trong vòng lặp đại lý | Nó không làm gì |
 | ------------------- | --------------------------------------------------------------------- | --------------------------------------------------- |
-| Object detection    | Locate candidate objects in current observations or stored key frames | Does not generate movement waypoints                |
-| Scene understanding | Summarize rooms, layout, landmarks, and other scene-level evidence    | Does not replace the planner or navigation executor |
-| Semantic grounding  | Connect a textual target or referring expression to visual evidence   | Does not execute the grounded target                |
+| Phát hiện đối tượng | Xác định vị trí các đối tượng ứng cử viên trong các quan sát hiện tại hoặc các khung chính được lưu trữ | Không tạo ra các điểm chuyển động |
+| Hiểu cảnh | Tóm tắt các phòng, cách bố trí, địa danh và các bằng chứng cấp cảnh khác | Không thay thế người lập kế hoạch hoặc người thực thi điều hướng |
+| Nền tảng ngữ nghĩa | Kết nối mục tiêu văn bản hoặc biểu thức đề cập đến bằng chứng trực quan | Không thực hiện mục tiêu nối đất |
 
-These tools answer perceptual questions when the planner needs more evidence before choosing its next
-sub-goal. The paper does not disclose their model backbones, APIs, prompts, training data, or standalone
-accuracy. Therefore they should be understood as named components of the proposed interface, not as
-fully specified released tools. These are the only auxiliary tool categories explicitly named in Section 3;
-the paper does not define a broader registry for manipulation, grasping, speech, mapping, or other robot
-skills.
+Những công cụ này trả lời các câu hỏi về nhận thức khi người lập kế hoạch cần thêm bằng chứng trước khi lựa chọn kế hoạch tiếp theo.
+mục tiêu phụ. Bài viết không tiết lộ xương sống mô hình, API, prompt, dữ liệu huấn luyện hoặc độc lập của họ
+độ chính xác. Vì vậy chúng nên được hiểu là các thành phần được đặt tên của giao diện được đề xuất chứ không phải là
+công cụ phát hành được chỉ định đầy đủ. Đây là các loại công cụ phụ trợ duy nhất được nêu tên rõ ràng trong Phần 3;
+bài viết không xác định phạm vi đăng ký rộng hơn cho thao tác, nắm bắt, lời nói, lập bản đồ hoặc robot khác
+kỹ năng.
 
-The system also provides two supporting capabilities that are not new movement policies:
+Hệ thống còn cung cấp 2 khả năng hỗ trợ không phải là chính sách chuyển động mới:
 
-- **Key-frame visual recall:** completed rollouts retain source-indexed frames; the planner can retrieve
-  one later when a textual summary is insufficient.
-- **Trajectory-to-evidence harness:** an adapter converts planner arguments into RobotNav calls, then
-  compresses dense observations, controller traces, and waypoints into evidence for the next planning
-  turn.
+- **Thu hồi hình ảnh khung hình chính:** quá trình triển khai đã hoàn tất sẽ giữ lại các khung được lập chỉ mục nguồn; người lập kế hoạch có thể truy xuất
+  sau đó khi bản tóm tắt bằng văn bản không đủ.
+- **Khai thác quỹ đạo thành bằng chứng:** một bộ chuyển đổi chuyển đổi các đối số của trình lập kế hoạch thành lệnh gọi RobotNav, sau đó
+  nén các quan sát dày đặc, dấu vết của bộ điều khiển và điểm tham chiếu thành bằng chứng cho kế hoạch tiếp theo
+  rẽ.
 
-[RobotNav paper v3, §§3.1 and 3.3](https://arxiv.org/abs/2606.18112v3)
+[RobotNav paper v3, §§3.1 và 3.3](https://arxiv.org/abs/2606.18112v3)
 
-### 3.3 Evidence Notebook and Context Compression
+### 3.3 Sổ ghi chép chứng cứ và nén ngữ cảnh
 
-Returning every image and low-level control trace to the planner would quickly exhaust its context
-window, while returning only `success/failure` would discard useful evidence. The harness instead emits
-a compact record. The paper gives this representative schema:
+Việc trả lại mọi hình ảnh và dấu vết kiểm soát cấp thấp cho trình lập kế hoạch sẽ nhanh chóng làm cạn kiệt bối cảnh của nó
+window, trong khi chỉ trả về `success/failure` sẽ loại bỏ bằng chứng hữu ích. Dây nịt thay vào đó phát ra
+một bản ghi nhỏ gọn. Bài viết đưa ra lược đồ đại diện này:
 
 ```text
 {
@@ -369,223 +369,223 @@ a compact record. The paper gives this representative schema:
 }
 ```
 
-The evidence notebook persists searched regions, candidate locations, rejected hypotheses, landmark
-cues, and layout assumptions through planner-context compression. A later entry can revise an earlier
-belief while preserving an auditable update history. Key-frame IDs preserve a path back to raw images,
-so text compression does not permanently remove the underlying visual evidence.
+Sổ ghi chép bằng chứng vẫn tồn tại các khu vực được tìm kiếm, địa điểm ứng cử viên, giả thuyết bị bác bỏ, mốc
+các tín hiệu và giả định về bố cục thông qua việc nén bối cảnh của kế hoạch. Một mục sau có thể sửa lại một mục trước đó
+niềm tin trong khi vẫn lưu giữ lịch sử cập nhật có thể kiểm tra được. ID khung chính duy trì đường dẫn quay lại hình ảnh thô,
+vì vậy việc nén văn bản không loại bỏ vĩnh viễn bằng chứng trực quan cơ bản.
 
-The paper's illustrative notebook entry is:
+Mục vở minh họa của bài báo là:
 
 ```text
 [step 47] Kitchen entered and searched; countertop and dining table checked. No mug observed.
 Corridor shelf remains a possible candidate region from key frame #12.
 ```
 
-### 3.4 Example Long-Horizon Tool Loop
+### 3.4 Ví dụ Vòng lặp công cụ có đường chân trời dài
 
-The following sequence is **illustrative but directly follows the paper's mug-search example**:
+Trình tự sau đây là **minh họa nhưng trực tiếp theo sau ví dụ tìm kiếm cốc của bài báo**:
 
-1. The planner LLM decomposes “find the mug” into “search the kitchen.”
-2. It calls Qwen-RobotNav in `ObjNav` mode with a large token budget and history-covering sampling.
-3. RobotNav predicts eight waypoints at each navigation step; the low-level controller executes them.
-4. The harness reports that the kitchen countertop and table were checked but no mug was found, and
-   stores key frames.
-5. The planner can call object detection or semantic grounding on a current/stored frame to verify a
-   candidate object.
-6. It updates the evidence notebook, selects another region, and calls RobotNav again.
-7. Once a candidate mug is visible, it can switch the same RobotNav model to local `PointNav` or
-   `Tracking` with a recency-focused observation configuration.
+1. Công cụ lập kế hoạch LLM phân tách “tìm chiếc cốc” thành “tìm kiếm trong bếp”.
+2. Nó gọi Qwen-RobotNav ở chế độ `ObjNav` với ngân sách token lớn và lấy mẫu bao gồm lịch sử.
+3. RobotNav dự đoán tám điểm tham chiếu ở mỗi bước điều hướng; bộ điều khiển cấp thấp thực thi chúng.
+4. Dây nịt báo cáo rằng mặt bàn và mặt bàn bếp đã được kiểm tra nhưng không tìm thấy chiếc cốc nào, và
+   lưu trữ các khung chính.
+5. Người lập kế hoạch có thể gọi tính năng phát hiện đối tượng hoặc nền tảng ngữ nghĩa trên khung hiện tại/được lưu trữ để xác minh
+   đối tượng ứng viên.
+6. Nó cập nhật sổ ghi chép bằng chứng, chọn một khu vực khác và gọi lại RobotNav.
+7. Khi một cốc ứng cử viên hiển thị, nó có thể chuyển mô hình RobotNav tương tự sang `PointNav` cục bộ hoặc
+   `Tracking` với cấu hình quan sát tập trung vào lần gần đây.
 
-This is why Qwen-RobotNav is best described as **one tool inside the proposed agent**, specifically the
-tool for moving. The upper planner performs long-horizon reasoning and tool selection; auxiliary vision
-tools gather evidence; the harness manages memory; and a controller turns waypoints into actuator-level
-motion. The paper evaluates one system-level instantiation for embodied question answering, but does not
-release a complete general robot-agent software stack.
-[RobotNav paper v3, §§3 and 5.3](https://arxiv.org/abs/2606.18112v3)
+Đây là lý do tại sao Qwen-RobotNav được mô tả tốt nhất là **một công cụ bên trong agent được đề xuất**, cụ thể là
+công cụ để di chuyển. Người lập kế hoạch cấp trên thực hiện việc suy luận và lựa chọn công cụ theo tầm nhìn dài hạn; tầm nhìn phụ trợ
+công cụ thu thập bằng chứng; dây nịt quản lý bộ nhớ; và bộ điều khiển biến các điểm tham chiếu thành cấp độ thiết bị truyền động
+chuyển động. Bài viết đánh giá một sự khởi tạo ở cấp độ hệ thống để trả lời câu hỏi được thể hiện, nhưng không
+phát hành một bộ phần mềm agent-robot tổng quát hoàn chỉnh.
+[RobotNav paper v3, §§3 và 5.3](https://arxiv.org/abs/2606.18112v3)
 
-## 4. Training Data
+## 4. Dữ liệu huấn luyện
 
-### 4.1 Corpus Composition
+### 4.1 Thành phần ngữ liệu
 
-The reported training set contains approximately **15.6 million samples**:
+Tập huấn luyện được báo cáo chứa khoảng **15,6 triệu mẫu**:
 
-![Qwen-RobotNav training data distribution](Image/training_data_distribution.png)
+![Phân phối dữ liệu huấn luyện Qwen-RobotNav](Image/training_data_distribution.png)
 
 ```text
 85% navigation trajectory-planning data
 15% navigation-related vision-language reasoning data
 ```
 
-The sources are more specific than the aggregate ratio suggests:
+Các nguồn cụ thể hơn tỷ lệ tổng hợp gợi ý:
 
-| Training family               | Reported samples | Construction or source                                                                                                       |
+| Huấn luyện gia đình | Mẫu báo cáo | Xây dựng hoặc nguồn |
 | ----------------------------- | ---------------: | ---------------------------------------------------------------------------------------------------------------------------- |
-| Instruction following         |           5.631M | VLN-CE R2R 1.491M and RxR 4.140M, unrolled with teacher forcing and expanded across view/augmentation variants               |
-| Point-goal navigation         |             984K | Matterport3D and HM3D in Habitat: 348K direct approach, 174K short range, 400K long range, 62K command primitives            |
-| Object-goal navigation        |           2.000M | Matterport3D, HM3D, and HM3D-OVON; skeleton-based exploration with open-vocabulary goal annotations                          |
-| Target tracking               |           1.486M | EVT-Bench Single Target Tracking split, without distractors                                                                  |
-| Autonomous driving            |           3.216M | nuScenes 78K and OpenScene 3.138M supervision variants                                                                       |
-| General VL                    |       about 1.0M | VQA, captioning, grounding, instruction following, multi-image reasoning, landmark recognition, and STEM                     |
-| Navigation-specific reasoning |             873K | Free-form decision-point QA and structured history/scene/progress/action reasoning derived from VLN trajectories             |
-| Discrete VLN conversations    |             362K | CVDN, SOON, REVERIE, SRDF, and other graph-based VLN data reformatted as multi-round four-view action questions              |
-| T2V-generated navigation      |              40K | Synthetic instruction-following and tracking videos converted to 2-D trajectories and filtered for visual/kinematic validity |
+| Hướng dẫn sau |           5,631M | VLN-CE R2R 1.491M và RxR 4.140M, không được kiểm soát bởi giáo viên và được mở rộng trên các biến thể chế độ xem/tăng cường |
+| Điều hướng mục tiêu điểm |             984K | Matterport3D và HM3D trong Môi trường sống: Tiếp cận trực tiếp 348K, tầm ngắn 174K, tầm xa 400K, lệnh nguyên thủy 62K |
+| Điều hướng mục tiêu-đối tượng |           2.000M | Matterport3D, HM3D và HM3D-OVON; khám phá dựa trên bộ xương với chú thích mục tiêu từ vựng mở |
+| Theo dõi mục tiêu |           1,486M | Phân tách theo dõi mục tiêu đơn EVT-Bench, không có yếu tố gây phân tâm |
+| Lái xe tự động |           3.216M | các biến thể giám sát nuScenes 78K và OpenScene 3.138M |
+| VL Tổng Hợp |       khoảng 1,0 triệu | VQA, chú thích, căn cứ, tuân theo hướng dẫn, lý luận nhiều hình ảnh, nhận dạng mốc và STEM |
+| Lý luận cụ thể về điều hướng |             873K | QA điểm quyết định dạng tự do và lý luận lịch sử/cảnh/tiến trình/hành động có cấu trúc bắt nguồn từ quỹ đạo VLN |
+| Hội thoại VLN rời rạc |             362K | CVDN, SOON, REVERIE, SRDF và dữ liệu VLN dựa trên biểu đồ khác được định dạng lại dưới dạng câu hỏi hành động bốn lượt xem nhiều vòng |
+| Điều hướng do T2V tạo |              40K | Các video theo dõi và làm theo hướng dẫn tổng hợp được chuyển đổi thành quỹ đạo 2-D và được lọc để đảm bảo tính hợp lệ về mặt hình ảnh/động học |
 
-The counts reconcile with the rounded headline:
+Số lượng phù hợp với tiêu đề được làm tròn:
 
-- **Trajectory categories:** about 13.357M samples.
-- **VL/reasoning categories:** about 2.235M samples.
-- **Combined:** about 15.592M samples, reported as 15.6M.
+- **Danh mục quỹ đạo:** khoảng 13.357M mẫu.
+- **VL/danh mục lý luận:** khoảng 2.235M mẫu.
+- **Kết hợp:** khoảng 15,592M mẫu, được báo cáo là 15,6M.
 
-These are training samples, not 15.6M independent raw episodes:
+Đây là các mẫu huấn luyện, không phải 15,6 triệu tập thô độc lập:
 
-- R2R/RxR counts include camera-view and language augmentations.
-- Driving counts include multiple conditioning variants of the same trajectory.
-- A driving trajectory may be rendered with or without an instruction, ego state, or prior trajectory
-  context.
+- Số lượng R2R/RxR bao gồm khả năng tăng cường ngôn ngữ và chế độ xem camera.
+- Số lượng lái xe bao gồm nhiều biến thể điều hòa của cùng một quỹ đạo.
+- Quỹ đạo lái xe có thể được hiển thị có hoặc không có hướng dẫn, trạng thái bản ngã hoặc quỹ đạo trước đó
+  bối cảnh.
 
-[RobotNav paper v3, §4 and Figure 5](https://arxiv.org/abs/2606.18112v3)
+[RobotNav paper v3, §4 và Hình 5](https://arxiv.org/abs/2606.18112v3)
 
-### 4.2 How Each Navigation Dataset Is Constructed
+### 4.2 Cách xây dựng mỗi bộ dữ liệu điều hướng
 
-#### Instruction following: R2R and RxR
+#### Hướng dẫn sau: R2R và RxR
 
-- Unroll ground-truth trajectories with **teacher forcing**.
-- Convert each route into step-level training samples.
-- Deduplicate instructions by trajectory ID.
-- Generate three paraphrases for every unique instruction.
-- Train both front-only and multi-camera view configurations.
-- Apply image-quality refinement to rendered observations.
+- Mở ra các quỹ đạo thực tế với **giáo viên ép buộc**.
+- Chuyển đổi từng lộ trình thành mẫu huấn luyện cấp độ.
+- Hướng dẫn trùng lặp theo ID quỹ đạo.
+- Tạo ba cách diễn giải cho mỗi hướng dẫn duy nhất.
+- Huấn luyện cả cấu hình chế độ xem chỉ phía trước và nhiều camera.
+- Áp dụng sàng lọc chất lượng hình ảnh cho các quan sát được hiển thị.
 
-#### PointNav
+#### ĐiểmNav
 
-- Emphasize harder **6-10 m** routes instead of allowing easy short routes to dominate.
-- Retain forward steps with a **45% inclusion rate** to reduce action imbalance.
-- Always retain turn and stop actions.
-- Include coordinate goals, short/long-range routes, and command primitives.
+- Nhấn mạnh các tuyến đường **6-10 m** khó hơn thay vì cho phép các tuyến đường ngắn dễ dàng chiếm ưu thế.
+- Giữ lại các bước tiến về phía trước với **tỷ lệ bao gồm **45%** để giảm sự mất cân bằng trong hành động.
+- Luôn giữ nguyên các thao tác quay và dừng.
+- Bao gồm các mục tiêu tọa độ, các tuyến đường ngắn/tầm xa và lệnh nguyên thủy.
 
 #### ObjectNav
 
-- Skeletonize the navigable environment into an exploration graph.
-- Randomly select branches and backtrack at dead ends instead of following only shortest paths.
-- Smooth the resulting path with cubic splines.
-- Sample trajectory waypoints every **0.25 m**.
-- Attach open-vocabulary object goals and varied language templates.
+- Sắp xếp môi trường có thể điều hướng thành biểu đồ khám phá.
+- Chọn ngẫu nhiên các nhánh và quay lại ở ngõ cụt thay vì chỉ đi theo những con đường ngắn nhất.
+- Làm mịn đường dẫn kết quả bằng các đường khối.
+- Các điểm tham chiếu quỹ đạo mẫu mỗi **0,25 m**.
+- Đính kèm các mục tiêu đối tượng từ vựng mở và các mẫu ngôn ngữ đa dạng.
 
-#### Target tracking
+#### Theo dõi mục tiêu
 
-- Use EVT-Bench's Single Target Tracking split without distractors.
-- Pair the current egocentric image and short recent history with a textual target description.
-- Supervise the same eight-waypoint future-trajectory format used by other navigation tasks.
+- Sử dụng tính năng phân chia Theo dõi mục tiêu đơn của EVT-Bench mà không có yếu tố gây phân tâm.
+- Ghép nối hình ảnh ích kỷ hiện tại và lịch sử ngắn gọn gần đây với mô tả mục tiêu bằng văn bản.
+- Giám sát định dạng quỹ đạo tương lai tám điểm tương tự được sử dụng bởi các nhiệm vụ điều hướng khác.
 
-#### Autonomous driving
+#### Lái xe tự động
 
-- Use nuScenes and OpenScene multi-view driving trajectories.
-- Create different input variants from the same path by optionally adding:
-  - navigation instructions;
-  - current ego-vehicle state;
-  - prior ground-truth trajectory context.
+- Sử dụng quỹ đạo lái xe đa góc nhìn của nuScenes và OpenScene.
+- Tạo các biến thể đầu vào khác nhau từ cùng một đường dẫn bằng cách thêm tùy ý:
+  - hướng dẫn điều hướng;
+  - trạng thái phương tiện bản ngã hiện tại;
+  - bối cảnh quỹ đạo thực tế trước đó.
 
-#### Text-to-video navigation data
+#### Dữ liệu điều hướng chuyển văn bản thành video
 
-The 40K synthetic pipeline is:
+Đường ống tổng hợp 40K là:
 
-1. Generate a first-person scene prompt and navigation instruction with an LLM.
-2. Render a short egocentric video with a text-to-video model.
-3. Filter visual and instruction consistency with a VLM.
-4. Recover camera motion using monocular depth and pose estimation.
-5. Convert the camera path into a 2-D navigation trajectory.
-6. Remove physically implausible samples with a kinematic filter.
+1. Tạo prompt cảnh ở góc nhìn thứ nhất và hướng dẫn điều hướng bằng LLM.
+2. Kết xuất một video ngắn lấy chủ nghĩa tự nhiên bằng mô hình chuyển văn bản thành video.
+3. Lọc tính nhất quán của hình ảnh và hướng dẫn bằng VLM.
+4. Khôi phục chuyển động của máy ảnh bằng cách sử dụng độ sâu một mắt và ước tính tư thế.
+5. Chuyển đổi đường đi của camera thành quỹ đạo điều hướng 2-D.
+6. Loại bỏ các mẫu không hợp lý về mặt vật lý bằng bộ lọc động học.
 
-#### Shared camera and motion augmentation
+#### Chia sẻ camera và tăng cường chuyển động
 
-- Camera height: uniformly sampled from **0.5-1.5 m**.
-- Horizontal field of view: sampled from **90-120 degrees**.
-- Aspect ratio: sampled between **2:1 and 4:3**.
-- PointNav additionally varies initial heading, viewpoint, and low-speed motion.
+- Chiều cao camera: lấy mẫu đồng đều từ **0,5-1,5 m**.
+- Trường nhìn ngang: lấy mẫu từ **90-120 độ**.
+- Tỷ lệ khung hình: được lấy mẫu trong khoảng **2:1 và 4:3**.
+- PointNav cũng thay đổi hướng ban đầu, góc nhìn và chuyển động tốc độ thấp.
 
-[RobotNav paper v3, §§4.1-4.2](https://arxiv.org/abs/2606.18112v3)
+[Giấy RobotNav v3, §§4.1-4.2](https://arxiv.org/abs/2606.18112v3)
 
-### 4.3 Vision-Language Preservation Data
+### 4.3 Dữ liệu lưu giữ ngôn ngữ thị giác
 
-The VL portion preserves:
+Phần VL bảo toàn:
 
-- Natural-language understanding
-- Open-world perception
-- Spatial reasoning
-- Interpretation of camera and temporal tags
-- Generalization to unseen instructions and environments
+- Hiểu ngôn ngữ tự nhiên
+- Nhận thức về thế giới mở
+- Lý luận không gian
+- Giải thích các thẻ máy ảnh và thời gian
+- Khái quát hóa các hướng dẫn và môi trường vô hình
 
-Its three main groups are:
+Ba nhóm chính của nó là:
 
-- **General VL, about 1.0M:** VQA, captioning, grounding, instruction following, multi-image
-  reasoning, landmark recognition, and STEM.
-- **Navigation reasoning, 873K:** history summaries, scene analysis, progress tracking, and action
-  reasoning derived from navigation trajectories.
-- **Discrete VLN conversations, 362K:** CVDN, SOON, REVERIE, SRDF, and related graph-based
-  navigation data reformatted as multi-round, four-view action questions.
+- **VL chung, khoảng 1,0M:** VQA, chú thích, nối đất, hướng dẫn làm theo, nhiều hình ảnh
+  lý luận, nhận dạng mốc và STEM.
+- **Lý luận điều hướng, 873K:** tóm tắt lịch sử, phân tích cảnh, theo dõi tiến trình và hành động
+  suy luận bắt nguồn từ quỹ đạo điều hướng.
+- **Cuộc hội thoại VLN riêng biệt, 362K:** CVDN, SOON, REVERIE, SRDF và dựa trên biểu đồ có liên quan
+  dữ liệu điều hướng được định dạng lại dưới dạng câu hỏi hành động nhiều vòng, bốn lượt xem.
 
-### 4.4 Interpretation and Split Caveats
+### 4.4 Giải thích và phân chia hãy cẩn thận
 
-The evaluation suites reuse several **dataset families** seen in training—R2R/RxR, EVT-Bench,
-Matterport3D/HM3D, and HM3D-OVON—under held-out labels such as Val-Unseen, test, or unseen-object
-splits. The paper does not publish a sample-level deduplication or contamination audit across those
-splits. This does not prove leakage, but it means the split definitions, not dataset names alone, carry the
-generalization claim. AlpaSim is the clear exception: the paper explicitly reports zero-shot evaluation
-without training on its 920 PhysicalAI-AV NuRec scenarios.
+Các bộ đánh giá sử dụng lại một số **dòng dữ liệu** được thấy trong quá trình huấn luyện—R2R/RxR, EVT-Bench,
+Matterport3D/HM3D và HM3D-OVON—dưới các nhãn được giữ lại như Val-Unseen, test hoặc unseen-object
+chia tách. Bài viết không công bố một cuộc kiểm tra loại bỏ sự trùng lặp hoặc ô nhiễm ở cấp độ mẫu trên các
+chia tách. Điều này không chứng minh được sự rò rỉ, nhưng nó có nghĩa là các định nghĩa phân tách, không chỉ riêng tên tập dữ liệu, mang theo
+yêu cầu khái quát hóa. AlpaSim là một ngoại lệ rõ ràng: bài báo báo cáo rõ ràng việc đánh giá zero-shot
+mà không cần huấn luyện về 920 kịch bản PhysicalAI-AV NuRec.
 
-## 5. Training Procedure
+## 5. Quy trình huấn luyện
 
-### 5.1 Training Objective
+### 5.1 Mục tiêu huấn luyện
 
-RobotNav uses a composite loss:
+RobotNav sử dụng tổn thất tổng hợp:
 
 $$
 \mathcal{L}
 =
-\mathcal{L}_{traj}
+\mathcal{L__{traj}
 +
-\lambda\mathcal{L}_{VL}
+\lambda\mathcal{L__{VL}
 $$
 
-where:
+ở đâu:
 
 $$
-\mathcal{L}_{traj}
+\mathcal{L__{traj}
 =
 \left\|
 W-\hat{W}
 \right\|_2^2
 $$
 
-is waypoint MSE, and \(\mathcal{L}_{VL}\) is next-token prediction on navigation-related reasoning samples.
+là MSE điểm tham chiếu và \(\mathcal{L__{VL}\) là dự đoán token tiếp theo trên các mẫu lý luận liên quan đến điều hướng.
 
-The reported value is:
+Giá trị được báo cáo là:
 
 $$
-\lambda=1.0
+\lambda=1,0
 $$
 
-Unlike flow matching, this is deterministic direct regression: one forward pass predicts all eight waypoints.
+Không giống như kết hợp luồng, đây là hồi quy trực tiếp mang tính xác định: một lần chuyển tiếp dự đoán tất cả tám điểm tham chiếu.
 
-### 5.2 Configuration Randomization
+### 5.2 Cấu hình ngẫu nhiên
 
-No observation configuration remains fixed during training.
+Không có cấu hình quan sát nào được cố định trong quá trình huấn luyện.
 
-For every sample, the model randomizes:
+Đối với mỗi mẫu, mô hình ngẫu nhiên hóa:
 
-- Token budget
-- Temporal decay
-- Per-camera weights
-- Per-frame allocation bounds
-- Random-history versus latest-frame sampling
+- Ngân sách token
+- Phân rã theo thời gian
+- Trọng lượng mỗi camera
+- Giới hạn phân bổ mỗi khung
+- Lấy mẫu lịch sử ngẫu nhiên so với khung hình mới nhất
 
-This prevents the network from overfitting to one camera layout or one context strategy.
+Điều này ngăn không cho mạng trang bị quá mức cho một bố cục camera hoặc một chiến lược bối cảnh.
 
-The resulting policy can switch observation strategies at inference without architecture changes or task-specific retraining.
+Chính sách kết quả có thể chuyển đổi các chiến lược quan sát khi suy luận mà không cần thay đổi kiến trúc hoặc huấn luyện lại về nhiệm vụ cụ thể.
 
-### 5.3 How Tasks Alternate During Co-Training
+### 5.3 Cách luân phiên các nhiệm vụ trong quá trình đồng huấn luyện
 
-RobotNav has two distinct sources of variation that should not be conflated:
+RobotNav có hai nguồn biến thể riêng biệt không nên gộp chung:
 
 ```text
 Batch level:
@@ -596,48 +596,48 @@ independently randomize token budget, temporal decay, camera weights,
 per-frame bounds, and random/latest history mode
 ```
 
-The task-mixture behavior is:
+Hành vi hỗn hợp nhiệm vụ là:
 
-- **Top-level target:** 85% trajectory data and 15% VL/reasoning data.
-- **Sampling granularity:** select a dataset at the batch level from a registry.
-- **Balancing goal:** keep all five navigation families visible instead of allowing large RxR or driving
-  sources to dominate.
-- **Not disclosed:** per-dataset registry rates and exact batch ordering.
-- **Do not infer:** a literal repeating sequence such as `85 trajectory batches -> 15 VL batches`.
+- **Mục tiêu cấp cao nhất:** 85% dữ liệu quỹ đạo và 15% VL/dữ liệu lý luận.
+- **Mức độ chi tiết của việc lấy mẫu:** chọn tập dữ liệu ở cấp lô từ sổ đăng ký.
+- **Mục tiêu cân bằng:** giữ cho tất cả năm nhóm điều hướng luôn hiển thị thay vì cho phép RxR lớn hoặc lái xe
+  nguồn để thống trị.
+- **Không được tiết lộ:** tỷ lệ đăng ký trên mỗi tập dữ liệu và thứ tự lô chính xác.
+- **Không suy ra:** một chuỗi lặp lại theo nghĩa đen, chẳng hạn như `85 trajectory batches -> 15 VL batches`.
 
-Once a trajectory sample is chosen, the observation configuration is randomized independently:
+Khi mẫu quỹ đạo được chọn, cấu hình quan sát được chọn ngẫu nhiên một cách độc lập:
 
-| Parameter                           | Training distribution                               |
+| Tham số | Phân phối huấn luyện |
 | ----------------------------------- | --------------------------------------------------- |
-| Visual-token budget \(B\)            | Uniform from 2,048 to 4,096                         |
-| Temporal decay \(\gamma\)            | Uniform from 1 to 3                                 |
-| Camera weight \(w_c\)                | Camera-specific uniform ranges                      |
-| Minimum tokens per frame \(b_{min}\) | Discrete uniform from 1 to 8                        |
-| Maximum tokens per frame \(b_{max}\) | Discrete uniform from 128 to 256                    |
-| Frame-history mode                  | `random` or `latest`, each with 50% probability |
+| Ngân sách token trực quan \(B\) | Đồng phục từ 2.048 đến 4.096 |
+| Phân rã theo thời gian \(\gamma\) | Đồng phục từ 1 đến 3 |
+| Trọng lượng máy ảnh \(w_c\) | Phạm vi thống nhất dành riêng cho máy ảnh |
+| Token tối thiểu trên mỗi khung \(b_{min}\) | Đồng phục rời rạc từ 1 đến 8 |
+| Token tối đa trên mỗi khung hình \(b_{max}\) | Đồng phục rời rạc từ 128 đến 256 |
+| Chế độ lịch sử khung | `random` hoặc `latest`, mỗi loại có xác suất 50% |
 
-The objective alternation is equally simple:
+Sự thay đổi mục tiêu cũng đơn giản không kém:
 
-- **Trajectory batch:** activate waypoint MSE.
-- **VL batch:** activate next-token prediction.
-- **Shared parameters:** both use the same VLM policy network.
-- **Loss weight:** \(\lambda=1\).
-- **Reason for co-training:** trajectory-only tuning tends to collapse toward reactive action-sequence
-  mapping and lose general spatial/language reasoning.
+- **Lô quỹ đạo:** kích hoạt điểm tham chiếu MSE.
+- **Lô VL:** kích hoạt dự đoán token tiếp theo.
+- **Tham số chung:** cả hai đều sử dụng cùng một mạng chính sách VLM.
+- **Giảm cân:** \(\lambda=1\).
+- **Lý do đồng huấn luyện:** việc điều chỉnh chỉ theo quỹ đạo có xu hướng chuyển sang chuỗi hành động phản ứng
+  lập bản đồ và mất khả năng suy luận về không gian/ngôn ngữ chung.
 
-[RobotNav paper v3, §§2.2 and 2.6](https://arxiv.org/abs/2606.18112v3)
+[RobotNav paper v3, §§2.2 và 2.6](https://arxiv.org/abs/2606.18112v3)
 
-### 5.4 End-to-End Fine-Tuning
+### 5.4 Tinh chỉnh từ đầu đến cuối
 
-RobotNav is initialized from Qwen3-VL and fine-tuned end-to-end:
+RobotNav được khởi tạo từ Qwen3-VL và được tinh chỉnh từ đầu đến cuối:
 
-- Vision encoder is trainable
-- Language backbone is trainable
-- MLP action head is trainable
-- The action head uses a larger learning rate than the pretrained backbone
-- AdamW, warm-up, cosine decay, and gradient clipping are used
+- Bộ mã hóa tầm nhìn có thể huấn luyện được
+- Nền tảng ngôn ngữ có thể huấn luyện được
+- Đầu hành động MLP có thể huấn luyện được
+- Đầu hành động sử dụng tốc độ học lớn hơn xương sống được huấn luyện trước
+- Sử dụng AdamW, khởi động, phân rã cosine và cắt gradient
 
-Reported example settings include:
+Cài đặt ví dụ được báo cáo bao gồm:
 
 ```text
 Backbone peak learning rate: 2 × 10^-5
@@ -646,102 +646,102 @@ Warm-up: first 3% of steps
 Gradient clipping: 1.0
 ```
 
-## 6. Evaluation
+## 6. Đánh giá
 
-### 6.1 Benchmark Matrix
+### 6.1 Ma trận benchmark
 
-RobotNav is evaluated across all five training task families plus an agentic embodied-QA system. These
-are not one common benchmark: metrics, sensors, split semantics, controller assumptions, and access to
-history differ, so scores should be compared only within a row.
+RobotNav được đánh giá trên tất cả năm nhóm nhiệm vụ huấn luyện cùng với hệ thống QA được thể hiện bằng agent. Những cái này
+không phải là một tiêu chuẩn chung: số liệu, cảm biến, ngữ nghĩa phân chia, giả định của bộ điều khiển và quyền truy cập vào
+lịch sử khác nhau, vì vậy điểm số chỉ nên được so sánh trong một hàng.
 
-| Evaluation            | Protocol and metrics                                                                              |                      Main Qwen-RobotNav result | Important interpretation                                                                         |
+| Đánh giá | Giao thức và số liệu |                      Kết quả Qwen-RobotNav chính | Giải thích quan trọng |
 | --------------------- | ------------------------------------------------------------------------------------------------- | ---------------------------------------------: | ------------------------------------------------------------------------------------------------ |
-| VLN-CE R2R Val-Unseen | Monocular and panoramic; NE, OSR, nDTW, SR, SPL                                                   |               Panoramic 8B: 72.1 SR / 66.6 SPL | Instruction-following family also supplies training data; unseen split is the operative boundary |
-| VLN-CE RxR Val-Unseen | Same metrics, multilingual instructions                                                           |               Panoramic 8B: 76.5 SR / 65.7 SPL | Paper reports +12.1 SR over NavFoM in its comparison                                             |
-| VLNVerse test         | Fine- and coarse-grained instruction tracks; SR/SPL                                               |  8B fine: 63.75 / 57.93; coarse: 46.59 / 41.54 | Coarse instructions are materially harder                                                        |
-| VLN-PE R2R Val-Unseen | Flash low-level controller; SR/SPL and fall rate                                                  |          8B: 65.50 SR / 61.19 SPL / 4.05 falls | Higher fall rate than InternVLA-N1's 0.45 exposes controller-safety trade-off                    |
-| MP3D / HM3D ObjectNav | Closed vocabulary; SR/SPL                                                                         | RGB-only 4B: MP3D 52.2/16.0; HM3D-v2 75.6/30.6 | Several baselines use HM3D-v1, limiting direct ranking                                           |
-| HM3D-OVON             | Seen, synonym, unseen objects; SR/SPL; one front camera                                           |                      4B SR: 57.7 / 60.1 / 53.1 | Search-style training improves reach but produces longer, less efficient paths                   |
-| EVT-Bench STT         | Single target, single view; tracking, collision and success rates                                 |               4B: 90.0 tracking / 77.4 success | Best tracking rate does not become best episode success; specialists reach 86+ SR                |
-| NAVSIM navtest        | Closed-loop driving metrics; prompt includes ground-truth trajectories from previous three frames |       4B PDMS 91.4; 79.5 without history prior | The historical ground-truth prior is a major part of the score                                   |
-| AlpaSim on NuRec      | 920 zero-shot scenarios; close encounter, off-road and aggregate score                            |                             8B: 22 / 27 / 0.17 | Far behind Alpamayo-R1-10B at 4 / 16 / 0.72; measures OOD transfer, not specialist parity        |
+| VLN-CE R2R Val-Không nhìn thấy | Một mắt và toàn cảnh; ĐB, OSR, nDTW, SR, SPL |               Toàn cảnh 8B: 72,1 SR / 66,6 SPL | Họ theo hướng dẫn cũng cung cấp dữ liệu huấn luyện; sự phân chia vô hình là ranh giới hoạt động |
+| VLN-CE RxR Val-Không nhìn thấy | Cùng số liệu, hướng dẫn đa ngôn ngữ |               Toàn cảnh 8B: 76,5 SR / 65,7 SPL | Báo cáo giấy +12,1 SR so với NavFoM khi so sánh |
+| Kiểm tra VLNVverse | Đường dẫn hướng dẫn chi tiết và thô; SR/SPL |  mức phạt 8B: 63,75/57,93; thô: 46,59 / 41,54 | Những hướng dẫn thô thiển khó hơn về mặt vật chất |
+| VLN-PE R2R Val-Không nhìn thấy | Bộ điều khiển flash cấp thấp; SR/SPL và tỷ lệ giảm |          8B: 65,50 SR / 61,19 SPL / 4,05 rơi | Tỷ lệ rơi cao hơn 0,45 của InternVLA-N1 cho thấy sự cân bằng giữa bộ điều khiển và an toàn |
+| Đối tượng MP3D / HM3DNav | Từ vựng đóng; SR/SPL | 4B chỉ có RGB: MP3D 52.2/16.0; HM3D-v2 75.6/30.6 | Một số đường cơ sở sử dụng HM3D-v1, hạn chế xếp hạng trực tiếp |
+| HM3D-OVON | Đối tượng được thấy, đồng nghĩa, không được nhìn thấy; SR/SPL; một camera phía trước |                      4B SR: 57,7 / 60,1 / 53,1 | Huấn luyện theo kiểu tìm kiếm cải thiện phạm vi tiếp cận nhưng tạo ra các đường dẫn dài hơn, kém hiệu quả hơn |
+| EVT-Băng ghế STT | Mục tiêu duy nhất, góc nhìn duy nhất; theo dõi, va chạm và tỷ lệ thành công |               4B: theo dõi 90,0 / 77,4 thành công | Tỷ lệ theo dõi tốt nhất không trở thành thành công của tập hay nhất; chuyên gia đạt 86+ SR |
+| NAVSIM điều hướng | Số liệu lái xe vòng kín; prompt bao gồm các quỹ đạo thực tế từ ba khung trước đó |       4B PDMS 91.4; 79,5 không có lịch sử trước đó | Sự thật lịch sử trước đó là một phần chính của bản nhạc |
+| AlpaSim trên NuRec | 920 tình huống bắn không; điểm chạm trán, địa hình và tổng điểm |                             8B: 22/27/0,17 | Bỏ xa Alpamayo-R1-10B ở mức 4/16/0,72; biện pháp chuyển OOD, không chuyên chẵn lẻ |
 
-[RobotNav paper v3, Tables 1-6 and 8-9](https://arxiv.org/abs/2606.18112v3)
+[RobotNav paper v3, Bảng 1-6 và 8-9](https://arxiv.org/abs/2606.18112v3)
 
-### 6.2 Agent-System EQA Results
+### 6.2 Kết quả EQA hệ thống agent
 
-These are **system-level** results, not standalone RobotNav policy scores:
+Đây là kết quả **cấp hệ thống**, không phải điểm chính sách RobotNav độc lập:
 
-- **Planner:** Qwen3.6-Plus.
-- **Movement executor:** Qwen-RobotNav-8B.
-- **HM-EQA:** 76.7 accuracy and 0.15 normalized steps.
-- **MT benchmark:** 54.4 accuracy and 0.19 normalized steps.
-  - The prose calls this benchmark `MT-HM3D`.
-  - Table 7 calls it `MT-EQA`.
-- **EXPRESS-Bench:** 79.27 LLM score and 33.96 Epath.
+- **Công cụ lập kế hoạch:** Qwen3.6-Plus.
+- **Người thực hiện chuyển động:** Qwen-RobotNav-8B.
+- **HM-EQA:** Độ chính xác 76,7 và 0,15 bước chuẩn hóa.
+- **Benchmark MT:** độ chính xác 54,4 và 0,19 bước chuẩn hóa.
+  - Văn xuôi gọi benchmark này là `MT-HM3D`.
+  - Bảng 7 gọi là `MT-EQA`.
+- **EXPRESS-Bench:** 79,27 điểm LLM và 33,96 Epath.
 
-The planner contribution and naming inconsistency must be preserved when citing these values.
-[RobotNav paper v3, §5.2.4 and Table 7](https://arxiv.org/abs/2606.18112v3)
+Sự đóng góp của người lập kế hoạch và sự không nhất quán trong việc đặt tên phải được giữ nguyên khi trích dẫn các giá trị này.
+[RobotNav paper v3, §5.2.4 và Bảng 7](https://arxiv.org/abs/2606.18112v3)
 
-### 6.3 Scaling and Context Ablations
+### 6.3 Loại bỏ tỷ lệ và ngữ cảnh
 
-Evaluation ablations expose several non-monotonic effects:
+Sự cắt bỏ đánh giá cho thấy một số hiệu ứng không đơn điệu:
 
-- Increasing navigation data from 12.5% to 100% strongly improves R2R, RxR, driving, and
-  OVON-Unseen (37.1 to 53.1 SR), but tracking saturates early and peaks at 25% data.
-- On 500 R2R Val-Unseen episodes with \(\gamma=2\), increasing token budget from 2,048 to 4,608
-  raises SR from 70.8 to 74.6, while OSR peaks earlier at a 3,584-token budget.
-- With \(B=3072\), SR peaks at \(\gamma=3.0\) and then declines slightly; more recent-frame bias is
-  helpful only up to a point.
-- Removing the three-frame ground-truth driving history prior reduces NAVSIM PDMS by more than 11
-  points for both reported model sizes.
+- Tăng dữ liệu điều hướng từ 12,5% lên 100% cải thiện mạnh mẽ R2R, RxR, lái xe và
+  OVON-Unseen (37,1 đến 53,1 SR), nhưng quá trình theo dõi bão hòa sớm và đạt đỉnh ở mức 25% dữ liệu.
+- Trên 500 tập R2R Val-Unseen có \(\gamma=2\), tăng ngân sách token từ 2.048 lên 4.608
+  tăng SR từ 70,8 lên 74,6, trong khi OSR đạt đỉnh sớm hơn với ngân sách 3.584 token.
+- Với \(B=3072\), SR đạt đỉnh \(\gamma=3.0\) rồi giảm nhẹ; xu hướng khung gần đây hơn là
+  chỉ hữu ích ở một mức độ nào đó.
+- Loại bỏ lịch sử lái xe thực tế cơ bản ba khung trước đó làm giảm hơn 11 NAVSIM PDMS
+  điểm cho cả hai kích thước mô hình được báo cáo.
 
-### 6.4 Real-World Evidence and Caveats
+### 6.4 Bằng chứng thực tế và những cảnh báo
 
-- Demonstrations cover Unitree Go2, an exhibition hall, an apartment, and a coffee-store scenario.
-- Reported latency:
-  - remote inference: about **196 ms**, or **5.1 Hz**;
-  - Jetson Thor: about **204 ms**, or **4.9 Hz**.
-- The paper does not report repeated-trial success rates for these deployments.
-- “Zero-shot real-world generalization” is therefore qualitative evidence, not a statistical real-world
-  evaluation protocol.
+- Các minh họa bao gồm Unittree Go2, phòng triển lãm, căn hộ và quán cà phê.
+- Độ trễ được báo cáo:
+  - suy luận từ xa: khoảng **196 ms** hoặc **5,1 Hz**;
+  - Jetson Thor: khoảng **204 ms**, hoặc **4,9 Hz**.
+- Bài viết không báo cáo tỷ lệ thành công khi thử nghiệm lặp lại các triển khai này.
+- Do đó, “khái quát hóa thế giới thực bằng không” là bằng chứng định tính, không phải là một thế giới thực thống kê
+  giao thức đánh giá.
 
-[RobotNav paper v3, §§5.5-5.6 and Figures 14-15](https://arxiv.org/abs/2606.18112v3)
+[RobotNav paper v3, §§5.5-5.6 và Hình 14-15](https://arxiv.org/abs/2606.18112v3)
 
-## 7. Comparison and Conclusion
+## 7. So sánh và kết luận
 
-### 7.1 How RobotNav Differs from Qwen-VLA
+### 7.1 RobotNav khác với Qwen-VLA như thế nào
 
-| Aspect                    | Qwen-VLA                                          | Qwen-RobotNav                                                |
+| Khía cạnh | Qwen-VLA | Qwen-RobotNav |
 | ------------------------- | ------------------------------------------------- | ------------------------------------------------------------ |
-| Scope                     | General embodied action and trajectory generation | Navigation only                                              |
-| Backbone                  | Qwen3.5-4B                                        | Qwen3-VL family, evaluated from 2B to 8B                     |
-| Policy head               | Large flow-matching DiT                           | Lightweight 4-layer MLP                                      |
-| Output                    | Variable task-specific action chunk               | Fixed eight-waypoint trajectory                              |
-| Generation                | Iterative flow integration                        | Single-pass regression                                       |
-| Robot state               | Can be directly included in action modeling       | Primarily visual history, prompt, and navigation context     |
-| Embodiment interface      | Robot/control description plus action masks       | Prompt tags and configurable observation encoding            |
-| History handling          | General multimodal context                        | Explicit token-budgeted temporal and multi-camera allocation |
-| Training schedule         | Four-stage curriculum including RL                | Single end-to-end multi-task fine-tuning pipeline            |
-| Action loss               | Flow-matching velocity prediction                 | Waypoint MSE                                                 |
-| Main robustness technique | Broad co-pretraining and progressive stages       | Randomization of observation configurations                  |
-| Agent integration         | General policy                                    | Designed as a reactive module under an upper planner         |
+| Phạm vi | Hành động thể hiện chung và tạo quỹ đạo | Chỉ điều hướng |
+| Xương sống | Qwen3.5-4B | Họ Qwen3-VL, được đánh giá từ 2B đến 8B |
+| Người đứng đầu chính sách | DiT phù hợp với dòng chảy lớn | MLP 4 lớp nhẹ |
+| Đầu ra | Đoạn hành động cụ thể theo nhiệm vụ có thể thay đổi | Đã sửa lỗi quỹ đạo tám điểm |
+| Thế hệ | Tích hợp dòng lặp | Hồi quy một lần |
+| Trạng thái robot | Có thể được đưa trực tiếp vào mô hình hành động | Chủ yếu là lịch sử trực quan, prompt và bối cảnh điều hướng |
+| Giao diện hiện thân | Mô tả robot/điều khiển cộng với mặt nạ hành động | Thẻ nhắc nhở và mã hóa quan sát có thể định cấu hình |
+| Xử lý lịch sử | Bối cảnh đa phương thức chung | Phân bổ tạm thời và nhiều camera theo ngân sách token rõ ràng |
+| Lịch trình huấn luyện | Chương trình giảng dạy bốn giai đoạn bao gồm RL | Quy trình tinh chỉnh đa tác vụ từ đầu đến cuối |
+| Mất hành động | Dự đoán vận tốc phù hợp với dòng chảy | Điểm tham chiếu MSE |
+| Kỹ thuật bền vững chính | Các giai đoạn đồng huấn luyện trước và tiến bộ rộng rãi | Ngẫu nhiên hóa cấu hình quan sát |
+| Tích hợp đại lý | Chính sách chung | Được thiết kế như một mô-đun phản ứng theo kế hoạch cấp trên |
 
-### 7.2 Core Training Philosophy
+### 7.2 Triết lý huấn luyện cốt lõi
 
-> **Keep the action head simple and train the VLM to become the navigator.**
+> **Giữ đầu hành động đơn giản và huấn luyện VLM trở thành người điều hướng.**
 
-RobotNav assumes that navigation planning can be represented compactly as future waypoints. Most spatial reasoning remains inside the pretrained VLM, while the small MLP only translates its hidden state into coordinates.
+RobotNav giả định rằng việc lập kế hoạch điều hướng có thể được thể hiện một cách cô đọng dưới dạng các điểm tham chiếu trong tương lai. Hầu hết lý luận về không gian vẫn nằm trong VLM được huấn luyện trước, trong khi MLP nhỏ chỉ chuyển trạng thái ẩn của nó thành tọa độ.
 
 ---
 
-## Primary Sources
+## Nguồn chính
 
-1. Zhang et al. *Qwen-RobotNav Technical Report: A Scalable Navigation Model Designed for an
-   Agentic Navigation System*, v3, 2026-06-29.
+1. Zhang và cộng sự. *Báo cáo kỹ thuật Qwen-RobotNav: Mô hình điều hướng có thể mở rộng được thiết kế cho
+   Hệ thống định vị agent*, v3, 2026-06-29.
    [arXiv](https://arxiv.org/abs/2606.18112v3) ·
-   [local PDF](../../../../papers/01-gwen/vla-specific/qwen_robotnav_2606.18112.pdf) ·
-   [official repository](https://github.com/QwenLM/Qwen-RobotNav)
-2. Wang et al. *Qwen-VLA: A Vision-Language-Action Model for General Embodied Intelligence*.
+   [PDF cục bộ](../../../../papers/01-gwen/vla-specific/qwen_robotnav_2606.18112.pdf) ·
+   [kho lưu trữ chính thức](https://github.com/QwenLM/Qwen-RobotNav)
+2. Wang và cộng sự. *Qwen-VLA: Mô hình Hành động-Ngôn ngữ-Tầm nhìn cho Trí tuệ Thể hiện Chung*.
    [arXiv](https://arxiv.org/abs/2605.30280v2) ·
-   [local PDF](../../../../papers/01-gwen/vla-specific/qwen_vla_2605.30280.pdf)
+   [PDF cục bộ](../../../../papers/01-gwen/vla-specific/qwen_vla_2605.30280.pdf)

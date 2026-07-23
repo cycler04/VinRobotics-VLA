@@ -1,4 +1,4 @@
-# Qwen3.5 — Evaluation
+# Qwen3.5 — Đánh giá
 
 > Các benchmark dưới đây là những benchmark được model card/blog của Qwen công bố hoặc nhắc tới. Khi trình bày cần ghi rõ **reported results**; không mặc nhiên coi đây là independent reproduction. Điểm số có thể thay đổi theo checkpoint, prompt, thinking mode, tool access, agent scaffold và số sample.
 
@@ -98,122 +98,122 @@ MMMU và MMMU-Pro thiên về multimodal academic reasoning; MathVista tập tru
 
 | Nhóm          | Benchmark          | Qwen3.5-35B-A3B |
 | -------------- | ------------------ | --------------: |
-| Knowledge      | MMLU-Pro           |            85.3 |
-| STEM/reasoning | HLE with CoT       |            22.4 |
-| STEM/reasoning | GPQA Diamond       |            84.2 |
-| Coding         | SWE-bench Verified |            69.2 |
-| Coding         | Terminal Bench 2   |            40.5 |
-| Coding         | LiveCodeBench v6   |            74.6 |
-| General agent  | TAU2-Bench         |            81.2 |
-| General agent  | DeepPlanning       |            22.8 |
+| Kiến thức | MMLU-Pro |            85,3 |
+| STEM/lý luận | HLE với CoT |            22.4 |
+| STEM/lý luận | Kim cương GPQA |            84,2 |
+| Mã hóa | Băng ghế dự bị SWE đã được xác minh |            69,2 |
+| Mã hóa | Ghế Nhà Ga 2 |            40,5 |
+| Mã hóa | LiveCodeBench v6 |            74,6 |
+| Tổng đại lý | TAU2-Băng ghế |            81,2 |
+| Tổng đại lý | Lập kế hoạch sâu |            22.8 |
 
-### Vision-language
+### Thị giác-ngôn ngữ
 
 | Nhóm         | Benchmark                  | Qwen3.5-35B-A3B |
 | ------------- | -------------------------- | --------------: |
-| STEM/puzzle   | MMMU                       |            81.4 |
-| STEM/puzzle   | MathVista mini             |            86.2 |
-| Hallucination | HallusionBench             |            67.9 |
-| Document/OCR  | OCRBench                   |            91.0 |
-| Spatial       | CountBench                 |            97.8 |
-| Video         | VideoMME with subtitles    |            86.6 |
-| Video         | VideoMME without subtitles |            82.5 |
+| STEM/câu đố | MMMU |            81,4 |
+| STEM/câu đố | MathVista mini |            86,2 |
+| Ảo giác | HallusionBench |            67,9 |
+| Tài liệu/OCR | OCBench |            91.0 |
+| Không gian | CountBench |            97,8 |
+| Video | VideoMME có phụ đề |            86,6 |
+| Video | VideoMME không có phụ đề |            82,5 |
 
 Ghi chú: `TIR-Bench` báo cáo điểm khi bật/tắt Code Interpreter; `BabyVision` và `V*` cũng dùng định dạng with-CI/without-CI trong model card. `--` nghĩa là chưa có điểm hoặc không áp dụng.
 
 ## 5. Phụ lục: toàn bộ score từ model card Qwen3.5-35B-A3B
 
-### Language
+### Ngôn ngữ
 
 | Nhóm                 | Benchmark          | Score |
 | --------------------- | ------------------ | ----: |
-| Knowledge             | MMLU-Pro           |  85.3 |
-| Knowledge             | MMLU-Redux         |  93.3 |
-| Knowledge             | C-Eval             |  90.2 |
-| Knowledge             | SuperGPQA          |  63.4 |
-| Instruction following | IFEval             |  91.9 |
-| Instruction following | IFBench            |  70.2 |
-| Instruction following | MultiChallenge     |  60.0 |
-| Long context          | AA-LCR             |  58.5 |
-| Long context          | LongBench v2       |  59.0 |
-| STEM & reasoning      | HLE with CoT       |  22.4 |
-| STEM & reasoning      | GPQA Diamond       |  84.2 |
-| STEM & reasoning      | HMMT Feb 25        |  89.0 |
-| STEM & reasoning      | HMMT Nov 25        |  89.2 |
-| Coding                | SWE-bench Verified |  69.2 |
-| Coding                | Terminal Bench 2   |  40.5 |
-| Coding                | LiveCodeBench v6   |  74.6 |
-| Coding                | CodeForces         |  2028 |
-| Coding                | OJBench            |  36.0 |
-| Coding                | FullStackBench en  |  58.1 |
-| Coding                | FullStackBench zh  |  55.0 |
-| General agent         | BFCL-V4            |  67.3 |
-| General agent         | TAU2-Bench         |  81.2 |
-| General agent         | VITA-Bench         |  31.9 |
-| General agent         | DeepPlanning       |  22.8 |
-| Search agent          | HLE with tool      |  47.4 |
-| Search agent          | BrowseComp         |  61.0 |
-| Search agent          | BrowseComp-zh      |  69.5 |
-| Search agent          | WideSearch         |  57.1 |
-| Search agent          | Seal-0             |  41.4 |
-| Multilingualism       | MMMLU              |  85.2 |
-| Multilingualism       | MMLU-ProX          |  81.0 |
-| Multilingualism       | NOVA-63            |  57.1 |
-| Multilingualism       | INCLUDE            |  79.7 |
-| Multilingualism       | Global PIQA        |  86.6 |
-| Multilingualism       | PolyMATH           |  64.4 |
-| Multilingualism       | WMT24++            |  76.3 |
-| Multilingualism       | MAXIFE             |  86.6 |
+| Kiến thức | MMLU-Pro |  85,3 |
+| Kiến thức | MMLU-Redux |  93,3 |
+| Kiến thức | Đánh giá C |  90,2 |
+| Kiến thức | SuperGPQA |  63,4 |
+| Hướng dẫn sau | IFEgiá trị |  91,9 |
+| Hướng dẫn sau | IFBench |  70,2 |
+| Hướng dẫn sau | Đa thử thách |  60,0 |
+| Bối cảnh dài | AA-LCR |  58,5 |
+| Bối cảnh dài | LongBench v2 |  59,0 |
+| STEM & lý luận | HLE với CoT |  22.4 |
+| STEM & lý luận | Kim cương GPQA |  84,2 |
+| STEM & lý luận | HMMT 25/02 |  89,0 |
+| STEM & lý luận | HMMT 25/11 |  89,2 |
+| Mã hóa | Băng ghế dự bị SWE đã được xác minh |  69,2 |
+| Mã hóa | Ghế Nhà Ga 2 |  40,5 |
+| Mã hóa | LiveCodeBench v6 |  74,6 |
+| Mã hóa | Lực Lượng Mã |  2028 |
+| Mã hóa | OJBench |  36.0 |
+| Mã hóa | FullStackBench vi |  58,1 |
+| Mã hóa | FullStackBench zh |  55,0 |
+| Tổng đại lý | BFCL-V4 |  67,3 |
+| Tổng đại lý | TAU2-Băng ghế |  81,2 |
+| Tổng đại lý | Ghế VITA |  31.9 |
+| Tổng đại lý | Lập kế hoạch sâu |  22.8 |
+| Đại lý tìm kiếm | HLE với công cụ |  47,4 |
+| Đại lý tìm kiếm | DuyệtComp |  61.0 |
+| Đại lý tìm kiếm | DuyệtComp-zh |  69,5 |
+| Đại lý tìm kiếm | Tìm kiếm rộng rãi |  57,1 |
+| Đại lý tìm kiếm | Con dấu-0 |  41,4 |
+| Đa ngôn ngữ | MMMLU |  85,2 |
+| Đa ngôn ngữ | MMLU-ProX |  81.0 |
+| Đa ngôn ngữ | NOVA-63 |  57,1 |
+| Đa ngôn ngữ | BAO GỒM |  79,7 |
+| Đa ngôn ngữ | PIQA toàn cầu |  86,6 |
+| Đa ngôn ngữ | PolyMATH |  64,4 |
+| Đa ngôn ngữ | WMT24++ |  76,3 |
+| Đa ngôn ngữ | TUYỆT VỜI |  86,6 |
 
-### Vision-Language
+### Tầm nhìn-Ngôn ngữ
 
 | Nhóm                  | Benchmark                    |       Score |
 | ---------------------- | ---------------------------- | ----------: |
-| STEM and puzzle        | MMMU                         |        81.4 |
-| STEM and puzzle        | MMMU-Pro                     |        75.1 |
-| STEM and puzzle        | MathVision                   |        83.9 |
-| STEM and puzzle        | MathVista mini               |        86.2 |
-| STEM and puzzle        | DynaMath                     |        85.0 |
-| STEM and puzzle        | ZEROBench                    |           8 |
-| STEM and puzzle        | ZEROBench-sub                |        34.1 |
-| STEM and puzzle        | VlmsAreBlind                 |        97.0 |
-| STEM and puzzle        | BabyVision                   | 38.4 / 29.6 |
-| General VQA            | RealWorldQA                  |        84.1 |
-| General VQA            | MMStar                       |        81.9 |
-| General VQA            | MMBenchEN-DEV-v1.1           |        91.5 |
-| General VQA            | SimpleVQA                    |        58.3 |
-| General VQA            | HallusionBench               |        67.9 |
-| Document understanding | OmniDocBench1.5              |        89.3 |
-| Document understanding | CharXiv (RQ)                 |        77.5 |
-| Document understanding | MMLongBench-Doc              |        59.5 |
-| Document understanding | CC-OCR                       |        80.7 |
-| Document understanding | AI2D_TEST                    |        92.6 |
-| Document understanding | OCRBench                     |        91.0 |
-| Spatial intelligence   | ERQA                         |        64.8 |
-| Spatial intelligence   | CountBench                   |        97.8 |
-| Spatial intelligence   | RefCOCO (avg)                |        89.2 |
-| Spatial intelligence   | ODInW13                      |        42.6 |
-| Spatial intelligence   | EmbSpatialBench              |        83.1 |
-| Spatial intelligence   | RefSpatialBench              |        63.5 |
-| Spatial intelligence   | LingoQA                      |        79.2 |
-| Spatial intelligence   | Hypersim                     |        13.1 |
-| Spatial intelligence   | SUNRGBD                      |        33.4 |
-| Spatial intelligence   | Nuscene                      |        14.6 |
-| Video understanding    | VideoMME (with subtitles)    |        86.6 |
-| Video understanding    | VideoMME (without subtitles) |        82.5 |
-| Video understanding    | VideoMMMU                    |        80.4 |
-| Video understanding    | MLVU                         |        85.6 |
-| Video understanding    | MVBench                      |        74.8 |
-| Video understanding    | LVBench                      |        71.4 |
-| Video understanding    | MMVU                         |        72.3 |
-| Visual agent           | ScreenSpot Pro               |        68.6 |
-| Visual agent           | OSWorld-Verified             |        54.5 |
-| Visual agent           | AndroidWorld                 |        71.1 |
-| Tool calling           | TIR-Bench                    | 55.5 / 38.0 |
-| Tool calling           | V*                           | 92.7 / 89.5 |
-| Medical VQA            | SLAKE                        |        78.7 |
-| Medical VQA            | PMC-VQA                      |        62.0 |
-| Medical VQA            | MedXpertQA-MM                |        61.4 |
+| STEM và câu đố | MMMU |        81,4 |
+| STEM và câu đố | MMMU-Pro |        75,1 |
+| STEM và câu đố | MathVision |        83,9 |
+| STEM và câu đố | MathVista mini |        86,2 |
+| STEM và câu đố | DynaMath |        85,0 |
+| STEM và câu đố | ZEROBench |           8 |
+| STEM và câu đố | ZEROBench-sub |        34.1 |
+| STEM và câu đố | VlmsAreBlind |        97,0 |
+| STEM và câu đố | BabyVision | 38,4 / 29,6 |
+| VQA tổng hợp | RealWorldQA |        84.1 |
+| VQA tổng hợp | MMStar |        81,9 |
+| VQA tổng hợp | MMBenchEN-DEV-v1.1 |        91,5 |
+| VQA tổng hợp | Đơn giảnVQA |        58,3 |
+| VQA tổng hợp | HallusionBench |        67,9 |
+| Hiểu tài liệu | OmniDocBench1.5 |        89,3 |
+| Hiểu tài liệu | CharXiv (RQ) |        77,5 |
+| Hiểu tài liệu | MMLongBench-Doc |        59,5 |
+| Hiểu tài liệu | CC-OCR |        80,7 |
+| Hiểu tài liệu | AI2D_TEST |        92,6 |
+| Hiểu tài liệu | OCBench |        91.0 |
+| Trí tuệ không gian | ERQA |        64,8 |
+| Trí tuệ không gian | CountBench |        97,8 |
+| Trí tuệ không gian | RefCOCO (trung bình) |        89,2 |
+| Trí tuệ không gian | ODInW13 |        42,6 |
+| Trí tuệ không gian | EmbSpatialBench |        83,1 |
+| Trí tuệ không gian | RefSpatialBench |        63,5 |
+| Trí tuệ không gian | LingoQA |        79,2 |
+| Trí tuệ không gian | Hypersim |        13.1 |
+| Trí tuệ không gian | SUNRGBD |        33,4 |
+| Trí tuệ không gian | Nuscene |        14.6 |
+| Hiểu video | VideoMME (có phụ đề) |        86,6 |
+| Hiểu video | VideoMME (không có phụ đề) |        82,5 |
+| Hiểu video | VideoMMMU |        80,4 |
+| Hiểu video | MLVU |        85,6 |
+| Hiểu video | MVBench |        74,8 |
+| Hiểu video | LVBench |        71,4 |
+| Hiểu video | MMVU |        72,3 |
+| Agent trực quan | ScreenSpot Pro |        68,6 |
+| Agent trực quan | OSWorld-Đã được xác minh |        54,5 |
+| Agent trực quan | Thế giới Android |        71.1 |
+| Công cụ gọi | TIR-Băng ghế dự bị | 55,5 / 38,0 |
+| Công cụ gọi | V* | 92,7 / 89,5 |
+| VQA y tế | NGỌT |        78,7 |
+| VQA y tế | PMC-VQA |        62.0 |
+| VQA y tế | MedXpertQA-MM |        61,4 |
 
 Các score dạng `x / y` là kết quả **with Code Interpreter / without Code Interpreter** theo model card. `--` trong bảng gốc nghĩa là chưa có score hoặc không áp dụng.
 
@@ -241,4 +241,4 @@ Các score dạng `x / y` là kết quả **with Code Interpreter / without Code
 - Bảng điểm ở trên là của đúng Qwen3.5-35B-A3B; không trộn với Qwen3.6 hoặc checkpoint khác.
 
 ![TODO: bản đồ benchmark theo capability](Image/qwen35_evaluation_map.png)
-![TODO: coding-agent evaluation loop](Image/qwen35_coding_agent_eval.png)
+![TODO: vòng đánh giá coding agent](Image/qwen35_coding_agent_eval.png)

@@ -1,151 +1,151 @@
-# Qwen-RobotManip: Architecture, Training Data, and Evaluation
+# Qwen-RobotManip: Kiến trúc, Dữ liệu huấn luyện và Đánh giá
 
-## Scope
+## Phạm vi
 
-This report covers **Qwen-RobotManip**, the manipulation specialist in the Qwen-Robot suite.
-It focuses on architecture, cross-embodiment alignment, training datasets, task alternation,
-objectives, post-training, and evaluation. For the navigation specialist, see
-[Qwen-RobotNav](../Qwen-RobotNav/qwen_robotnav_details.md). For the general model, see
+Báo cáo này bao gồm **Qwen-RobotManip**, chuyên gia thao tác trong bộ Qwen-Robot.
+Nó tập trung vào kiến trúc, liên kết nhiều phương án, tập dữ liệu huấn luyện, luân phiên nhiệm vụ,
+mục tiêu, sau huấn luyện và đánh giá. Đối với chuyên gia điều hướng, hãy xem
+[Qwen-RobotNav](../Qwen-RobotNav/qwen_robotnav_details.md). Đối với mô hình chung, xem
 [Qwen-VLA](../Qwen-VLA/qwen_vla_details.md).
 
-> **Research date:** 2026-07-22. The primary source checked is Qwen-RobotManip v2
-> (2026-06-17). Dataset and evaluation numbers are author-reported and have not been
-> reproduced in this workspace. The official repository currently states that there is no
-> plan to release the model weights.
+> **Ngày nghiên cứu:** 22-07-2026. Nguồn chính được kiểm tra là Qwen-RobotManip v2
+> (2026-06-17). Tập dữ liệu và số lượng đánh giá là do tác giả báo cáo và chưa được
+> được sao chép trong không gian làm việc này. Kho lưu trữ chính thức hiện tuyên bố rằng không có
+> lên kế hoạch giải phóng trọng lượng của mô hình.
 
-## Core Idea
+## Ý tưởng cốt lõi
 
-Qwen-RobotManip treats heterogeneous robot representations as the central scaling bottleneck.
-It maps multiple embodiments into a masked 80-dimensional state/action space, aligns motion in
-camera-relative end-effector coordinates, and conditions on recent behavior for in-context
-adaptation. A flow-matching DiT generates action chunks while separate manipulation and
-vision-language batches preserve both control and multimodal reasoning.
+Qwen-RobotManip coi các biểu diễn robot không đồng nhất là nút thắt quy mô trung tâm.
+Nó ánh xạ nhiều phương án vào một không gian trạng thái/hành động 80 chiều được che kín, sắp xếp chuyển động theo
+tọa độ agent cuối liên quan đến máy ảnh và các điều kiện về hành vi gần đây cho trong ngữ cảnh
+sự thích nghi. DiT khớp luồng sẽ tạo ra các khối hành động trong khi tách biệt các thao tác và
+các lô thị giác-ngôn ngữ bảo tồn cả khả năng kiểm soát và lý luận đa phương thức.
 
-## 1. Model Overview
+## 1. Tổng quan về mô hình
 
-### 1.1 Main Tasks
+### 1.1 Nhiệm vụ chính
 
-Qwen-RobotManip focuses on manipulation rather than the full set of embodied tasks.
+Qwen-RobotManip tập trung vào thao tác hơn là tập hợp đầy đủ các nhiệm vụ được thể hiện.
 
-Target capabilities include:
+Khả năng mục tiêu bao gồm:
 
-- Single-arm and bimanual manipulation
-- Parallel-gripper and dexterous-hand control
-- Pick, place, fold, insert, operate, and rearrange tasks
-- Instruction-conditioned manipulation
-- Cross-robot transfer
-- Robustness to new objects, layouts, backgrounds, and camera poses
-- Rapid behavioral adaptation from recent episode history
+- Thao tác bằng một tay và hai tay
+- Tay nắm song song và điều khiển khéo léo
+- Chọn, đặt, gấp, chèn, vận hành và sắp xếp lại các nhiệm vụ
+- Thao tác có điều kiện
+- Chuyển giao giữa các robot
+- Tính bền vững đối với các đối tượng, bố cục, hình nền và tư thế máy ảnh mới
+- Thích ứng hành vi nhanh chóng từ lịch sử tập phim gần đây
 
-![Qwen-RobotManip atomic action taxonomy](Image/atomic_action_taxonomy.png)
+![Phân loại hành động nguyên tử Qwen-RobotManip](Image/atomic_action_taxonomy.png)
 
-Unlike Qwen-VLA, it does not need one action decoder to also model navigation waypoints or autonomous-driving trajectories.
+Không giống như Qwen-VLA, nó không cần một bộ giải mã hành động để mô hình hóa các điểm định hướng hoặc quỹ đạo lái xe tự động.
 
-### 1.2 Architecture
+### 1.2 Kiến trúc
 
-![Qwen-RobotManip architecture overview](Image/architecture_overview.png)
+![Tổng quan về kiến trúc Qwen-RobotManip](Image/architecture_overview.png)
 
 ```mermaid
 flowchart LR
-    I[Multi-view images] --> VLM[Qwen3.5-4B backbone]
-    P[Instruction and structured embodiment prompt] --> VLM
-    H[Historical images] --> VLM
-    VLM --> VH[Final-layer visual and language states]
+    I[Hình ảnh nhiều chế độ xem] --> VLM[Xương sống Qwen3.5-4B]
+    P[Prompt hướng dẫn và phương án có cấu trúc] --> VLM
+    H[Hình ảnh lịch sử] --> VLM
+    VLM --> VH[Trạng thái ngôn ngữ và hình ảnh lớp cuối cùng]
 
-    S[Current proprioceptive state] --> SM[State MLP]
-    A0[Noisy 80-D action chunk] --> DIT[10-block DiT]
+    S[Trạng thái sở hữu hiện tại] --> SM[MLP tiểu bang]
+    A0[Đoạn hành động 80-D ồn ào] --> DIT[DiT 10 khối]
     SM --> DIT
-    C[Historical states and actions] --> CM[Context MLP]
+    C[Các trạng thái và hành động lịch sử] --> CM[MLP bối cảnh]
     CM --> DIT
-    E[Camera and end-effector embeddings] --> DIT
-    T[Flow timestep] --> DIT
+    E[Tích hợp máy ảnh và bộ phận end-effector] --> DIT
+    T[Dấu thời gian dòng chảy] --> DIT
     VH --> DIT
-    DIT --> A[Canonical manipulation action chunk]
+    DIT --> A[Đoạn hành động thao tác kinh điển]
 ```
 
-The Qwen VLM backbone hidden states have width 2,560.
+Các trạng thái ẩn của đường trục Qwen VLM có chiều rộng 2.560.
 
-The action expert contains:
+Action expert bao gồm:
 
-- **10 Transformer blocks**
-- Hidden width **768**
-- **12 attention heads**
-- Self-attention over state and noisy-action tokens
-- Cross-attention to the VLM after self-attention
-- SwiGLU feed-forward layers
-- Alternating cross-attention:
-  - Even-indexed blocks attend to visual tokens
-  - Odd-indexed blocks attend to language tokens
+- **10 khối máy biến áp**
+- Chiều rộng ẩn **768**
+- **12 đầu chú ý**
+- Tự chú ý đến trạng thái và token action nhiễu
+- Chú ý chéo đến VLM sau khi tự chú ý
+- Các lớp chuyển tiếp nguồn cấp dữ liệu SwiGLU
+- Luân phiên chú ý chéo:
+  - Các khối được lập chỉ mục chẵn tham gia vào token trực quan
+  - Các khối được lập chỉ mục lẻ tham dự vào token ngôn ngữ
 
-This differs from Qwen-VLA's larger single-stream DiT, where VLM-derived and action tokens are processed jointly through self-attention.
+Điều này khác với DiT luồng đơn lớn hơn của Qwen-VLA, trong đó token hành động và token có nguồn gốc từ VLM được xử lý cùng nhau thông qua sự tự chú ý.
 
-The output contain a chunk of **16 continuos actions**, with **80 dims**.
+Đầu ra chứa một đoạn **16 hành động liên tục**, với **80 mức độ mờ**.
 
-## 2. Inputs and Cross-Embodiment Representation
+## 2. Đầu vào và biểu diễn xuyên embodiment
 
-### 2.1 Model Inputs, Camera Views, and Prompt Examples
+### 2.1 Đầu vào mô hình, Chế độ xem camera và Ví dụ về prompt
 
-One RobotManip decision consumes more than images and an instruction. The complete conceptual input is:
+Một quyết định của RobotManip đòi hỏi nhiều thứ hơn là hình ảnh và hướng dẫn. Đầu vào khái niệm hoàn chỉnh là:
 
-| Input group                 | Contents                                                                                               | Where it enters the model                                                             |
+| Nhóm đầu vào | Nội dung | Nơi nó đi vào mô hình |
 | --------------------------- | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------- |
-| Current vision              | One or more synchronized RGB camera views                                                              | Qwen3.5 vision-language backbone                                                      |
-| Task and embodiment text    | Structured prompt with embodiment, instruction, speed, FPS, and camera-view direction                  | Qwen3.5 text stream                                                                   |
-| Current proprioception      | Masked canonical 80-D state; only the embodiment's populated slots are meaningful                      | Two-layer state MLP, then prepended to noisy action tokens in the DiT                 |
-| Camera geometry             | Intrinsics and extrinsics for every calibrated view; selected action-reference camera per end effector | Camera positional encoding in DiT cross-attention                                     |
-| Action-side conditioning    | End-effector type, camera-calibration availability flag, and flow timestep                             | Adaptive normalization/conditioning in the DiT                                        |
-| Optional behavioral history | Earlier RGB observations, 80-D states, and executed action chunks from the same episode                | Historical images join the visual stream; state/action history becomes context tokens |
+| Tầm nhìn hiện tại | Một hoặc nhiều chế độ xem camera RGB được đồng bộ hóa | Backbone thị giác-ngôn ngữ Qwen3.5 |
+| Văn bản nhiệm vụ và phương án | Prompt có cấu trúc với phương án, hướng dẫn, tốc độ, FPS và hướng xem camera | Luồng văn bản Qwen3.5 |
+| Quyền sở hữu hiện tại | Trạng thái 80-D chuẩn được che dấu; chỉ các vị trí được điền của phương án mới có ý nghĩa | MLP trạng thái hai lớp, sau đó được thêm vào trước các token action nhiễu trong DiT |
+| Hình học máy ảnh | Nội tại và bên ngoài cho mọi chế độ xem được hiệu chỉnh; camera tham chiếu hành động được chọn trên mỗi bộ hiệu ứng cuối | Mã hóa vị trí camera trong attention chéo của DiT |
+| Điều hòa bên hành động | Loại bộ end-effector, cờ khả dụng hiệu chuẩn máy ảnh và dấu thời gian của luồng | Chuẩn hóa/điều hòa thích ứng trong DiT |
+| Lịch sử hành vi tùy chọn | Các quan sát RGB trước đó, trạng thái 80-D và các đoạn hành động được thực hiện từ cùng một tập | Hình ảnh lịch sử tham gia vào dòng hình ảnh; lịch sử trạng thái/hành động trở thành token bối cảnh |
 
-The Gaussian noisy action chunk and flow timestep are training/inference machinery, not sensor inputs
-provided by the robot operator. The model ultimately denoises them into the next canonical action chunk.
-[RobotManip paper v2, §§3.1-3.5](https://arxiv.org/abs/2606.17846v2)
+Đoạn action nhiễu Gaussian và dấu thời gian của luồng là máy huấn luyện/suy luận, không phải đầu vào cảm biến
+được cung cấp bởi người vận hành robot. Cuối cùng, mô hình sẽ chuyển chúng thành đoạn hành động chuẩn tiếp theo.
+[Giấy RobotManip v2, §§3.1-3.5](https://arxiv.org/abs/2606.17846v2)
 
-The adopted DiT architecture also uses a small set of learned query tokens as internal proxies for VLM
-vision/language features. They join the state/action tokens, cross-attend to final-layer VLM states, and
-participate in DiT self-attention; their outputs are discarded rather than decoded as actions. The paper
-does not disclose their count or initialization. [RobotManip paper v2, §6.4 and Figure 20](https://arxiv.org/abs/2606.17846v2)
+Kiến trúc DiT được thông qua cũng sử dụng một tập hợp nhỏ token truy vấn đã học làm proxy nội bộ cho VLM
+đặc điểm thị giác/ngôn ngữ. Họ tham gia các token trạng thái/hành động, tham dự chéo đến các trạng thái VLM lớp cuối cùng và
+tham gia vào việc tự chú ý đến DiT; đầu ra của chúng bị loại bỏ thay vì được giải mã dưới dạng hành động. Giấy
+không tiết lộ số lượng hoặc khởi tạo của họ. [RobotManip paper v2, §6.4 và Hình 20](https://arxiv.org/abs/2606.17846v2)
 
-#### Camera views and “angles”
+#### Chế độ xem camera và “góc”
 
-RobotManip does **not** prescribe a fixed camera count or a universal list of yaw angles. It consumes
-whatever synchronized views a source embodiment provides. The paper and Figure 3 use these semantic
-view types:
+RobotManip **không** quy định số lượng camera cố định hoặc danh sách chung các góc lệch. Nó tiêu thụ
+bất kỳ chế độ xem được đồng bộ hóa nào mà phương án nguồn cung cấp. Bài báo và Hình 3 sử dụng các ngữ nghĩa này
+các kiểu xem:
 
-| View type             | Examples in the paper                                       | How it is used                                                                                        |
+| Loại xem | Ví dụ trong bài báo | Nó được sử dụng như thế nào |
 | --------------------- | ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| External/third-person | Front, side, left, and right views                          | Scene-wide object and arm geometry; any available external view can be the reference for a single arm |
-| Head-mounted          | A common view above/between two arms                        | Can be the shared action-reference frame for both arms                                                |
-| Wrist-mounted         | Single-arm wrist view, or separate left/right wrist cameras | Close-up manipulation; dual arms can use their own wrist camera as separate reference frames          |
+| Bên ngoài/người thứ ba | Mặt trước, mặt bên, mặt trái và mặt phải | Hình học cánh tay và đối tượng trên toàn cảnh; mọi chế độ xem bên ngoài có sẵn đều có thể là tham chiếu cho một nhánh |
+| Gắn trên đầu | Một góc nhìn chung phía trên/giữa hai cánh tay | Có thể là khung tham chiếu hành động chung cho cả hai cánh tay |
+| Gắn trên cổ tay | Chế độ xem cổ tay một cánh tay hoặc máy ảnh cổ tay trái/phải riêng biệt | Thao tác cận cảnh; cánh tay kép có thể sử dụng máy ảnh đeo tay của riêng mình làm khung tham chiếu riêng biệt |
 
-“Left,” “front,” “right,” “side,” and “wrist” are view roles, not published numeric azimuths. The
-structured prompt reduces the camera direction to **`arm side`** or **`opposite side`**; it does not carry
-a degree value. Precise geometry instead comes from camera intrinsics/extrinsics and Camera Positional
-Encoding (CaPE): every image token uses its own camera pose, while each state/action token uses the pose
-of the selected reference camera.
+“Trái”, “phía trước”, “phải”, “bên” và “cổ tay” là các vai trò xem, không phải là góc phương vị số được công bố. các
+prompt có cấu trúc giảm hướng camera xuống **`arm side`** hoặc **`opposite side`**; nó không mang theo
+một giá trị độ. Thay vào đó, hình học chính xác đến từ phần bên trong/bên ngoài của máy ảnh và Vị trí của máy ảnh
+Mã hóa (CaPE): mỗi token hình ảnh sử dụng tư thế máy ảnh riêng, trong khi mỗi token trạng thái/hành động sử dụng tư thế
+của máy ảnh tham chiếu đã chọn.
 
-Reference selection is randomized during training:
+Lựa chọn tham khảo được chọn ngẫu nhiên trong quá trình huấn luyện:
 
-- For a single arm, select any available external or wrist-mounted camera.
-- For dual arms, either use a shared head/third-person camera for both arms, or use the left wrist camera
-  for the left arm and the right wrist camera for the right arm.
-- If calibrated camera parameters are unavailable, an auxiliary flag switches pose prediction from
-  camera-frame delta mode to robot-base-relative mode.
+- Đối với một cánh tay, hãy chọn bất kỳ máy ảnh bên ngoài hoặc máy ảnh gắn trên cổ tay nào có sẵn.
+- Đối với hai cánh tay, hãy sử dụng camera đầu/máy ảnh của người thứ ba dùng chung cho cả hai tay hoặc sử dụng máy ảnh ở cổ tay trái
+  cho cánh tay trái và máy ảnh cổ tay phải cho cánh tay phải.
+- Nếu không có thông số camera đã hiệu chỉnh, cờ phụ sẽ chuyển dự đoán từ
+  chế độ delta khung máy ảnh sang chế độ tương đối với cơ sở robot.
 
-The camera-frame action path requires calibration at both training and inference. The paper does not
-publish a fixed input resolution, a required lens field of view, the exact camera order in the Qwen chat
-template, or numeric mounting angles for each dataset.
-[RobotManip paper v2, §3.3 and Figure 3](https://arxiv.org/abs/2606.17846v2)
+Đường dẫn hành động của khung máy ảnh yêu cầu hiệu chỉnh ở cả quá trình huấn luyện và suy luận. Tờ giấy không
+xuất bản độ phân giải đầu vào cố định, trường nhìn của ống kính bắt buộc, thứ tự camera chính xác trong cuộc trò chuyện Qwen
+mẫu hoặc góc gắn số cho mỗi tập dữ liệu.
+[RobotManip paper v2, §3.3 và Hình 3](https://arxiv.org/abs/2606.17846v2)
 
-The paper's embodied chain-of-thought data uses synchronized available views such as front, wrist, and
-side. During annotation, a separate VLM can see a history summary, six future frames spaced one second
-apart, and episode progress. Those are **privileged annotation inputs**: the RobotManip VLM training
-example receives only the current multi-view images and task instruction, with the generated reasoning
-as its target. They should not be added to the runtime policy input contract.
-[RobotManip paper v2, §2.5](https://arxiv.org/abs/2606.17846v2)
+Dữ liệu chuỗi suy nghĩ được thể hiện trong bài báo sử dụng các chế độ xem có sẵn được đồng bộ hóa như mặt trước, cổ tay và
+bên. Trong quá trình chú thích, một VLM riêng biệt có thể xem bản tóm tắt lịch sử, sáu khung hình trong tương lai cách nhau một giây
+ngoài và tiến triển của tập phim. Đó là **đầu vào chú thích đặc quyền**: khóa huấn luyện RobotManip VLM
+ví dụ chỉ nhận được hình ảnh nhiều góc nhìn hiện tại và hướng dẫn tác vụ, với lý do được tạo
+như mục tiêu của nó. Chúng không nên được thêm vào hợp đồng đầu vào chính sách thời gian chạy.
+[Giấy RobotManip v2, §2.5](https://arxiv.org/abs/2606.17846v2)
 
-#### Exact structured embodiment prompt
+#### Prompt phương án có cấu trúc chính xác
 
-The paper publishes this exact example:
+Bài báo công bố ví dụ chính xác này:
 
 ```text
 embodiment: robot_aloha
@@ -155,42 +155,42 @@ fps: 30
 camera view direction: arm side
 ```
 
-The fields mean:
+Các trường có nghĩa là:
 
-| Field                     | Meaning                                                                      |
+| Lĩnh vực | Ý nghĩa |
 | ------------------------- | ---------------------------------------------------------------------------- |
-| `embodiment`            | Robot platform identifier, such as`robot_aloha`                            |
-| `instruction`           | Episode-level natural-language objective                                     |
-| `speed`                 | Episode length in timesteps, quantized into 500-step bins—not metres/second |
-| `fps`                   | Temporal sampling rate of the input sequence                                 |
-| `camera view direction` | Camera position relative to the acting arm:`arm side` or `opposite side` |
+| `embodiment` | Mã nhận dạng nền tảng robot, chẳng hạn như`robot_aloha` |
+| `instruction` | Mục tiêu ngôn ngữ tự nhiên ở cấp độ tập |
+| `speed` | Độ dài tập theo dấu thời gian, được lượng tử hóa thành các thùng 500 bước—không phải mét/giây |
+| `fps` | Tốc độ lấy mẫu tạm thời của chuỗi đầu vào |
+| `camera view direction` | Vị trí camera so với cánh tay diễn xuất:`arm side` hoặc `opposite side` |
 
-During training, `embodiment`, `speed`, and `fps` are randomly dropped with 15% probability so
-the policy can tolerate missing metadata. The paper does not say that the instruction or camera-direction
-field is dropped. [RobotManip paper v2, §3.4](https://arxiv.org/abs/2606.17846v2)
+Trong quá trình huấn luyện, `embodiment`, `speed` và `fps` bị rơi ngẫu nhiên với xác suất 15%
+chính sách có thể chấp nhận việc thiếu siêu dữ liệu. Bài viết không nói rằng hướng dẫn hoặc hướng dẫn camera
+trường bị loại bỏ. [Giấy RobotManip v2, §3.4](https://arxiv.org/abs/2606.17846v2)
 
-#### Behavioral-history input
+#### Đầu vào lịch sử hành vi
 
-One historical chunk is the triplet \((o_h,s_h,a_h)\): what the robot saw, its proprioceptive state, and
-the complete \(K\)-step action chunk it executed. For \(H\) chunks:
+Một phần lịch sử là bộ ba \((o_h,s_h,a_h)\): những gì robot nhìn thấy, trạng thái cảm nhận bản thể của nó và
+đoạn hành động bước \(K\) hoàn chỉnh mà nó đã thực thi. Đối với khối \(H\) :
 
-- historical frames are prepended to the current frame and encoded with the current images in one VLM
-  forward pass;
-- an image-count annotation is appended to the instruction so the VLM can associate images with time;
-- historical states and flattened action chunks are projected by separate MLPs;
-- temporal embeddings identify the chunk and slot embeddings identify action positions;
-- chunks are serialized oldest-to-newest, while the current state still enters the DiT's dedicated state
-  encoder.
+- các khung lịch sử được thêm vào khung hiện tại và được mã hóa bằng các hình ảnh hiện tại trong một VLM
+  chuyền về phía trước;
+- chú thích số lượng hình ảnh được thêm vào lệnh để VLM có thể liên kết hình ảnh với thời gian;
+- các trạng thái lịch sử và các khối hành động được làm phẳng được chiếu bởi các MLP riêng biệt;
+- các phần nhúng tạm thời xác định các phần nhúng và phần nhúng vị trí xác định các vị trí hành động;
+- các khối được tuần tự hóa từ cũ nhất đến mới nhất, trong khi trạng thái hiện tại vẫn chuyển sang trạng thái chuyên dụng của DiT
+  bộ mã hóa.
 
-The default “unified” design appends these context tokens to the VLM sequence. Training samples a
-window from a random position in the same episode; deployment uses the most recent rolling window.
-The paper uses symbolic \(H\) and \(K\) in the method description but does not publish one universal
-history length or literal image-count annotation string. [RobotManip paper v2, §3.5](https://arxiv.org/abs/2606.17846v2)
+Thiết kế “hợp nhất” mặc định sẽ gắn các token ngữ cảnh này vào chuỗi VLM. Mẫu huấn luyện a
+cửa sổ từ một vị trí ngẫu nhiên trong cùng một tập phim; triển khai sử dụng cửa sổ cuộn gần đây nhất.
+Bài viết sử dụng ký hiệu \(H\) và \(K\) trong phần mô tả phương pháp nhưng không công bố một ký hiệu chung
+độ dài lịch sử hoặc chuỗi chú thích đếm hình ảnh theo nghĩa đen. [Giấy RobotManip v2, §3.5](https://arxiv.org/abs/2606.17846v2)
 
-#### Illustrative assembled input
+#### Đầu vào lắp ráp minh họa
 
-The following is a **reconstruction for explanation**, not a released API schema or verbatim chat
-template:
+Sau đây là **bản dựng lại để giải thích**, không phải lược đồ API được phát hành hoặc trò chuyện nguyên văn
+mẫu:
 
 ```yaml
 current_images:
@@ -224,12 +224,12 @@ history:
     executed_action_chunk_80d: <K earlier actions>
 ```
 
-This example shows the information relationships. The paper does not release these YAML keys, the
-exact tensor serialization, or an inference API.
+Ví dụ này cho thấy các mối quan hệ thông tin. Bài viết không phát hành các khóa YAML này,
+tuần tự hóa tensor chính xác hoặc API suy luận.
 
-### 2.2 Canonical 80-Dimensional State and Action Space
+### 2.2 Không gian hành động và trạng thái 80 chiều chuẩn mực
 
-RobotManip maps many embodiments into a fixed 80-dimensional template:
+RobotManip ánh xạ nhiều phương án thành một mẫu 80 chiều cố định:
 
 ```text
 Left arm block:  29 dimensions
@@ -238,7 +238,7 @@ Reserved block:  22 dimensions
 Total:            80 dimensions
 ```
 
-Each 29-dimensional arm block includes:
+Mỗi khối tay 29 chiều bao gồm:
 
 ```text
 7  joint-position dimensions
@@ -247,17 +247,17 @@ Each 29-dimensional arm block includes:
 12 dexterous-hand dimensions
 ```
 
-The reserved dimensions can represent additional degrees of freedom such as mobile-base motion and humanoid robot actions.
+Các kích thước dành riêng có thể thể hiện mức độ tự do bổ sung như chuyển động của bệ di động và hành động của robot hình người.
 
-Different robots activate different subsets of this space. Binary masks ensure that only valid dimensions contribute to training.
+Các robot khác nhau kích hoạt các tập hợp con khác nhau của không gian này. Mặt nạ nhị phân đảm bảo rằng chỉ những kích thước hợp lệ mới góp phần huấn luyện.
 
-### 2.3 Three Forms of Cross-Embodiment Alignment
+### 2.3 Ba hình thức liên kết theo phương án chéo
 
-RobotManip's main innovation is not simply a larger manipulation dataset. It makes data from different robots numerically and behaviorally compatible.
+Sự đổi mới chính của RobotManip không chỉ đơn giản là một tập dữ liệu thao tác lớn hơn. Nó làm cho dữ liệu từ các robot khác nhau tương thích về mặt số lượng và hành vi.
 
-#### A. Representation Alignment
+#### A. Căn chỉnh biểu diễn
 
-All robots are converted into the same 80-D template.
+Tất cả các robot đều được chuyển đổi thành cùng một mẫu 80-D.
 
 ```text
 Franka data ─────┐
@@ -266,246 +266,246 @@ UR data ─────────┤
 ARX data ────────┘
 ```
 
-Per-dimension masks prevent:
+Mặt nạ theo kích thước ngăn chặn:
 
-- Missing joints from creating fake zero targets
-- Single-arm robots from supervising the unused arm
-- Dexterous-hand robots from dominating simpler gripper embodiments
+- Thiếu khớp do tạo mục tiêu 0 giả
+- Robot một cánh tay giám sát cánh tay không sử dụng
+- Robot có bàn tay khéo léo chiếm ưu thế trong các phương án kẹp đơn giản hơn
 
-#### B. Motion Alignment
+#### B. Căn chỉnh chuyển động
 
-End-effector actions are expressed as **camera-frame relative deltas** rather than only robot-base-frame coordinates.
+Các hành động của bộ end-effector được thể hiện dưới dạng **đồng bằng tương đối của khung máy ảnh** thay vì chỉ tọa độ khung cơ sở robot.
 
-This makes visually similar motions numerically closer:
+Điều này làm cho các chuyển động tương tự về mặt trực quan gần hơn về mặt số lượng:
 
 ```text
 Robot A: move toward the cup in camera coordinates
 Robot B: move toward the cup in camera coordinates
 ```
 
-Although the two robots may have different base frames and kinematics, the target motion is aligned with what the vision model sees.
+Mặc dù hai robot có thể có khung cơ sở và động học khác nhau nhưng chuyển động của mục tiêu sẽ được điều chỉnh phù hợp với những gì mô hình tầm nhìn nhìn thấy.
 
-Camera positional encoding and learned camera embeddings provide information about viewpoint and camera geometry.
+Mã hóa vị trí camera và phần nhúng camera đã học cung cấp thông tin về góc nhìn và hình dạng camera.
 
-#### C. Behavior Alignment
+#### C. Điều chỉnh hành vi
 
-The policy receives:
+Chính sách nhận được:
 
-- Robot identity
-- Execution speed
+- Nhận dạng robot
+- Tốc độ thực hiện
 - FPS
-- Camera direction
-- Recent observation-state-action chunks
+- Hướng máy ảnh
+- Các khối hành động trạng thái quan sát gần đây
 
-Recent history acts as an implicit description of:
+Lịch sử gần đây đóng vai trò như một sự mô tả ngầm định về:
 
-- Kinematics
-- Motion speed
-- Grasping style
-- Controller behavior
-- Episode-specific execution dynamics
+- Động học
+- Tốc độ chuyển động
+- Phong cách nắm bắt
+- Hành vi điều khiển
+- Động lực thực thi theo từng tập cụ thể
 
-This enables **in-context policy adaptation** without changing model parameters.
+Điều này cho phép **điều chỉnh chính sách trong ngữ cảnh** mà không thay đổi các tham số mô hình.
 
-## 3. Training Data
+## 3. Dữ liệu huấn luyện
 
-### 3.1 Dataset Composition
+### 3.1 Thành phần tập dữ liệu
 
-RobotManip is more data-centric than Qwen-VLA.
+RobotManip tập trung vào dữ liệu hơn Qwen-VLA.
 
-![Qwen-RobotManip training data corpus](Image/training_data_corpus.png)
+![Khối dữ liệu huấn luyện Qwen-RobotManip](Image/training_data_corpus.png)
 
 ```mermaid
 flowchart TD
-    R[Open-source robot demonstrations] --> C[Unified curation]
-    E[Egocentric human videos] --> C
-    E --> H2R[Human-to-Robot synthesis]
+    R[Trình diễn robot nguồn mở] --> C[Giám tuyển thống nhất]
+    E[Video về con người ích kỷ] --> C
+    E --> H2R[Tổng hợp từ người sang robot]
     H2R --> C
-    C --> A[Representation, motion, and behavior alignment]
-    A --> P[Manipulation pretraining corpus]
-    VL[Curated VL, spatial reasoning, ECoT, and ego-video data] --> TRAIN[Dual-stream pretraining]
+    C --> A[Sự liên kết giữa đại diện, chuyển động và hành vi]
+    A --> P[Thao tác luyện tập trước]
+    VL[Dữ liệu VL, lý luận không gian, ECoT và video bản ngã được quản lý] --> TRAIN[Huấn luyện trước luồng kép]
     P --> TRAIN
 ```
 
-The action-training corpus contains **38,161 hours** in Table 1, rounded by the authors to
-**about 38,100 hours**. Its headline total is not one flat
-collection: it combines direct robot demonstrations, human-hand video, and robot-rendered derivatives of
-that human video. The accompanying VL preservation stream is a separate collection of about **28M
-examples**. [RobotManip paper v2, §2 and Table 1](https://arxiv.org/abs/2606.17846v2)
+Kho dữ liệu huấn luyện hành động chứa **38.161 giờ** trong Bảng 1, được các tác giả làm tròn thành
+**khoảng 38.100 giờ**. Tổng tiêu đề của nó không phải là một căn hộ
+bộ sưu tập: nó kết hợp các phần trình diễn robot trực tiếp, video do bàn tay con người thực hiện và các dẫn xuất do robot kết xuất
+video nhân văn đó. Luồng bảo quản VL đi kèm là một tập hợp riêng có dung lượng khoảng **28M
+ví dụ**. [RobotManip paper v2, §2 và Bảng 1](https://arxiv.org/abs/2606.17846v2)
 
-| Action-data group         | Reported amount | Sources and scope                                                                                              |
+| Nhóm dữ liệu hành động | Số tiền báo cáo | Nguồn và phạm vi |
 | ------------------------- | --------------: | -------------------------------------------------------------------------------------------------------------- |
-| Single-arm robot          |         3,808 h | Part of OXE, RoboMIND, DROID, RH20T, AgiBotWorld-Beta, RoboCOIN, RDT-1B, InternData-A1, and Galaxea Open-World |
-| Dual-arm robot            |         6,744 h | Same nine-source corpus, regrouped by embodiment rather than dataset                                           |
-| Mobile and humanoid robot |           868 h | Tabletop and indoor manipulation                                                                               |
-| Egocentric human hands    |         1,933 h | EgoDex 732 h used, VITRA 247 h, EgoVerse 954 h                                                                 |
-| Human-to-Robot synthetic  |        24,808 h | Derived from the human videos and rendered across 15 dual-arm platforms                                        |
+| Robot một tay |         3,808 giờ | Một phần của OXE, RoboMIND, DROID, RH20T, AgiBotWorld-Beta, RoboCOIN, RDT-1B, InternData-A1 và Galaxea Open-World |
+| Robot hai tay |         6.744 giờ | Kho ngữ liệu chín nguồn tương tự, được nhóm lại theo phương án thay vì tập dữ liệu |
+| Robot di động và hình người |           868 giờ | Thao tác trên bàn và trong nhà |
+| Bàn tay con người ích kỷ |         1.933 giờ | EgoDex 732 h đã qua sử dụng, VITRA 247 h, EgoVerse 954 h |
+| Tổng hợp từ người sang robot |        24.808 giờ | Bắt nguồn từ video của con người và được hiển thị trên 15 nền tảng cánh tay kép |
 
-#### Direct robot demonstrations
+#### Trình diễn robot trực tiếp
 
-The **11,420 direct-robot hours** come from nine named open sources:
+**11.420 giờ sử dụng robot trực tiếp** đến từ chín nguồn mở có tên:
 
-| Source                    |       Amount used or reported | What it contributes                                                                    |
+| Nguồn |       Số tiền đã sử dụng hoặc báo cáo | Nó đóng góp gì |
 | ------------------------- | ----------------------------: | -------------------------------------------------------------------------------------- |
-| Open X-Embodiment         |                   about 600 h | Fractal, Bridge and BC-Z subsets; diverse single-arm real-robot behavior               |
-| AgiBotWorld-Beta          |                 about 2,400 h | Gripper-based bimanual G1 demonstrations over about 200 task types                     |
-| RoboMIND and RoboMIND 2.0 |                 about 1,400 h | Single-arm, dual-arm, ALOHA and humanoid data across several platforms                 |
-| Galaxea Open-World        |                   about 500 h | Bimanual mobile manipulation in household tasks                                        |
-| RoboCOIN                  |                   about 430 h | Multi-embodiment real-world demonstrations                                             |
-| DROID                     | 95K trajectories, about 500 h | Franka data from 86 real-world environments                                            |
-| RH20T                     |                 about 1,100 h | Contact-rich data over four embodiments and 140+ tasks                                 |
-| RDT-1B                    |                          29 h | Bimanual demonstrations on ALOHA-like hardware                                         |
-| InternData-A1             |             more than 3,600 h | High-fidelity simulation spanning tabletop, mobile manipulation and long-horizon tasks |
+| Mở X-Hiện thân |                   khoảng 600 giờ | tập hợp con Fractal, Bridge và BC-Z; hành vi đa dạng của robot thực một cánh tay |
+| AgiBotWorld-Beta |                 khoảng 2.400 giờ | Trình diễn G1 hai tay dựa trên bộ kẹp trên khoảng 200 loại nhiệm vụ |
+| RoboMIND và RoboMIND 2.0 |                 khoảng 1.400 giờ | Dữ liệu một cánh tay, hai cánh tay, ALOHA và hình người trên nhiều nền tảng |
+| Thế giới mở Galaxea |                   khoảng 500 giờ | Thao tác di động hai tay trong công việc gia đình |
+| RoboCOIN |                   khoảng 430 giờ | Trình diễn thế giới thực đa phương án |
+| DROID | Quỹ đạo 95K, khoảng 500 giờ | Dữ liệu Franka từ 86 môi trường trong thế giới thực |
+| RH20T |                 khoảng 1.100 giờ | Dữ liệu giàu liên hệ qua bốn phương án và hơn 140 nhiệm vụ |
+| RDT-1B |                          29 giờ | Trình diễn hai tay trên phần cứng giống ALOHA |
+| Thực tậpData-A1 |             hơn 3.600 giờ | Mô phỏng có độ chính xác cao trải rộng trên mặt bàn, thao tác trên thiết bị di động và các tác vụ có tầm nhìn dài |
 
-These individually rounded source figures do not reconcile exactly with the embodiment-group total,
-and the paper does not publish a post-curation episode manifest. They are therefore composition evidence,
-not an exact accounting ledger. [RobotManip paper v2, §§2.1-2.2](https://arxiv.org/abs/2606.17846v2)
+Các số liệu nguồn được làm tròn riêng lẻ này không khớp chính xác với tổng số nhóm phương án,
+và bài báo không xuất bản bản kê khai các tập sau tuyển chọn. Do đó, chúng là bằng chứng tổng hợp,
+không phải là sổ cái kế toán chính xác. [Giấy RobotManip v2, §§2.1-2.2](https://arxiv.org/abs/2606.17846v2)
 
-#### Egocentric human video
+#### Video về con người ích kỷ
 
-The **1,933 human hours** are filtered subsets rather than each source's full release:
+**1.933 giờ làm việc** là các tập hợp con được lọc thay vì bản phát hành đầy đủ của từng nguồn:
 
-- **EgoDex:** use 732 of 829 available hours; retain 60% of frames during training.
-- **VITRA:** use 247 hours from its Ego4D and EPIC-KITCHENS subsets; retain 25% of frames.
-- **EgoVerse:** use 954 of 1,362 available hours; retain 45% of frames.
+- **EgoDex:** sử dụng 732 trên 829 giờ khả dụng; giữ lại 60% khung hình trong quá trình huấn luyện.
+- **VITRA:** sử dụng 247 giờ từ các tập hợp con Ego4D và EPIC-KITCHENS; giữ lại 25% số khung hình.
+- **EgoVerse:** sử dụng 954 trong số 1.362 giờ có sẵn; giữ lại 45% số khung hình.
 
-Temporal subsampling slows the faster human-hand motion so its speed distribution better matches robot
-teleoperation data.
-[RobotManip paper v2, §§2.2-2.3](https://arxiv.org/abs/2606.17846v2)
+Lấy mẫu con theo thời gian làm chậm chuyển động nhanh hơn của bàn tay con người để phân phối tốc độ của nó phù hợp hơn với robot
+dữ liệu viễn thông.
+[Giấy RobotManip v2, §§2.2-2.3](https://arxiv.org/abs/2606.17846v2)
 
-#### Human-to-Robot synthesis
+#### Tổng hợp từ người sang robot
 
-The conversion pipeline:
+Đường dẫn chuyển đổi:
 
-1. Retarget MANO hand poses into end-effector pose and gripper width.
-2. Smooth translation and rotation trajectories.
-3. Segment and remove visible human hands.
-4. Inpaint the removed hand regions.
-5. Search for feasible robot-base placements.
-6. Solve inverse kinematics in MuJoCo.
-7. Render the selected robot morphology.
-8. Composite the robot into the source video using estimated depth.
+1. Điều chỉnh lại tư thế tay MANO thành tư thế end-effector và chiều rộng tay cầm.
+2. Quỹ đạo dịch chuyển và xoay trơn tru.
+3. Phân đoạn và loại bỏ bàn tay con người có thể nhìn thấy được.
+4. Sơn lại các vùng tay đã loại bỏ.
+5. Tìm kiếm các vị trí đặt bệ robot khả thi.
+6. Giải động học nghịch đảo trong MuJoCo.
+7. Hiển thị hình thái robot đã chọn.
+8. Kết hợp robot vào video nguồn bằng độ sâu ước tính.
 
-The result expands **1,933 source hours into 24,808 derived hours** across 15 bimanual morphologies.
-These hours increase training scale but are not independent human experience.
+Kết quả mở rộng **1.933 giờ nguồn thành 24.808 giờ phái sinh** trên 15 hình thái hai tay.
+Những giờ này làm tăng quy mô huấn luyện nhưng không phải là trải nghiệm độc lập của con người.
 
-**Unknown:** the paper does not explain why \(1,933\times15\) differs from the stated synthetic total.
-Filtering or failed conversion is plausible, but not documented.
-[RobotManip paper v2, §2.3](https://arxiv.org/abs/2606.17846v2)
-[Official RobotManip repository](https://github.com/QwenLM/Qwen-RobotManip)
+**Không xác định:** bài viết không giải thích tại sao \(1,933\times15\) khác với tổng số tổng hợp đã nêu.
+Việc lọc hoặc chuyển đổi không thành công là hợp lý nhưng không được ghi lại.
+[Giấy RobotManip v2, §2.3](https://arxiv.org/abs/2606.17846v2)
+[Kho lưu trữ RobotManip chính thức](https://github.com/QwenLM/Qwen-RobotManip)
 
-#### Vision-language co-training stream
+#### Luồng huấn luyện chung về thị giác-ngôn ngữ
 
-The separate **28M-example VL stream** covers:
+**Luồng VL ví dụ 28M** riêng biệt bao gồm:
 
-- general visual understanding;
-- spatial perception and reasoning;
-- OCR and document understanding;
-- multimodal specialist knowledge;
-- multilingual instruction following;
-- embodied chain-of-thought and ego-video understanding.
+- hiểu biết trực quan chung;
+- nhận thức và lý luận về không gian;
+- OCR và hiểu biết tài liệu;
+- kiến thức chuyên môn đa phương thức;
+- hướng dẫn đa ngôn ngữ sau đây;
+- thể hiện chuỗi suy nghĩ và sự hiểu biết về cái tôi-video.
 
-Named sources include RoboPoint, RefSpatial, PixMo, and CapsFusion. However:
+Các nguồn được đặt tên bao gồm RoboPoint, RefSpatial, PixMo và CapsFusion. Tuy nhiên:
 
-- the mixture also contains proprietary and synthesized VL data;
-- the paper does not give a complete source-by-source breakdown;
-- “open-source data only” applies to the manipulation corpus, not every VL example;
-- no global benchmark-contamination audit is reported for the web/proprietary mixture.
+- hỗn hợp cũng chứa dữ liệu VL tổng hợp và độc quyền;
+- bài viết không đưa ra sự phân tích đầy đủ theo từng nguồn;
+- “chỉ dữ liệu nguồn mở” áp dụng cho kho thao tác, không phải cho mọi ví dụ VL;
+- không có cuộc kiểm tra ô nhiễm chuẩn toàn cầu nào được báo cáo cho hỗn hợp web/độc quyền.
 
-[RobotManip paper v2, §2.5](https://arxiv.org/abs/2606.17846v2)
+[Giấy RobotManip v2, §2.5](https://arxiv.org/abs/2606.17846v2)
 
-### 3.2 ECoT: What It Is and Where It Is Used
+### 3.2 ECoT: Nó là gì và được sử dụng ở đâu
 
-**Embodied chain-of-thought (ECoT)** is language reasoning grounded in the robot's visual scene and physical state. The original ECoT policy generates task, plan, subtask, motion, gripper-position, andobject-grounding text before predicting an action. 
+**Chuỗi suy nghĩ được thể hiện (ECOT)** là khả năng suy luận ngôn ngữ dựa trên cảnh quan trực quan và trạng thái vật lý của robot. Chính sách ECoT ban đầu tạo ra văn bản nhiệm vụ, kế hoạch, nhiệm vụ phụ, chuyển động, vị trí kẹp và nối đất đối tượng trước khi dự đoán một hành động.
 
-Qwen-RobotManip adopts the underlying idea but uses it differently: its ECoT examples are an **auxiliary vision-language training task**, not a documented mandatory text prefix for the continuous action policy at deployment.
-[Original ECoT paper, §§4.1-4.3](https://arxiv.org/abs/2407.08693)
-[RobotManip paper v2, §§2.5, 4.1.2 and 5](https://arxiv.org/abs/2606.17846v2)
+Qwen-RobotManip áp dụng ý tưởng cơ bản nhưng sử dụng nó theo cách khác: các ví dụ ECoT của nó là **nhiệm vụ huấn luyện ngôn ngữ-thị giác phụ trợ**, không phải là tiền tố văn bản bắt buộc được ghi lại cho chính sách hành động liên tục khi triển khai.
+[Giấy ECOT gốc, §§4.1-4.3](https://arxiv.org/abs/2407.08693)
+[RobotManip paper v2, §§2.5, 4.1.2 và 5](https://arxiv.org/abs/2606.17846v2)
 
-#### Where ECoT enters the pipeline
+#### Nơi ECoT đi vào quy trình
 
 ```mermaid
 flowchart TD
-    subgraph OFFLINE[Offline annotation only]
-        TRAJ[Robot trajectory at timestamp t]
-        PRIV[Past-memory summary<br/>six future frames<br/>coarse episode progress]
-        TEACHER[Qwen3.6-Plus<br/>thinking mode]
+    subgraph OFFLINE[Chỉ chú thích ngoại tuyến]
+        TRAJ[Quỹ đạo của robot tại dấu thời gian t]
+        PRIV[Tóm tắt bộ nhớ quá khứ<br/>sáu khung hình tương lai<br/>Tiến trình thô của tập]
+        TEACHER[Qwen3.6-Plus<br/>Chế độ suy nghĩ]
         TRAJ --> TEACHER
         PRIV --> TEACHER
-        TEACHER --> TARGET[Three-part ECoT text target]
+        TEACHER --> TARGET[Mục tiêu văn bản ECoT ba phần]
     end
 
-    subgraph PRETRAIN[RobotManip pretraining]
-        INPUT[Current multi-view images<br/>and task instruction]
-        VLM[Qwen3.5 VLM backbone]
+    subgraph PRETRAIN[Huấn luyện trước RobotManip]
+        INPUT[Hình ảnh nhiều chế độ xem hiện tại<br/>và hướng dẫn tác vụ]
+        VLM[Xương sống Qwen3.5 VLM]
         INPUT --> VLM
-        TARGET -->|next-token supervision| VLM
-        VLM --> REP[Embodied visual-language<br/>representations]
-        REP --> DIT[DiT action expert]
+        TARGET -->|giám sát token tiếp theo| VLM
+        VLM --> REP[Ngôn ngữ trực quan thể hiện<br/>biểu diễn]
+        REP --> DIT[Action expert DiT]
     end
 
-    subgraph DEPLOY[Default deployment path]
-        LIVE[Live observation, state,<br/>prompt, optional history]
-        POLICY[VLM plus DiT]
-        ACT[16-step continuous<br/>canonical action chunk]
+    subgraph DEPLOY[Đường dẫn triển khai mặc định]
+        LIVE[Quan sát trực tiếp, trạng thái, <br/>prompt, lịch sử tùy chọn]
+        POLICY[VLM cộng với DiT]
+        ACT[16 bước liên tục<br/>Đoạn hành động chuẩn]
         LIVE --> POLICY --> ACT
     end
 ```
 
-At a sampled trajectory time `t`, the annotation pipeline gives a teacher VLM more information than
-the eventual student sees:
+Tại thời điểm quỹ đạo được lấy mẫu `t`, quy trình chú thích cung cấp cho VLM giáo viên nhiều thông tin hơn
+học sinh cuối cùng thấy:
 
-1. synchronized current images from all available views;
-2. a summary of earlier episode frames and visible state changes;
-3. six future frames sampled at one-second intervals from `t`;
-4. a coarse estimate of how far the episode has progressed;
-5. the task instruction.
+1. hình ảnh hiện tại được đồng bộ hóa từ tất cả các chế độ xem có sẵn;
+2. bản tóm tắt các khung tập trước đó và những thay đổi trạng thái hiển thị;
+3. sáu khung hình trong tương lai được lấy mẫu trong khoảng thời gian một giây từ `t`;
+4. ước tính sơ bộ về mức độ tiến triển của tình tiết;
+5. hướng dẫn nhiệm vụ.
 
-The teacher, reported as **Qwen3.6-Plus in thinking mode**, writes one target with three fields:
+Giáo viên, được báo cáo là **Qwen3.6-Plus ở chế độ tư duy**, viết một mục tiêu với ba trường:
 
-1. **Scene Description** — objects, spatial relations, robot-arm positions, and gripper states;
-2. **Task Progress Assessment** — completed subgoals plus the literal judgment `Task complete.` or
+1. **Mô tả cảnh** — các đối tượng, mối quan hệ không gian, vị trí cánh tay robot và trạng thái tay cầm;
+2. **Đánh giá tiến độ nhiệm vụ** — các mục tiêu phụ đã hoàn thành cộng với phán đoán theo nghĩa đen `Task complete.` hoặc
    `Task not yet complete.`;
-3. **Next Action** — one atomic action from the paper's taxonomy, such as reach-and-grasp, move-and-release,
-   rotate, open, push, insert, or handover.
+3. **Hành động tiếp theo** — một hành động cơ bản từ phân loại của bài báo, chẳng hạn như tiếp cận và nắm bắt, di chuyển và thả ra,
+   xoay, mở, đẩy, chèn hoặc chuyển giao.
 
-The privileged past/future/progress context is used only to improve annotation quality. The resulting
-training example contains **current multi-view images + task instruction as input** and the three-part
-ECoT response as its text target. It is trained with the VLM next-token loss as part of the separate VL
-batch stream. The paper reports an overall **9:1 manipulation-to-VL pretraining mixture**, but does not
-publish what fraction of the roughly 28M VL examples is ECoT.
-[RobotManip paper v2, §2.5 and §4.1](https://arxiv.org/abs/2606.17846v2)
+Bối cảnh đặc quyền trong quá khứ/tương lai/tiến trình chỉ được sử dụng để cải thiện chất lượng chú thích. Kết quả
+ví dụ huấn luyện chứa **hình ảnh nhiều chế độ xem hiện tại + hướng dẫn tác vụ làm đầu vào** và ba phần
+Phản hồi ECoT làm mục tiêu văn bản của nó. Nó được huấn luyện với việc mất token tiếp theo VLM như một phần của VL riêng biệt
+luồng hàng loạt. Bài viết báo cáo tổng thể **hỗn hợp huấn luyện trước thao tác với VL 9:1**, nhưng không
+công bố phần nào trong khoảng 28 triệu ví dụ VL là ECoT.
+[RobotManip paper v2, §2.5 và §4.1](https://arxiv.org/abs/2606.17846v2)
 
-#### How ECoT affects actions
+#### ECoT ảnh hưởng đến hành động như thế nào
 
-ECoT supervision directly updates the **VLM backbone**, encouraging its hidden states to encode scene
-state, task progress, and useful next-action semantics. Action batches separately backpropagate the
-flow-matching loss through both the backbone and the DiT, so the continuous action expert can use those
-richer visual-language representations. This is an indirect representation-transfer path; the paper does
-not say that the DiT consumes the generated three-part ECoT text.
+Giám sát ECoT trực tiếp cập nhật **đường trục VLM**, khuyến khích các trạng thái ẩn của nó mã hóa cảnh
+trạng thái, tiến độ nhiệm vụ và ngữ nghĩa hành động tiếp theo hữu ích. Các lô hành động truyền ngược riêng biệt
+Suy hao phù hợp với luồng thông qua cả đường trục và DiT, vì vậy chuyên gia hoạt động liên tục có thể sử dụng những suy hao đó
+biểu diễn ngôn ngữ hình ảnh phong phú hơn. Đây là con đường chuyển giao đại diện gián tiếp; tờ giấy làm
+không nói rằng DiT sử dụng văn bản ECoT gồm ba phần được tạo.
 
-The phase distinction is important:
+Sự phân biệt pha rất quan trọng:
 
-| Phase                                | ECoT role                           | What the model receives or produces                                                                         |
+| Giai đoạn | Vai trò ECoT | Những gì mô hình nhận được hoặc sản xuất |
 | ------------------------------------ | ----------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| Data synthesis                       | Create text supervision             | Teacher sees current views plus privileged past, future, and progress cues and writes the three-part target |
-| Foundation pretraining, VL batch     | Train embodied representations      | Student sees only current views and instruction and predicts ECoT text with next-token loss                 |
-| Foundation pretraining, action batch | Transfer representations to control | VLM and DiT predict continuous actions with flow matching; no ECoT text target is documented in this batch  |
-| Default domain SFT                   | No explicit ECoT objective          | Flow-matching action loss only                                                                              |
-| Default deployment                   | No documented ECoT decoding         | VLM hidden states condition the DiT, which produces a 16-step continuous action chunk                       |
+| Tổng hợp dữ liệu | Tạo giám sát văn bản | Giáo viên nhìn thấy các quan điểm hiện tại cộng với các tín hiệu đặc quyền về quá khứ, tương lai và tiến bộ và viết mục tiêu gồm ba phần |
+| Huấn luyện nền tảng đợt VL | Huấn luyện các đại diện thể hiện | Học sinh chỉ nhìn thấy các chế độ xem và hướng dẫn hiện tại, đồng thời dự đoán văn bản ECoT có mất token tiếp theo |
+| Huấn luyện nền tảng, đợt hành động | Chuyển biểu diễn sang điều khiển | VLM và DiT dự đoán các hành động liên tục bằng cách khớp luồng; không có mục tiêu văn bản ECoT nào được ghi lại trong đợt này |
+| Tên miền mặc định SFT | Không có mục tiêu ECoT rõ ràng | Chỉ mất hành động phù hợp với dòng chảy |
+| Triển khai mặc định | Không có tài liệu giải mã ECoT | Các trạng thái ẩn VLM điều chỉnh DiT, tạo ra đoạn hành động liên tục 16 bước |
 
-This differs from the original 2024 ECoT design, where the policy autoregressively emits its reasoning chain before its action. Qwen-RobotManip's design is closer to the **reasoning pretraining/co-training** family studied by ECoT-Lite: use reasoning to shape internal representations while avoiding mandatory
-test-time text generation. 
+Điều này khác với thiết kế ECoT 2024 ban đầu, trong đó chính sách tự động đưa ra chuỗi lý luận trước khi hành động. Thiết kế của Qwen-RobotManip gần với dòng **huấn luyện trước/đồng huấn luyện lý luận** được nghiên cứu bởi ECoT-Lite: sử dụng lý luận để định hình các biểu diễn nội bộ đồng thời tránh bắt buộc
+tạo văn bản trong thời gian thử nghiệm.
 
-This is a conceptual comparison, not a claim that RobotManip implements the
-published ECoT-Lite recipe exactly.
-[ECoT-Lite project, “Policy Variants”](https://ecot-lite.github.io/)
+Đây là một so sánh mang tính khái niệm, không phải là khẳng định rằng RobotManip thực hiện
+công thức ECoT-Lite được công bố chính xác.
+[Dự án ECoT-Lite, “Biến thể chính sách”](https://ecot-lite.github.io/)
 
-#### Worked example
+#### Ví dụ thực tế
 
-The paper does not publish a complete generated RobotManip ECoT sample. The following is therefore an **illustrative reconstruction** that obeys its documented three-field schema and atomic-action taxonomy; it is not a verbatim model output.
+Bài viết không xuất bản mẫu RobotManip ECoT được tạo hoàn chỉnh. Do đó, phần sau đây là **tái tạo minh họa** tuân theo lược đồ ba trường được ghi lại và phân loại hành động nguyên tử; nó không phải là một đầu ra mô hình nguyên văn.
 
-**Student training input:**
+**Đầu vào huấn luyện sinh viên:**
 
 ```yaml
 images:
@@ -515,7 +515,7 @@ images:
 instruction: "Take the toy off the table and put it on the mat."
 ```
 
-**ECoT text target:**
+**Mục tiêu văn bản ECoT:**
 
 ```text
 Scene Description: A red toy is on the left side of the table. The blue mat is
@@ -527,7 +527,7 @@ Task not yet complete.
 Next Action: Reach the left gripper toward the red toy and grasp it.
 ```
 
-The teacher may have used the hidden annotation-only context below to make that target reliable:
+Giáo viên có thể đã sử dụng ngữ cảnh chỉ có chú thích ẩn bên dưới để làm cho mục tiêu đó trở nên đáng tin cậy:
 
 ```yaml
 annotation_only:
@@ -538,61 +538,61 @@ annotation_only:
   coarse_episode_progress: "early"
 ```
 
-None of `annotation_only` belongs in the student input or default deployment API. During robot control,
-the policy instead uses the live observation, proprioceptive state, structured embodiment prompt, and
-optional behavior history; the DiT then emits the numeric action chunk. The textual `Next Action` above
-teaches semantic action selection but is not itself the motor command.
+Không có `annotation_only` nào thuộc về API triển khai mặc định hoặc đầu vào của sinh viên. Trong quá trình điều khiển robot,
+Thay vào đó, chính sách sử dụng quan sát trực tiếp, trạng thái cảm nhận bản thân, prompt phương án có cấu trúc và
+lịch sử hành vi tùy chọn; DiT sau đó sẽ phát ra đoạn hành động số. Văn bản `Next Action` ở trên
+dạy lựa chọn hành động ngữ nghĩa nhưng bản thân nó không phải là lệnh vận động.
 
-#### Evidence limits
+#### Giới hạn bằng chứng
 
-- The paper does not disclose the ECoT subset size, exact synthesis prompt, annotation filtering rate,
-  or a released ECoT dataset manifest.
-- It reports an ablation for removing the **entire VL mixture**, not ECoT alone. The reported performance
-  drops therefore cannot be attributed specifically to ECoT.
-- One architecture comparison excludes the embodiment prompt, ECoT, and context together, so it also
-  does not isolate ECoT's causal effect.
-- “Qwen3.6-Plus with thinking mode” names the annotation teacher configuration. Its internal thinking
-  is not the same artifact as the structured ECoT target used to train RobotManip.
-- The public paper and repository do not document inference-time generation, display, correction, or
-  reuse of RobotManip ECoT text. Treating it as a deployed planner would go beyond the evidence.
+- Bài báo không tiết lộ kích thước tập con ECoT, dấu nhắc tổng hợp chính xác, tốc độ lọc chú thích,
+  hoặc bản kê khai tập dữ liệu ECoT đã được phát hành.
+- Nó báo cáo sự cắt bỏ để loại bỏ **toàn bộ hỗn hợp VL**, không chỉ riêng ECoT. Hiệu suất được báo cáo
+  do đó, sự sụt giảm không thể được quy cụ thể cho ECoT.
+- Một so sánh kiến trúc loại trừ prompt phương án, ECoT và ngữ cảnh cùng nhau, do đó, nó cũng
+  không cô lập tác động nhân quả của ECoT.
+- “Qwen3.6-Plus với chế độ tư duy” đặt tên cho cấu hình chú thích của giáo viên. Suy nghĩ nội tại của nó
+  không phải là thành phần giống với mục tiêu ECoT có cấu trúc được sử dụng để huấn luyện RobotManip.
+- Tài liệu và kho lưu trữ công khai không ghi lại việc tạo, hiển thị, chỉnh sửa hoặc
+  tái sử dụng văn bản RobotManip ECoT. Việc coi nó như một người lập kế hoạch được triển khai sẽ vượt xa bằng chứng.
 
-### 3.3 Data Curation
+### 3.3 Quản lý dữ liệu
 
-The curation pipeline is easier to read as four checks:
+Quy trình quản lý dễ đọc hơn dưới dạng bốn bước kiểm tra:
 
-- **Temporal alignment**
-  - synchronize video, robot state, and action timestamps;
-  - preserve valid episode boundaries.
-- **Motion and kinematic validity**
-  - reject discontinuities and invalid action steps;
-  - correct incompatible kinematic conventions.
-- **Cross-modal consistency**
-  - verify that language matches the demonstrated behavior;
-  - check agreement between video and state/action signals.
-- **Visual validity**
-  - harmonize camera streams;
-  - remove unusable frames, missing hands, and occluded hand trajectories.
+- **Căn chỉnh theo thời gian**
+  - đồng bộ hóa video, trạng thái robot và dấu thời gian hành động;
+  - duy trì ranh giới tập hợp lệ.
+- **Tính đúng đắn của chuyển động và động học**
+  - loại bỏ sự gián đoạn và các bước hành động không hợp lệ;
+  - sửa các quy ước động học không tương thích.
+- **Tính nhất quán giữa các phương thức**
+  - xác minh rằng ngôn ngữ phù hợp với hành vi được thể hiện;
+  - kiểm tra sự thống nhất giữa video và tín hiệu trạng thái/hành động.
+- **Giá trị trực quan**
+  - hài hòa các luồng camera;
+  - loại bỏ các khung không sử dụng được, bàn tay bị thiếu và quỹ đạo bàn tay bị che khuất.
 
-This is crucial because mixed robot data can create contradictory gradients when the same physical behavior is encoded differently.
+Điều này rất quan trọng vì dữ liệu hỗn hợp của robot có thể tạo ra các gradient trái ngược nhau khi cùng một hành vi vật lý được mã hóa khác nhau.
 
-## 4. Training Procedure
+## 4. Quy trình huấn luyện
 
-### 4.1 Pretraining and Task Alternation
+### 4.1 Huấn luyện trước và luân phiên nhiệm vụ
 
-RobotManip uses dual-stream co-training:
+RobotManip sử dụng đồng huấn luyện hai luồng:
 
-- **Reported ratio:** 9:1 robot/manipulation-to-VL.
-- **Action-stream contents in Figure 3:** robot demonstrations, egocentric hands, and Human-to-Robot
-  trajectories.
-- **Terminology ambiguity:** §4.1.1 calls the numerator “robot data.”
-- **Unknown:** the exact loader-level interpretation of that numerator is not fully specified.
+- **Tỷ lệ được báo cáo:** 9:1 robot/thao tác-to-VL.
+- **Nội dung luồng hành động trong Hình 3:** trình diễn robot, bàn tay lấy cái tôi làm trung tâm và Con người với Robot
+  quỹ đạo.
+- **Mơ hồ về thuật ngữ:** §4.1.1 gọi tử số là “dữ liệu robot”.
+- **Không xác định:** cách diễn giải chính xác ở cấp độ trình tải của tử số đó không được chỉ định đầy đủ.
 
 ```text
 Approximately 90% manipulation/VLA data
 Approximately 10% vision-language data
 ```
 
-The streams use **separate batches**, different schemas, and different active objectives:
+Các luồng sử dụng **các lô riêng biệt**, các lược đồ khác nhau và các mục tiêu hoạt động khác nhau:
 
 ```text
 VLA batch:
@@ -602,13 +602,13 @@ VLM batch:
 vision + language question/answer tokens
 ```
 
-| Training unit                 | Active supervision                                                  | Parameters updated                                                          | Sampling detail                                |
+| Đơn vị huấn luyện | Giám sát tích cực | Thông số được cập nhật | Chi tiết lấy mẫu |
 | ----------------------------- | ------------------------------------------------------------------- | --------------------------------------------------------------------------- | ---------------------------------------------- |
-| VLA batch                     | Masked flow-matching velocity on an action chunk                    | VLM backbone and DiT action expert                                          | About 90% of the reported pretraining mixture  |
-| VL batch                      | Autoregressive next-token prediction                                | VLM path; no action target                                                  | About 10% of the reported pretraining mixture  |
-| One VLA sample inside the DiT | Eight independent noise/timestep draws reuse one VLM representation | Primarily increases action-expert supervision per expensive visual encoding | Eight repeats are not eight new demonstrations |
+| Lô VLA | Vận tốc phù hợp với dòng chảy được che giấu trên một đoạn hành động | Action expert DiT và xương sống VLM | Khoảng 90% hỗn hợp huấn luyện trước được báo cáo |
+| Lô VL | Dự đoán token tiếp theo tự động hồi quy | Đường dẫn VLM; không có mục tiêu hành động | Khoảng 10% hỗn hợp huấn luyện trước được báo cáo |
+| Một mẫu VLA bên trong DiT | Tám nhiễu/dấu thời gian độc lập tái sử dụng một biểu diễn VLM | Chủ yếu tăng cường sự giám sát của action expert trên mỗi mã hóa hình ảnh đắt tiền | Tám lần lặp lại không phải là tám cuộc biểu tình mới |
 
-This must not be confused with the action expert's *layer-wise* alternation:
+Không được nhầm lẫn điều này với sự thay thế *theo lớp* của action expert:
 
 ```text
 DiT block 0 -> cross-attend to visual tokens
@@ -617,81 +617,81 @@ DiT block 2 -> cross-attend to visual tokens
 ...
 ```
 
-What is and is not known:
+Những gì được biết và chưa được biết:
 
-- **Known:** every batch belongs to either the VLA stream or the VL stream.
-- **Known:** the streams are sampled under a reported 9:1 mixture.
-- **Not published:** a deterministic `9 VLA -> 1 VL` cycle.
-- **Not published:** probabilistic scheduler details, per-source weights, or epoch construction.
-- **Not published:** correction for the raw-hour imbalance between robot, human, and H2R data.
+- **Đã biết:** mỗi lô thuộc về luồng VLA hoặc luồng VL.
+- **Đã biết:** các luồng được lấy mẫu theo hỗn hợp 9:1 được báo cáo.
+- **Chưa được công bố:** chu trình `9 VLA -> 1 VL` xác định.
+- **Chưa được công bố:** chi tiết về bộ lập lịch xác suất, trọng số trên mỗi nguồn hoặc cấu trúc kỷ nguyên.
+- **Chưa được xuất bản:** sửa lỗi mất cân bằng trong giờ thô giữa dữ liệu robot, con người và H2R.
 
-“Alternating tasks” therefore means **sampling separate task batches under a mixture ratio**, not a
-documented fixed sequence. [RobotManip paper v2, Figure 3 and §4.1.1](https://arxiv.org/abs/2606.17846v2)
+Do đó, “Nhiệm vụ luân phiên” có nghĩa là **lấy mẫu các lô nhiệm vụ riêng biệt theo tỷ lệ hỗn hợp**, không phải
+trình tự cố định được ghi lại. [RobotManip paper v2, Hình 3 và §4.1.1](https://arxiv.org/abs/2606.17846v2)
 
-#### Flow-Matching Objective
+#### Mục tiêu khớp luồng
 
-For a ground-truth action chunk \(a\), Gaussian noise \(\epsilon\), and
+Đối với đoạn hành động thực tế \(a\), nhiễu Gaussian \(\epsilon\) và
 \(t\sim\operatorname{Beta}(1,1.5)\):
 
 $$
 x_t = (1-t)\epsilon + ta
 $$
 
-The target velocity is:
+Vận tốc mục tiêu là:
 
 $$
 v = a-\epsilon
 $$
 
-The action expert minimizes:
+Action expert giảm thiểu:
 
 $$
-\mathcal{L}_{FM}
+\mathcal{L__{FM}
 =
 \left\|
 f_\theta(x_t,t,s,o)-(a-\epsilon)
 \right\|_2^2
 $$
 
-where \(s\) is robot state and \(o\) is the visual-language observation.
+trong đó \(s\) là trạng thái robot và \(o\) là quan sát bằng ngôn ngữ hình ảnh.
 
-#### Masked Flow-Matching Loss
+#### Tổn thất phù hợp với dòng chảy được che giấu
 
-RobotManip applies three masks:
+RobotManip áp dụng ba mặt nạ:
 
-1. **Slot mask** — active dimensions for the embodiment
-2. **Step-validity mask** — valid, non-anomalous trajectory steps
-3. **Human-hand validity mask** — removes supervision after a hand leaves the camera view
+1. **Mặt nạ khe** — kích thước hoạt động cho phương án
+2. **Mặt nạ hợp lệ theo bước** — các bước quỹ đạo hợp lệ, không dị thường
+3. **Mặt nạ xác thực của bàn tay con người** — xóa tính năng giám sát sau khi một bàn tay rời khỏi chế độ xem camera
 
-The loss is normalized per sample over valid entries so that robots with more active dimensions do not automatically produce larger gradients.
+Sự mất mát được chuẩn hóa trên mỗi mẫu trên các mục nhập hợp lệ để các robot có kích thước hoạt động cao hơn không tự động tạo ra độ dốc lớn hơn.
 
-#### VLM Preservation Loss
+#### Mất bảo toàn VLM
 
-Vision-language samples use standard autoregressive next-token prediction:
+Các mẫu thị giác-ngôn ngữ sử dụng dự đoán token tiếp theo tự hồi quy tiêu chuẩn:
 
 $$
 \mathcal{L}
 =
-\mathcal{L}_{FM}
+\mathcal{L__{FM}
 +
-\lambda\mathcal{L}_{VLM}
+\lambda\mathcal{L__{VLM}
 $$
 
-The report uses \(\lambda=0.1\). Because only the corresponding loss is active for each batch type, this
-coefficient weights the VL update when the selected batch is a VL batch; it does not imply that every
-training example simultaneously has both targets.
+Báo cáo sử dụng \(\lambda=0.1\). Bởi vì chỉ có tổn thất tương ứng được kích hoạt cho từng loại lô, điều này
+hệ số tính trọng số cập nhật VL khi lô được chọn là lô VL; nó không có nghĩa là mọi
+ví dụ huấn luyện đồng thời có cả hai mục tiêu.
 
-#### Repeated Noise Sampling
+#### Lấy mẫu nhiễu lặp đi lặp lại
 
-For one action chunk, the action expert draws multiple independent noise and timestep samples. The reported setup repeats the diffusion training calculation eight times while reusing the expensive VLM representation.
+Đối với một đoạn hành động, action expert sẽ lấy nhiều mẫu nhiễu và dấu thời gian độc lập. Thiết lập được báo cáo lặp lại phép tính huấn luyện khuếch tán tám lần trong khi sử dụng lại biểu diễn VLM đắt tiền.
 
-This improves action-expert training efficiency without requiring eight separate visual forward passes.
+Điều này cải thiện hiệu quả huấn luyện action expert mà không yêu cầu tám đường chuyển tiếp trực quan riêng biệt.
 
-### 4.2 Stochastic Context Sampling
+### 4.2 Lấy mẫu bối cảnh ngẫu nhiên
 
-Always providing the immediately preceding action chunk can cause a shortcut: the model may copy the latest action instead of learning the robot's broader behavior.
+Việc luôn cung cấp đoạn hành động ngay trước đó có thể dẫn đến một lối tắt: mô hình có thể sao chép hành động mới nhất thay vì tìm hiểu hành vi rộng hơn của robot.
 
-During training, RobotManip samples historical context from random positions in the same episode.
+Trong quá trình huấn luyện, RobotManip lấy mẫu bối cảnh lịch sử từ các vị trí ngẫu nhiên trong cùng một tập.
 
 ```text
 Naive context:
@@ -701,131 +701,131 @@ Stochastic context:
 [random earlier chunks] → predict t
 ```
 
-This forces the model to infer stable behavioral characteristics instead of exploiting temporal proximity.
+Điều này buộc mô hình phải suy ra các đặc điểm hành vi ổn định thay vì khai thác khoảng cách về thời gian.
 
-At deployment, a normal rolling recent-history window can be used.
+Khi triển khai, có thể sử dụng cửa sổ lịch sử gần đây cuộn bình thường.
 
-### 4.3 Post-Training
+### 4.3 Sau Huấn luyện
 
-RobotManip uses domain-specific **generalist SFT**:
+RobotManip sử dụng **SFT tổng quát** dành riêng cho từng miền:
 
-- All demonstrations for a target benchmark or deployment domain are combined
-- One fine-tuned policy handles all tasks in that domain
-- The default SFT objective is flow matching only
-- Image color jitter is applied
-- Optional mixed post-training can retain VL data and auxiliary pretraining VLA data to reduce domain overfitting
+- Tất cả các bản trình diễn cho benchmark mục tiêu hoặc miền triển khai được kết hợp
+- Một chính sách tinh chỉnh xử lý tất cả các tác vụ trong miền đó
+- Mục tiêu SFT mặc định chỉ là khớp luồng
+- Áp dụng jitter màu hình ảnh
+- Quá trình huấn luyện sau hỗn hợp tùy chọn có thể giữ lại dữ liệu VL và dữ liệu VLA tiền huấn luyện phụ trợ để giảm tình trạng trang bị quá mức miền
 
-The main benchmark comparisons use domain-only SFT. In ablations, adding VL makes it 10% of
-post-training samples; a further mixed setting makes auxiliary pretraining VLA 75% of all VLA data, but
-the remaining source-level scheduler is not disclosed. No dedicated reinforcement-learning stage is
-reported as the main pipeline. [RobotManip paper v2, §§4.2 and 6.5.1](https://arxiv.org/abs/2606.17846v2)
+Các so sánh benchmark chính chỉ sử dụng SFT tên miền. Trong quá trình cắt bỏ, việc thêm VL chiếm 10%
+mẫu sau huấn luyện; một cài đặt hỗn hợp khác giúp cho việc huấn luyện trước VLA phụ trợ chiếm 75% trong tổng số dữ liệu VLA, nhưng
+bộ lập lịch cấp nguồn còn lại không được tiết lộ. Không có giai đoạn học tăng cường chuyên dụng nào được
+được báo cáo là đường dẫn chính. [RobotManip paper v2, §§4.2 và 6.5.1](https://arxiv.org/abs/2606.17846v2)
 
-## 5. Evaluation
+## 5. Đánh giá
 
-### 5.1 Benchmark Coverage
+### 5.1 Phạm vi benchmark
 
-The paper deliberately separates familiar in-distribution benchmarks from tests intended to measure
-generalization. All values below are author-reported success rates unless another metric is named.
-[RobotManip paper v2, §6](https://arxiv.org/abs/2606.17846v2)
+Bài viết cố tình tách các tiêu chuẩn quen thuộc trong phân phối khỏi các bài kiểm tra nhằm đo lường
+khái quát hóa. Tất cả các giá trị bên dưới là tỷ lệ thành công do tác giả báo cáo trừ khi một số liệu khác được nêu tên.
+[Giấy RobotManip v2, §6](https://arxiv.org/abs/2606.17846v2)
 
-| Evaluation           | Protocol and main metric                               |             Qwen-RobotManip result | Important interpretation                                                               |
+| Đánh giá | Giao thức và số liệu chính |             Kết quả Qwen-RobotManip | Giải thích quan trọng |
 | -------------------- | ------------------------------------------------------ | ---------------------------------: | -------------------------------------------------------------------------------------- |
-| LIBERO               | In-distribution task/scene suites; SR                  |                 99.1; Context 99.2 | Near saturation, so weak evidence for pretraining quality                              |
-| RoboTwin Easy / Hard | In-distribution dual-arm tasks; SR                     |   93.4 / 92.5; Context 93.7 / 94.0 | Measures domain adaptation more than open-world transfer                               |
-| LIBERO-Plus          | Seven OOD perturbation axes; overall SR                |                 89.0; Context 91.4 | Includes camera, robot state, language, lighting, background, noise, and layout shifts |
-| RoboTwin-Clean2Rand  | Fine-tune on Clean, test randomizations; Hard SR       |                 62.6; Context 69.4 | Context helps most under combined shift                                                |
-| RoboCasa365          | Atomic, composite-seen, composite-unseen; total SR     |                               35.9 | Composite-unseen is 14.9 versus RLDX-1's 5.4                                           |
-| EBench               | 26 task types; SR and composite score                  |                 45.6 SR / 60 score | Covers tabletop, mobile pick-and-place, and long-horizon tasks                         |
-| RoboTwin-IF          | Held-out instruction templates; average SR             |                               72.2 | Tests language-conditioned action selection in similar scenes                          |
-| RoboTwin-XE          | Train on AgileX ALOHA, zero-shot to ARX/UR5/Franka; SR | 23.9 average with camera-frame EEF | Joint-space transfer remains poor; result supports camera-frame alignment              |
+| LIBERO | Bộ tác vụ/cảnh đang được phân phối; SR |                 99,1; Bối cảnh 99,2 | Gần bão hòa, bằng chứng quá yếu về chất lượng huấn luyện trước |
+| RoboTwin Dễ / Khó | Nhiệm vụ hai cánh tay trong phân phối; SR |   93,4/92,5; Bối cảnh 93,7 / 94,0 | Các biện pháp thích ứng tên miền hơn là chuyển giao thế giới mở |
+| LIBERO-Plus | Bảy trục nhiễu loạn OOD; tổng thể SR |                 89,0; Bối cảnh 91.4 | Bao gồm máy ảnh, trạng thái robot, ngôn ngữ, ánh sáng, nền, nhiễu và các thay đổi bố cục |
+| RoboTwin-Clean2Rand | Tinh chỉnh Clean, kiểm tra ngẫu nhiên; SR cứng |                 62,6; Bối cảnh 69,4 | Bối cảnh giúp ích nhiều nhất trong ca kết hợp |
+| RoboCasa365 | Nguyên tử, tổng hợp-nhìn thấy, tổng hợp-không nhìn thấy; tổng SR |                               35,9 | Tổng hợp không nhìn thấy là 14,9 so với 5,4 của RLDX-1 |
+| EBench | 26 loại nhiệm vụ; SR và điểm tổng hợp |                 45,6 SR / 60 điểm | Bao gồm các nhiệm vụ trên bàn, chọn và đặt trên thiết bị di động và tầm nhìn dài |
+| RoboTwin-IF | Các mẫu hướng dẫn được giữ lại; SR trung bình |                               72,2 | Kiểm tra lựa chọn hành động có điều kiện ngôn ngữ trong các cảnh tương tự |
+| RoboTwin-XE | Huấn luyện trên AgileX ALOHA, không bắn tới ARX/UR5/Franka; SR | trung bình 23,9 với EEF khung máy ảnh | Chuyển giao không gian chung vẫn còn kém; result hỗ trợ căn chỉnh khung máy ảnh |
 
-### 5.2 Real-Robot Evaluation
+### 5.2 Đánh giá Robot thật
 
-Real-world evaluation uses the RoboChallenge Table30 v1 generalist track: **30 tasks across AgileX
-ALOHA, Franka, UR, and ARX**. The paper reports first place, **45% task success**, and a **59.83
-process score**. On eight bimanual ALOHA tasks it reports 40% average SR versus 21.2% for
-\(\pi_{0.5}\); across twelve cross-platform pick-and-place tasks it reports 63.3% versus DM0's 48.3%.
-[Official RobotManip benchmark summary](https://github.com/QwenLM/Qwen-RobotManip)
+Đánh giá trong thế giới thực sử dụng quy trình tổng quát RoboChallenge Table30 v1: **30 nhiệm vụ trên AgileX
+ALOHA, Franka, UR và ARX**. Bài báo báo cáo vị trí đầu tiên, **45% nhiệm vụ thành công** và **59,83
+điểm quá trình**. Trên tám tác vụ ALOHA hai tay, nó báo cáo SR trung bình là 40% so với 21,2% của
+\(\pi_{0.5}\); trên 12 nhiệm vụ chọn và đặt đa nền tảng, nó báo cáo 63,3% so với 48,3% của DM0.
+[Tóm tắt benchmark RobotManip chính thức](https://github.com/QwenLM/Qwen-RobotManip)
 
-Additional real-robot protocols show what the aggregate benchmark number hides:
+Các giao thức robot thực bổ sung cho thấy số benchmark tổng hợp ẩn giấu điều gì:
 
-| Protocol                     | Training/evaluation setup                                                            |                                                                    Main result |
+| Giao thức | Thiết lập huấn luyện/đánh giá |                                                                    Kết quả chính |
 | ---------------------------- | ------------------------------------------------------------------------------------ | -----------------------------------------------------------------------------: |
-| CobotMagic ALOHA             | Fine-tune on 22.9 h; seven in-distribution tasks × 5 trials                         |                                         88.6% SR versus 42.9% for\(\pi_{0.5}\) |
-| CobotMagic ALOHA OOD         | Four changed-object/scene/instruction tasks × 10 trials                             |                                                          87.5% SR versus 37.5% |
-| Few-shot ARX                 | Same 130 demonstrations; five tasks × 10 trials                                     |     Leads four tasks, but every tested model gets 0/10 on full screw insertion |
-| ARX zero-demo skill transfer | Joint SFT on 6K CobotMagic + 130 ARX demonstrations; four target tasks have no demos | 55.0% with full alignment; 12.5% without UnifiedEEF; 7.5% without UnifiedSpace |
+| CobotMagic ALOHA | Tinh chỉnh vào 22,9h; bảy nhiệm vụ trong phân phối × 5 thử nghiệm |                                         88,6% SR so với 42,9% cho\(\pi_{0,5}\) |
+| CobotMagic ALOHA OOD | Bốn nhiệm vụ thay đổi đối tượng/cảnh/hướng dẫn × 10 lần thử |                                                          87,5% SR so với 37,5% |
+| ARX ​​bắn ít | 130 cuộc biểu tình tương tự; năm nhiệm vụ × 10 thử nghiệm |     Dẫn đầu bốn nhiệm vụ, nhưng mọi mô hình được thử nghiệm đều đạt 0/10 khi lắp vít đầy đủ |
+| Chuyển giao kỹ năng không demo ARX | SFT chung trên các cuộc trình diễn 6K CobotMagic + 130 ARX; bốn nhiệm vụ mục tiêu không có bản demo | 55,0% với sự căn chỉnh đầy đủ; 12,5% không có UnifiedEEF; 7,5% không có UnifiedSpace |
 
-[RobotManip paper v2, Tables 10-14](https://arxiv.org/abs/2606.17846v2)
+[RobotManip paper v2, Bảng 10-14](https://arxiv.org/abs/2606.17846v2)
 
-### 5.3 Training and Context Ablations
+### 5.3 Huấn luyện và Loại bỏ bối cảnh
 
-The most relevant ablations for interpreting the training recipe are:
+Sự cắt bỏ phù hợp nhất để giải thích công thức huấn luyện là:
 
-- Removing VL pretraining lowers RoboTwin-Clean2Rand Hard from 62.6 to 54.4 and
-  RoboTwin-IF from 71.6 to 64.6, supporting the claim that the VL stream affects downstream
-  robustness rather than merely preserving text generation.
-- Adding VL during post-training improves LIBERO-Plus from 90.1 to 91.4 but leaves the Hard
-  Clean2Rand result essentially flat, 62.6 to 62.5.
-- With a fixed 7:3 robot-to-auxiliary data ratio, robot-only, +ego, and +H2R variants score
-  54.7, 55.0, and 58.7 on Clean2Rand Hard; H2R is more useful than raw ego video in that test.
-- Context requires enough flow-integration steps: 10 steps reaches 70.9 average in the reported
-  context ablation, while four steps reaches 63.3 and can jitter; zero history at episode start can
-  cause hesitation.
+- Loại bỏ việc huấn luyện trước VL làm giảm RoboTwin-Clean2Rand Hard từ 62,6 xuống 54,4 và
+  RoboTwin-IF từ 71,6 đến 64,6, ủng hộ tuyên bố rằng luồng VL ảnh hưởng đến hạ lưu
+  mạnh mẽ hơn là chỉ bảo tồn việc tạo văn bản.
+- Thêm VL trong quá trình huấn luyện sẽ cải thiện LIBERO-Plus từ 90,1 lên 91,4 nhưng để lại mức Hard
+  Kết quả Clean2Rand về cơ bản bằng phẳng, 62,6 đến 62,5.
+- Với tỷ lệ dữ liệu giữa rô-bốt và phụ trợ cố định là 7:3, điểm số biến thể chỉ dành cho rô-bốt, +ego và +H2R
+  54,7, 55,0 và 58,7 trên Clean2Rand Hard; H2R hữu ích hơn video bản ngã thô trong thử nghiệm đó.
+- Bối cảnh yêu cầu đủ các bước tích hợp luồng: 10 bước đạt điểm trung bình 70,9 trong báo cáo
+  cắt bỏ bối cảnh, trong khi bốn bước đạt 63,3 và có thể bị rung; không có lịch sử khi bắt đầu tập phim
+  gây do dự.
 
-[RobotManip paper v2, Tables 15-18](https://arxiv.org/abs/2606.17846v2)
+[RobotManip paper v2, Bảng 15-18](https://arxiv.org/abs/2606.17846v2)
 
-### 5.4 Evaluation Caveats
+### 5.4 Đánh giá hãy cẩn thận
 
-- Results are author-reported and have no repeated-run variance or confidence intervals.
-- The context variant is not uniformly better:
-  - it improves LIBERO-Plus and RoboTwin-Clean2Rand;
-  - it is lower on EBench and RoboCasa365;
-  - it requires a larger denoising budget to avoid jitter.
-- Human-to-Robot data can contain retargeting, rendering, or inpainting artifacts.
-- Most controlled OOD tests remain simulation-based.
-- Fixed action chunks and iterative inference limit highly reactive behavior.
-- Real-world validation still covers a finite set of platforms and tasks.
+- Kết quả do tác giả báo cáo và không có phương sai hoặc khoảng tin cậy lặp lại.
+- Biến thể ngữ cảnh không tốt hơn một cách thống nhất:
+  - nó cải thiện LIBERO-Plus và RoboTwin-Clean2Rand;
+  - nó thấp hơn trên EBench và RoboCasa365;
+  - nó đòi hỏi ngân sách khử nhiễu lớn hơn để tránh hiện tượng jitter.
+- Dữ liệu từ người đến robot có thể chứa các tạo phẩm nhắm mục tiêu lại, hiển thị hoặc inpainting.
+- Hầu hết các thử nghiệm OOD được kiểm soát vẫn dựa trên mô phỏng.
+- Các khối hành động cố định và suy luận lặp lại hạn chế hành vi có tính phản ứng cao.
+- Xác thực trong thế giới thực vẫn bao gồm một tập hợp hữu hạn các nền tảng và nhiệm vụ.
 
-## 6. Comparison and Conclusion
+## 6. So sánh và kết luận
 
-### 6.1 How RobotManip Differs from Qwen-VLA
+### 6.1 RobotManip khác với Qwen-VLA như thế nào
 
-| Aspect                     | Qwen-VLA                                               | Qwen-RobotManip                                                     |
+| Khía cạnh | Qwen-VLA | Qwen-RobotManip |
 | -------------------------- | ------------------------------------------------------ | ------------------------------------------------------------------- |
-| Scope                      | Manipulation, navigation, human and agent trajectories | Manipulation only                                                   |
-| DiT structure              | Large 16-block single-stream DiT                       | Smaller 10-block DiT with alternating cross-attention               |
-| Action representation      | General task-dependent padded action/trajectory space  | Explicit 80-D canonical manipulation template                       |
-| Main cross-robot mechanism | Textual embodiment prompt and validity masks           | Representation, camera-frame motion, and behavioral alignment       |
-| History                    | General observation history may be used                | Explicit observation-state-action context for in-context adaptation |
-| Data strategy              | Broad heterogeneous embodied mixture                   | Deeply curated manipulation-only mixture                            |
-| Synthetic scaling          | Simulation and human data within broad mixture         | Dedicated human-to-robot conversion across 15 platforms             |
-| Pretraining schedule       | T2A → CPT → SFT → RL                                | Dual-stream aligned pretraining → domain-generalist SFT            |
-| RL                         | Included                                               | Not a central reported stage                                        |
-| Main design philosophy     | Build a universal action generator progressively       | Align heterogeneous manipulation data, then scale it                |
+| Phạm vi | Thao tác, điều hướng, quỹ đạo của con người và agent | Chỉ thao tác |
+| Cấu trúc DiT | DiT luồng đơn lớn 16 khối | DiT 10 khối nhỏ hơn với attention chéo xen kẽ |
+| Đại diện hành động | Không gian hành động/quỹ đạo có đệm phụ thuộc vào nhiệm vụ chung | Mẫu thao tác kinh điển 80-D rõ ràng |
+| Cơ chế chéo robot chính | Dấu nhắc và tính hợp lệ của phương án thực hiện văn bản | Sự biểu diễn, chuyển động của khung máy ảnh và căn chỉnh hành vi |
+| Lịch sử | Lịch sử quan sát chung có thể được sử dụng | Bối cảnh hành động-trạng thái quan sát rõ ràng để thích ứng trong ngữ cảnh |
+| Chiến lược dữ liệu | Hỗn hợp thể hiện không đồng nhất rộng | Hỗn hợp chỉ dành cho thao tác được quản lý sâu sắc |
+| Tỉ lệ tổng hợp | Dữ liệu mô phỏng và con người trong phạm vi rộng | Chuyển đổi chuyên dụng từ người sang robot trên 15 nền tảng |
+| Lịch trình huấn luyện trước | T2A → CPT → SFT → RL | Huấn luyện trước căn chỉnh theo luồng kép → SFT tổng hợp miền |
+| RL | Bao gồm | Không phải là một giai đoạn báo cáo trung tâm |
+| Triết lý thiết kế chính | Xây dựng dần dần một trình tạo hành động phổ quát | Căn chỉnh dữ liệu thao tác không đồng nhất, sau đó chia tỷ lệ |
 
-### 6.2 Core Training Philosophy
+### 6.2 Triết lý huấn luyện cốt lõi
 
-> **Alignment first, then scale.**
+> **Căn chỉnh trước rồi mới chia tỷ lệ.**
 
-RobotManip treats inconsistent robot representations as the main bottleneck. The training pipeline is built around making different robots supervise a common physical concept before increasing data volume.
+RobotManip coi việc biểu diễn robot không nhất quán là nút thắt cổ chai chính. Quy trình huấn luyện được xây dựng xoay quanh việc giúp các robot khác nhau giám sát một khái niệm vật lý chung trước khi tăng khối lượng dữ liệu.
 
 ---
 
-## Primary Sources
+## Nguồn chính
 
-1. Yuan et al. *Qwen-RobotManip Technical Report: Alignment Unlocks Scale for Robotic
-   Manipulation Foundation Models*, v2, 2026-06-17.
+1. Yuan và cộng sự. *Báo cáo kỹ thuật Qwen-RobotManip: Căn chỉnh mở khóa quy mô cho robot
+   Mô hình nền tảng thao túng*, v2, 2026-06-17.
    [arXiv](https://arxiv.org/abs/2606.17846v2) ·
-   [local PDF](../../../../papers/01-gwen/vla-specific/qwen_robotmanip_2606.17846.pdf) ·
-   [official repository](https://github.com/QwenLM/Qwen-RobotManip)
-2. Wang et al. *Qwen-VLA: A Vision-Language-Action Model for General Embodied Intelligence*.
+   [PDF cục bộ](../../../../papers/01-gwen/vla-specific/qwen_robotmanip_2606.17846.pdf) ·
+   [kho lưu trữ chính thức](https://github.com/QwenLM/Qwen-RobotManip)
+2. Wang và cộng sự. *Qwen-VLA: Mô hình Hành động-Ngôn ngữ-Tầm nhìn cho Trí tuệ Thể hiện Chung*.
    [arXiv](https://arxiv.org/abs/2605.30280v2) ·
-   [local PDF](../../../../papers/01-gwen/vla-specific/qwen_vla_2605.30280.pdf)
-3. Zawalski et al. *Robotic Control via Embodied Chain-of-Thought Reasoning*, 2024.
+   [PDF cục bộ](../../../../papers/01-gwen/vla-specific/qwen_vla_2605.30280.pdf)
+3. Zawalski và cộng sự. *Điều khiển bằng robot thông qua suy luận chuỗi suy nghĩ được thể hiện*, 2024.
    [arXiv](https://arxiv.org/abs/2407.08693) ·
-   [project page](https://embodied-cot.github.io/) ·
-   [official repository](https://github.com/MichalZawalski/embodied-CoT)
-4. Chen et al. *Training Strategies for Efficient Embodied Reasoning*, 2025.
+   [trang dự án](https://embodied-cot.github.io/) ·
+   [kho lưu trữ chính thức](https://github.com/MichalZawalski/embodied-CoT)
+4. Chen và cộng sự. *Chiến lược huấn luyện về lý luận thể hiện hiệu quả*, 2025.
    [arXiv](https://arxiv.org/abs/2505.08243) ·
-   [project page](https://ecot-lite.github.io/)
+   [trang dự án](https://ecot-lite.github.io/)

@@ -1,6 +1,6 @@
-# Qwen-RobotWorld — Training stages
+# Qwen-RobotWorld — Các giai đoạn huấn luyện
 
-## 1. Training strategy
+## 1. Chiến lược huấn luyện
 
 Paper công bố hai stage chính:
 
@@ -12,7 +12,7 @@ Embodied specialization SFT
 
 Điểm đặc biệt là general data vẫn xuất hiện trong mọi batch ở SFT, nên model vừa học embodied physics vừa giữ general visual prior.
 
-## 2. Stage 1 — General foundation pretraining
+## 2. Giai đoạn 1 — Huấn luyện trước nền tảng chung
 
 Mục tiêu là học appearance, geometry, object motion, lighting, collision dynamics và human manipulation priors.
 
@@ -31,23 +31,23 @@ General images/videos + human hand videos
 - TI2V học continuation từ first-frame observation.
 - Task ratio chuyển dần từ T2I sang joint T2I/T2V/TI2V.
 
-## 3. Stage 2 — Embodied specialization SFT
+## 3. Giai đoạn 2 - SFT chuyên biệt cho embodiment
 
 Embodied data được đưa vào theo progressive four-phase schedule:
 
 ```mermaid
 flowchart TB
-  A[Multi-embodiment robot + human hand data]
+  A[Robot đa phương án + dữ liệu bàn tay con người]
   A --> B[Thêm wrist-view và third-person view]
-  B --> C[Multi-view concatenated generation]
-  C --> D[Complex tasks + cross-domain + long-horizon]
-  G[General world data] --> A
+  B --> C[Thế hệ nối nhiều chế độ xem]
+  C --> D[Nhiệm vụ phức tạp + tên miền chéo + tầm nhìn dài]
+  G[Dữ liệu chung về thế giới] --> A
   G --> B
   G --> C
   G --> D
 ```
 
-Trong embodied portion:
+Trong phần thể hiện:
 
 - khoảng 70% tổng SFT data là embodied, 30% general;
 - manipulation khoảng 90% embodied sampling weight;
@@ -56,7 +56,7 @@ Trong embodied portion:
 
 General data tiếp tục có mặt trong mọi batch.
 
-## 4. Data processing stages
+## 4. Các công đoạn xử lý dữ liệu
 
 ```text
 1. Raw collection
@@ -71,11 +71,11 @@ General data tiếp tục có mặt trong mọi batch.
 
 Video preprocessing gồm frame extraction, frame interpolation, sub-task splitting, main-view selection và multi-view concatenation.
 
-## 5. Training objective/infrastructure
+## 5. Mục tiêu/cơ sở hạ tầng huấn luyện
 
 - Flow matching trên VAE latent.
 - Noise lấy từ standard normal.
-- Timestep log-normal, adaptive shifting theo video length.
+- Dấu thời gian log-bình thường, thích ứng thay đổi theo độ dài video.
 - TI2V first-frame timestep cố định ở 0.
 - Megatron-LM với hybrid parallelism.
 - Selective activation recomputation trên một phần double-stream blocks.
@@ -84,7 +84,7 @@ Paper không mô tả RL stage; không nên tự thêm RL vào pipeline chính c
 
 ## 6. Chi tiết về training procedure
 
-### 6.1 Stage 1: general world foundation pretraining
+### 6.1 Giai đoạn 1: luyện tập trước nền tảng thế giới chung
 
 Stage 1 không chỉ học video robot. General-world data cung cấp các prior về appearance, lighting, object identity, generic motion, collision-like visual patterns, background và scene dynamics. Human manipulation video bổ sung grasping, tool use, object affordance, hand-object interaction và quan hệ nhân quả giữa action với outcome.
 
@@ -100,13 +100,13 @@ Task mixture chuyển dần từ chủ yếu T2I ở đầu pretraining sang joi
 
 T2I đóng vai trò **morphology anchor** cho video generation. Nếu chỉ huấn luyện video, model có thể học motion nhưng gặp object deformation, robot-arm shape drift, object-identity drift hoặc texture không ổn định. Shared backbone cho phép visual prior từ T2I regularize task động T2V/TI2V.
 
-### 6.2 Stage 2: embodied specialization SFT
+### 6.2 Giai đoạn 2: SFT chuyên biệt cho embodiment
 
 Tỷ lệ tổng thể được báo cáo là khoảng **70% embodied data và 30% general data**. Trong embodied sampling, manipulation chiếm khoảng 90%, multi-view concatenation khoảng 5% và navigation/driving khoảng 5%. Đây là approximate sampling weights, không nhất thiết là raw dataset proportions.
 
 SFT có bốn phase nhỏ:
 
-#### Phase 1 — Single-view, multi-embodiment foundation
+#### Giai đoạn 1 — Nền tảng một góc nhìn, đa phương án
 
 Kết hợp human hand, single-arm robot, dual-arm robot và nhiều morphology trong main view. Mục tiêu là học basic robot appearance, manipulation và action semantics, đồng thời chuyển human action prior sang robot execution.
 
@@ -116,11 +116,11 @@ Human action priors + robot execution examples
         Embodiment-invariant task semantics
 ```
 
-#### Phase 2 — Viewpoint expansion
+#### Giai đoạn 2 — Mở rộng quan điểm
 
 Dần thêm wrist-view, third-person external view và camera placement đa dạng. Main view hỗ trợ global context; wrist view hỗ trợ contact, grasp và fine manipulation. Mục tiêu là giảm phụ thuộc vào một camera hoặc một viewpoint.
 
-#### Phase 3 — Multi-view concatenated generation
+#### Giai đoạn 3 - Tạo kết nối nhiều chế độ xem
 
 Input và target có thể ghép nhiều camera theo chiều ngang:
 
@@ -163,7 +163,7 @@ General data tiếp tục xuất hiện trong SFT để giảm catastrophic forg
 
 Paper không công bố batch assembly chính xác, batch ordering, task ratio theo từng step hoặc registry sampling rate.
 
-### 6.4 Flow-matching objective
+### 6.4 Mục tiêu điều chỉnh luồng
 
 Video (x) được encode thành clean latent:
 
@@ -171,7 +171,7 @@ Video (x) được encode thành clean latent:
 z₀ = E(x)
 ```
 
-Sample Gaussian noise:
+Mẫu nhiễu Gaussian:
 
 ```text
 ε ~ N(0, I)
@@ -183,7 +183,7 @@ Tạo intermediate latent bằng linear interpolation:
 zₜ = (1 − t) z₀ + t ε
 ```
 
-Target velocity:
+Vận tốc mục tiêu:
 
 ```text
 v* = ε − z₀
@@ -195,7 +195,7 @@ MMDiT dự đoán:
 vθ(zₜ, t, h)
 ```
 
-Loss flow matching:
+Phù hợp với dòng tổn thất:
 
 ```text
 LFM = E[ ||vθ(zₜ, t, h) − v*||² ]
@@ -210,7 +210,7 @@ Với TI2V, first-frame latent được đặt ở `t = 0` và loại khỏi den
 Paper công bố sử dụng:
 
 - Megatron-LM;
-- hybrid parallelism;
+- song song lai;
 - selective activation recomputation trên một phần Double-stream MMDiT blocks.
 
 Hybrid parallelism có thể bao gồm data, tensor, pipeline và sequence/context parallelism, nhưng paper không nêu cấu hình cụ thể. Selective activation recomputation chỉ recompute một số block để cân bằng GPU memory và throughput:

@@ -1,4 +1,4 @@
-# Qwen3.5 — Training datasets
+# Qwen3.5 — Tập dữ liệu huấn luyện
 
 ## Kết luận ngắn
 
@@ -11,13 +11,13 @@ Qwen3.5 là **open-weight với partial technical disclosure**, không phải d�
 | Text                    | Web/text chất lượng cao, instruction và knowledge     | △           |
 | Code                    | Code generation, debugging, repository và terminal tasks | ✓/△        |
 | Mathematics/STEM        | Toán, khoa học, reasoning và verifier tasks            | ✓/△        |
-| Multilingual            | 201 languages and dialects                                | ✓           |
-| Image-text              | Caption, visual QA, reasoning                             | ✓           |
-| Video-text              | Frame/temporal understanding, video QA                    | ✓           |
+| Đa ngôn ngữ | 201 ngôn ngữ và phương ngữ | ✓ |
+| Văn bản hình ảnh | Chú thích, QA trực quan, lý luận | ✓ |
+| Văn bản video | Hiểu biết về khung/thời gian, QA video | ✓ |
 | Documents/charts/OCR/UI | Document, chart, screenshot và interface understanding   | ✓           |
 | Reasoning traces        | Suy luận và câu trả lời có cấu trúc               | △           |
-| Tool trajectories       | Tool call, observation, multi-step interaction            | ✓/△        |
-| Agent environments      | Browser, coding, planning, real-world-like tasks          | ✓/△        |
+| Quỹ đạo công cụ | Gọi công cụ, quan sát, tương tác nhiều bước | ✓/△ |
+| Môi trường đại lý | Trình duyệt, mã hóa, lập kế hoạch, các tác vụ giống thế giới thực | ✓/△ |
 
 ## 2. Dạng dữ liệu trong unified sequence
 

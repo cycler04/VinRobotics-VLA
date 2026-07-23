@@ -1,4 +1,4 @@
-# Qwen3.6-35B-A3B — Training stages
+# Qwen3.6-35B-A3B — Giai đoạn huấn luyện
 
 > Qwen chưa công bố training recipe đầy đủ. Pipeline dưới đây kết hợp thông tin model card với diễn giải thận trọng từ các capability được công bố.
 
@@ -6,12 +6,12 @@
 
 ```mermaid
 flowchart TB
-  A[Foundation pre-training] --> B[Multimodal + MTP]
-  B --> C[Long-context / YaRN support]
-  C --> D[Instruction SFT]
-  D --> E[Reasoning + verifier RL]
-  E --> F[Thinking Preservation training]
-  F --> G[Agentic coding post-training]
+  A[Huấn luyện trước nền tảng] --> B[Đa phương thức + MTP]
+  B --> C[Hỗ trợ ngữ cảnh dài / YaRN]
+  C --> D[Hướng dẫn SFT]
+  D --> E[Lý luận + xác minh RL]
+  E --> F[Huấn luyện bảo tồn tư duy]
+  F --> G[Mã hóa đại lý sau huấn luyện]
 ```
 
 ## 2. Foundation và multimodal training
@@ -20,7 +20,7 @@ Nền tảng giữ nguyên hướng Qwen3.5: text, code, math, multilingual, ima
 
 Chưa công bố: tổng token, tỷ lệ modality, curriculum, filtering, deduplication và compute budget.
 
-### Mixed multimodal sampling
+### Lấy mẫu đa phương thức hỗn hợp
 
 Một cách diễn giải phù hợp với thực hành huấn luyện LLM/VLM hiện đại là các domain được sampling vào mixed batches:
 
@@ -40,11 +40,11 @@ Không nên hiểu pipeline là train hết text rồi mới train code, math, i
 
 Sampling ratio có thể thay đổi theo giai đoạn: sau dữ liệu nền tảng có thể tăng code, math, reasoning hoặc agent trajectories. Dữ liệu cũng có thể được sắp xếp từ dễ đến khó. Đây là diễn giải theo thông lệ, không phải curriculum chính thức của Qwen.
 
-## 3. Long-context
+## 3. Bối cảnh dài
 
 Model hỗ trợ 262,144 native tokens. Khi cần khoảng 1M tokens, framework có thể dùng YaRN bằng cách thay đổi `rope_parameters`. Đây là context extension ở cấu hình/inference; không đồng nghĩa model luôn reasoning ổn định ở 1M.
 
-## 4. Post-training cho agentic coding
+## 4. Huấn luyện sau cho mã hóa đại lý
 
 ```text
 Repository / frontend task
@@ -77,17 +77,17 @@ RL thường cần model đã có khả năng sinh output có ý nghĩa; reward 
 
 ```mermaid
 flowchart LR
-  P[Task distribution] --> R[Parallel agent rollouts]
-  R --> E[Environment: code / browser / tools]
-  E --> V[Verifier, tests or judge]
-  V --> W[Reward]
-  W --> U[Async policy update]
+  P[Phân phối nhiệm vụ] --> R[Triển khai đại lý song song]
+  R --> E[Môi trường: mã/trình duyệt/công cụ]
+  E --> V[Người xác minh, kiểm tra hoặc đánh giá]
+  V --> W[Phần thưởng]
+  W --> U[Cập nhật chính sách không đồng bộ]
   U --> R
 ```
 
 Các công bố nói đến million-agent environments, asynchronous RL và task distributions tăng dần độ phức tạp. Tên thuật toán, reward function, environment suite và số rollout chưa được công khai đầy đủ.
 
-## 6. Thinking Preservation training
+## 6. Huấn luyện khả năng giữ thinking trace
 
 Đây là behavior training mới, không phải layer mới:
 
@@ -103,7 +103,7 @@ Mục tiêu là duy trì consistency trong iterative coding và agent loop, đ�
 
 ## 7. Khác Qwen3.5
 
-| Qwen3.5                                            | Qwen3.6                                                          |
+| Qwen3.5 | Qwen3.6 |
 | -------------------------------------------------- | ---------------------------------------------------------------- |
 | Foundation → SFT → reasoning/agent post-training | Giữ nền tảng, tăng trọng tâm agentic coding                |
 | Thinking theo lượt gần nhất                    | Có training/option`preserve_thinking`                         |

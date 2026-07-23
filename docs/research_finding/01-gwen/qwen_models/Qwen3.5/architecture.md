@@ -1,4 +1,4 @@
-# Qwen3.5 — Architecture
+# Qwen3.5 — Kiến trúc
 
 > **Scope.** Tài liệu này dùng các thông tin công khai trong blog/model card/config của Qwen. Các con số có thể khác theo checkpoint; khi thuyết trình cần ghi rõ model cụ thể. Qwen3.5 là **native multimodal causal language model**, không chỉ là LLM text được gắn thêm vision ở cuối.
 
@@ -57,7 +57,7 @@ Next group
 
 Ví dụ được công bố cho **Qwen3.5-9B**: 32 layers, hidden size 4096, bố cục `8 × [3 × (Gated DeltaNet → FFN) + 1 × (Gated Attention → FFN)]`. Đây là ví dụ checkpoint, không nên áp dụng nguyên xi cho mọi model.
 
-## 3. Gated DeltaNet block
+## 3. Khối Gated DeltaNet
 
 ```text
 Input x
@@ -78,7 +78,7 @@ Input x
 
 Trực giác: DeltaNet duy trì một **state/bộ nhớ nén** thay vì lưu và so sánh trực tiếp toàn bộ key-value của chuỗi. Query đọc state; key xác định thông tin; value là nội dung; gate điều khiển ghi, giữ, quên và mức đóng góp vào output. Cơ chế này hướng tới chi phí gần tuyến tính theo độ dài chuỗi ở phần mixing chính, nhưng có thể yếu hơn full attention khi cần truy xuất chính xác giữa các token xa.
 
-## 4. Gated full-attention block
+## 4. Khối chú ý đầy đủ có cổng
 
 ```text
 Input x
@@ -100,13 +100,13 @@ GQA dùng nhiều query heads hơn KV heads, vì vậy giảm kích thước KV 
 
 ## 5. Dense FFN và sparse MoE
 
-Dense variant:
+Biến thể dày đặc:
 
 ```text
 Hidden state ──> shared FFN ──> output
 ```
 
-MoE variant:
+Biến thể MoE:
 
 ```text
 Hidden state ──┬──> Router ──> top-k routed experts ──┐
@@ -133,11 +133,11 @@ Qwen3.6-35B-A3B (đại diện cùng họ kiến trúc) công bố 262,144 nativ
 | Thuộc tính                 | Giá trị công bố                                     |
 | ---------------------------- | ------------------------------------------------------- |
 | Tổng / activated parameters | 35B / 3B                                                |
-| Layers, hidden size          | 40, 2048                                                |
-| Layout                       | `10 × [3 DeltaNet + 1 Gated Attention]`              |
-| MoE                          | 256 routed experts; top-8 routed + 1 shared             |
-| DeltaNet                     | 32 value heads; 16 query/key heads; head dim 128        |
-| Gated attention              | 16 query heads; 2 KV heads; head dim 256; rotary dim 64 |
+| Lớp, kích thước ẩn | 40, 2048 |
+| Bố cục | `10 × [3 DeltaNet + 1 Gated Attention]` |
+| Bộ GD | 256 chuyên gia được định tuyến; top-8 định tuyến + 1 chia sẻ |
+| DeltaNet | 32 đầu giá trị; 16 đầu truy vấn/khóa; đầu mờ 128 |
+| Kiểm soát attention | 16 đầu truy vấn; đầu 2 KV; đầu mờ 256; quay mờ 64 |
 | Context                      | 262K native; khoảng 1.01M extended                     |
 | Khác                        | Multi-step MTP; preserve-thinking                       |
 
@@ -149,16 +149,16 @@ MTP (Multi-Token Prediction) tạo training signal cho nhiều token tương lai
 | --------------------------------- | -------------------------------------------------------------: |
 | Loại model                       |                      Causal Language Model with Vision Encoder |
 | Tổng / activated parameters      |                                                       35B / 3B |
-| Hidden dimension                  |                                                           2048 |
+| Kích thước ẩn |                                                           2048 |
 | Token embedding và LM output     |                                               248,320 (padded) |
-| Layers                            |                                                             40 |
+| Lớp |                                                             40 |
 | Layer layout                      | `10 × [3 DeltaNet + 1 Gated Attention]`, mỗi layer có MoE |
-| DeltaNet heads / dimension        |                                              32 V; 16 QK / 128 |
-| Gated Attention heads / dimension |                                               16 Q; 2 KV / 256 |
-| Rotary position dimension         |                                                             64 |
-| MoE                               |                     256 experts; 8 routed + 1 shared activated |
-| Expert intermediate dimension     |                                                            512 |
-| MTP                               |                                    Trained with multiple steps |
+| Đầu / kích thước DeltaNet |                                              32V; 16 QK / 128 |
+| Gated Đầu chú ý / kích thước |                                               16Q; 2KV/256 |
+| Kích thước vị trí quay |                                                             64 |
+| Bộ GD |                     256 chuyên gia; 8 định tuyến + 1 chia sẻ được kích hoạt |
+| Chuyên gia trung cấp |                                                            512 |
+| MTP |                                    Được huấn luyện với nhiều bước |
 | Context                           |                   262,144 native; khoảng 1,010,000 extensible |
 
 Model card ghi Qwen3.5 mặc định sinh **thinking content** trong `<think>...</think>` trước final response. Qwen3.5-Flash là hosted/API version tương ứng với 35B-A3B nhưng có thêm production features như 1M context mặc định và built-in tools; không nên coi đó là cùng một serving configuration với open-weight checkpoint.
@@ -177,31 +177,31 @@ Model card ghi Qwen3.5 mặc định sinh **thinking content** trong `<think>...
 
 ```mermaid
 flowchart TB
-  X[Input hidden states] --> D[Gated DeltaNet block]
-  D --> D2[Gated DeltaNet block]
-  D2 --> D3[Gated DeltaNet block]
-  D3 --> A[Gated full-attention block<br/>GQA + RoPE]
-  A --> N[Next hybrid group]
+  X[Nhập trạng thái ẩn] --> D[Khối Gated DeltaNet]
+  D --> D2[Khối Gated DeltaNet]
+  D2 --> D3[Khối Gated DeltaNet]
+  D3 --> A[Khối chú ý toàn diện có cổng<br/>GQA + RoPE]
+  A --> N[Nhóm lai tiếp theo]
   D -. mỗi block .-> F[Dense FFN hoặc Sparse MoE]
   A -. mỗi block .-> F
 ```
 
 ```mermaid
 flowchart LR
-  H[Hidden state] --> R[Router]
-  R --> E1[Top-k routed experts]
-  H --> S[Shared expert]
-  E1 --> C[Weighted combine]
+  H[Trạng thái ẩn] --> R[Bộ định tuyến]
+  R --> E1[Các chuyên gia định tuyến hàng đầu]
+  H --> S[Chuyên gia chia sẻ]
+  E1 --> C[Kết hợp có trọng số]
   S --> C
-  C --> O[MoE output]
+  C --> O[Đầu ra MoE]
 ```
 
 ```mermaid
 flowchart TB
-  I[Image / Video] --> P[Resize, patchification,<br/>frame sampling]
-  P --> V[Vision Encoder]
-  V --> A[Projection / token alignment]
-  A --> T[Visual tokens in LM space]
-  T --> U[Interleave with text tokens]
-  U --> L[Qwen3.5 hybrid LM]
+  I[Hình ảnh / Video] --> P[Thay đổi kích thước, vá lỗi, lấy mẫu khung <br/>]
+  P --> V[Bộ mã hóa tầm nhìn]
+  V --> A[Căn chỉnh phép chiếu/token]
+  A --> T[Token trực quan trong không gian LM]
+  T --> U[Xen kẽ bằng token văn bản]
+  U --> L[LM lai Qwen3.5]
 ```

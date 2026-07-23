@@ -1,6 +1,6 @@
-# Qwen-RobotWorld — Dataset
+# Qwen-RobotWorld — Bộ dữ liệu
 
-## 1. Embodied World Knowledge (EWK)
+## 1. Tri thức thế giới hiện thân (EWK)
 
 EWK gồm khoảng **8.6M video-text pairs**, hơn **200M observation frames**:
 
@@ -10,13 +10,13 @@ EWK gồm khoảng **8.6M video-text pairs**, hơn **200M observation frames**:
 | Embodied data           | 70% tổng corpus                                                                 |
 | Manipulation            | khoảng 5.9M samples; 20+ robot morphologies; 1,300+ skills                      |
 | Driving                 | khoảng 200K samples trong summary; full curated mixture ~1,744,405 clips/2,405h |
-| Indoor navigation       | 6,064 episodes; 134 indoor scenes; ~49.8 km                                      |
-| Human-to-robot transfer | MANO-to-robot pipeline; 14 robot morphologies                                    |
+| Điều hướng trong nhà | 6.064 tập; 134 cảnh trong nhà; ~49,8 km |
+| Chuyển giao từ người sang robot | Đường ống MANO-to-robot; 14 hình thái robot |
 | Multi-view              | khoảng 1.6M embodied samples; synchronized 2–4 views                           |
 
-![Paper Figure 1 — EWK data overview](Image/figure_1_ewk_overview.png)
+![Bài viết Hình 1 - Tổng quan về dữ liệu EWK](Image/figure_1_ewk_overview.png)
 
-## 2. Action-language mapping
+## 2. Ánh xạ ngôn ngữ hành động
 
 Action signals khác nhau giữa joint angles, waypoints, steering, heading và hand motion được chuyển thành natural-language action. Model học:
 
@@ -31,24 +31,24 @@ Coverage gồm 20+ embodiments và 500+ action categories: manipulation primitiv
 ## 3. Năm lớp annotation
 
 1. **Task Goal:** mục tiêu và desired state transition.
-2. **Action Detail:** trajectory, micro-action, speed, force, viewpoint.
-3. **Physical Feedback:** displacement, deformation, contact-state change.
-4. **Comprehensive caption:** 50–100 words.
-5. **Concise caption:** 15–30 words.
+2. **Chi tiết hành động:** quỹ đạo, hành động vi mô, tốc độ, lực, góc nhìn.
+3. **Phản hồi vật lý:** sự dịch chuyển, biến dạng, thay đổi trạng thái tiếp xúc.
+4. **Chú thích đầy đủ:** 50–100 từ.
+5. **Chú thích ngắn gọn:** 15–30 từ.
 
 Hai loại caption được sampling equal probability 50/50 trong training.
 
-## 4. Data domains
+## 4. Miền dữ liệu
 
 | Domain             | Nguồn/vai trò                                                                                                             |
 | ------------------ | --------------------------------------------------------------------------------------------------------------------------- |
-| Manipulation       | EgoHOD, EPIC-Kitchens, Bridge V2, RH20T, DROID, RoboMIND, RoboCoin, Agibot-World, Galaxea, ActionNet, OpenLoong, Robotwin… |
-| Autonomous driving | Waymo E2E, NVIDIA PhysicalAI-AD, Bench2Drive, Sekai                                                                         |
-| Indoor navigation  | VLNVerse, Isaac Sim, 134 scenes                                                                                             |
-| Human-to-robot     | Human egocentric video → MANO reconstruction → robot retargeting/video editing                                            |
-| General data       | Internet images/videos, multi-resolution, no AIGC according to paper                                                        |
+| Thao tác | EgoHOD, EPIC-Kitchens, Bridge V2, RH20T, DROID, RoboMIND, RoboCoin, Agibot-World, Galaxea, ActionNet, OpenLoong, Robotwin… |
+| Lái xe tự động | Waymo E2E, NVIDIA PhysicalAI-AD, Bench2Drive, Sekai |
+| Điều hướng trong nhà | VLNVerse, Isaac Sim, 134 cảnh |
+| Người với robot | Video lấy con người làm trung tâm → Tái thiết MANO → nhắm mục tiêu lại robot/chỉnh sửa video |
+| Dữ liệu chung | Hình ảnh/video trên Internet, đa độ phân giải, không có AIGC theo giấy |
 
-## 5. Quality filtering
+## 5. Lọc chất lượng
 
 LLM judge kiểm tra factual accuracy, specificity, instruction clarity và viewpoint consistency. Caption gần ngưỡng hoặc domain thiếu đại diện được human review; prompt được refine theo scenario/task/embodiment rồi re-annotate.
 
@@ -74,7 +74,7 @@ Các chỉ số dưới đây mô tả **quy mô và độ phủ của dataset**
 
 Các metric này trả lời câu hỏi **“dataset lớn và đa dạng đến mức nào?”**. Chúng không trả lời trực tiếp model dự đoán tốt đến đâu; điều đó được đo bằng benchmark metrics trong `evaluation.md`.
 
-![Paper Figure 2 — data processing pipeline](Image/figure_2_data_processing.png)
+![Giấy Hình 2 - đường dẫn xử lý dữ liệu](Image/figure_2_data_processing.png)
 
 ## 6. Chi tiết cấu trúc dữ liệu EWK
 
@@ -94,20 +94,20 @@ Paper có một số cách thống kê khác nhau giữa phần tổng quan và 
 
 Các con số này không nhất thiết mâu thuẫn: raw clip, processed clip, training sample và final sampled mixture có thể là các đơn vị khác nhau. Một clip có thể được cắt, ghép, annotation hoặc sampling thành nhiều dạng. Paper chưa giải thích hoàn toàn cách reconcile mọi con số, vì vậy khi thuyết trình nên nói “quy mô được báo cáo” thay vì cộng tất cả thành một tổng mới.
 
-### 6.2 General-world data
+### 6.2 Dữ liệu chung của thế giới
 
 General-world data được thu thập từ video của 14 platform, natural scenes, daily life, sports, high-quality images, photography và e-commerce imagery. Video được chuẩn hóa ở 24 FPS và hỗ trợ nhiều aspect ratio như 1:1, 2:3, 3:2, 3:4, 4:3, 9:16 và 16:9.
 
 Image data đóng vai trò visual-quality anchor, giúp model học:
 
-- object morphology;
+- hình thái đối tượng;
 - texture và material;
-- composition;
-- sharp visual appearance.
+- thành phần;
+- ngoại hình sắc nét.
 
 Caption được sinh bằng Qwen2.5-VL. Paper mô tả việc loại trừ AIGC image/video khỏi general data vì lo ngại artifact, physical inconsistency và bias từ dữ liệu synthetic.
 
-### 6.3 Manipulation data
+### 6.3 Dữ liệu thao tác
 
 Manipulation là phần lớn nhất của embodied corpus và gồm nhiều nguồn:
 
@@ -125,7 +125,7 @@ Manipulation data được tổ chức theo bốn trục:
 3. **Multi-scenario:** kitchen, workshop, laboratory, outdoor workspace, factory, real scene và simulated scene để giảm overfit vào background, lighting, camera hoặc simulator.
 4. **Multi-view:** egocentric/head view, wrist camera, external camera và synchronized concatenated views. Main camera hỗ trợ planning; wrist camera hỗ trợ contact, grasp và fine manipulation.
 
-### 6.4 Driving data
+### 6.4 Dữ liệu lái xe
 
 | Dataset              | Loại                   |     Quy mô được báo cáo |
 | -------------------- | ----------------------- | ----------------------------: |
@@ -152,14 +152,14 @@ Structured trajectory caption
 
 Driving data cung cấp ego-motion, multi-agent motion, parallax, perspective change, scene-scale 3D geometry, acceleration, lane change và turning.
 
-### 6.5 Indoor navigation data
+### 6.5 Dữ liệu dẫn đường trong nhà
 
 Navigation data được xây dựng trong NVIDIA Isaac Sim từ VLNVerse:
 
-- 6,064 successful episodes;
-- 134 indoor scenes;
+- 6.064 tập thành công;
+- 134 cảnh trong nhà;
 - RGB 256×256;
-- 10 FPS;
+- 10 khung hình/giây;
 - trajectory trung bình 8.2 m, khoảng 4–17.5 m;
 - tổng distance khoảng 49.8 km;
 - khoảng 5.8 giờ video.
@@ -171,7 +171,7 @@ Có hai dạng instruction:
 
 Nhóm này dạy room-scale geometry, obstacle-aware movement, long-term spatial coherence và grounding language vào continuous trajectory.
 
-### 6.6 Human-to-robot transfer
+### 6.6 Chuyển giao từ người sang robot
 
 Pipeline chính chuyển video tay người thành robot video:
 
@@ -195,15 +195,15 @@ Bốn stream được tạo gồm original human video, hand-removed scene, pure
 
 Phần này có khoảng **80K episodes**, gồm Franka Panda, AgileX Split Aloha, ARX Lift2, AgiBot Genie1, single-arm, dual-arm, mobile dual-arm và humanoid.
 
-### 6.7 Action-language mapping
+### 6.7 Ánh xạ ngôn ngữ hành động
 
 Các domain có action space khác nhau:
 
 | Domain       | Action gốc                         |
 | ------------ | ----------------------------------- |
-| Manipulation | Joint angles, end-effector waypoint |
-| Driving      | Steering, throttle, trajectory      |
-| Navigation   | Heading, waypoint, turn command     |
+| Thao túng | Góc khớp, điểm tham chiếu đầu cuối |
+| Lái xe | Chỉ đạo, ga, quỹ đạo |
+| Điều hướng | Hướng đi, điểm tham chiếu, lệnh rẽ |
 
 Qwen-RobotWorld ánh xạ chúng thành natural-language action. Ví dụ:
 

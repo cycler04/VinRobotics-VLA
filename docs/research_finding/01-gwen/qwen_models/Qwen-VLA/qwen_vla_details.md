@@ -1,21 +1,21 @@
-# Qwen-VLA Architecture, Training, and End-to-End Dataflow
+# Luồng dữ liệu, huấn luyện và kiến trúc Qwen-VLA từ đầu đến cuối
 
-## 1. Executive summary
+## 1. Tóm tắt
 
-Qwen-VLA is a **generalist vision-language-action model** that extends a pretrained
-Qwen3.5-4B vision-language model with a **1.15B-parameter Diffusion Transformer
+Qwen-VLA là **mô hình hành động-ngôn ngữ-tầm nhìn tổng quát** mở rộng quy trình huấn luyện trước
+Mô hình ngôn ngữ thị giác Qwen3.5-4B với Biến áp khuếch tán tham số **1,15B
 (DiT) action expert**.
 
-Its central design goal is broader than ordinary manipulation-focused VLAs:
+Mục tiêu thiết kế trung tâm của nó rộng hơn các VLA tập trung vào thao tác thông thường:
 
-- process images, video-like observation histories, and language;
-- retain vision-language understanding and text generation;
-- generate continuous manipulation actions;
-- generate navigation waypoint trajectories;
-- learn from human egocentric wrist and hand trajectories;
-- support multiple robot embodiments and control conventions with one set of weights.
+- xử lý hình ảnh, lịch sử quan sát giống như video và ngôn ngữ;
+- duy trì sự hiểu biết thị giác-ngôn ngữ và tạo văn bản;
+- tạo ra các hành động thao tác liên tục;
+- tạo quỹ đạo điểm điều hướng;
+- học hỏi từ quỹ đạo cổ tay và bàn tay ích kỷ của con người;
+- hỗ trợ nhiều phương án robot và các quy ước điều khiển với một bộ trọng lượng.
 
-The architecture can be summarized as:
+Kiến trúc có thể được tóm tắt như sau:
 
 ```text
 Images / observation history
@@ -35,58 +35,58 @@ Contextual hidden-state sequence
             clean continuous action or trajectory chunk
 ```
 
-The most important distinction is that Qwen-VLA **unifies the neural interface**,
-not the physical meaning of every action dimension. A navigation waypoint and a
-robot joint target remain physically different. Qwen-VLA places them into the same
-padded tensor format, identifies their control convention through text, and masks
-unused channels during training.
+Điểm khác biệt quan trọng nhất là Qwen-VLA **hợp nhất giao diện thần kinh**,
+không phải là ý nghĩa vật lý của mọi chiều hướng hành động. Một điểm định hướng và một
+mục tiêu chung của robot vẫn khác nhau về mặt vật lý. Qwen-VLA đặt chúng vào cùng một
+định dạng tensor đệm, xác định quy ước điều khiển của chúng thông qua văn bản và mặt nạ
+các kênh không được sử dụng trong quá trình huấn luyện.
 
-A second important correction is that the default Qwen-VLA framework **does not
-use proprioceptive robot state as an input**. The authors tested joint-angle state
-conditioning, found only marginal gains on RoboTwin, and retained the
-embodiment-aware text prompt as the sole platform-specific input. This differs from
-models such as π0, which explicitly process robot state.
+Điều chỉnh quan trọng thứ hai là khung Qwen-VLA mặc định **không
+sử dụng trạng thái robot có khả năng cảm thụ bản thân làm đầu vào**. Các tác giả đã thử nghiệm trạng thái góc khớp
+điều hòa, chỉ tìm thấy lợi ích cận biên trên RoboTwin và giữ lại
+Prompt văn bản nhận biết phương án làm đầu vào duy nhất dành riêng cho nền tảng. Điều này khác với
+các mô hình như π0, xử lý trạng thái robot một cách rõ ràng.
 
 ---
 
-## 2. What problem Qwen-VLA is solving
+## 2. Qwen-VLA đang giải quyết vấn đề gì
 
-A conventional VLA generally learns:
+Một VLA thông thường thường học:
 
 $$
 p_\theta(a_t \mid o_t, x)
 $$
 
-where:
+ở đâu:
 
-- $o_t$ is the current visual observation;
-- $x$ is the language instruction;
-- $a_t$ is the next robot action.
+- $o_t$ là quan sát trực quan hiện tại;
+- $x$ là hướng dẫn ngôn ngữ;
+- $a_t$ là hành động tiếp theo của robot.
 
-This formulation is often specialized to one task family, usually manipulation,
-and one limited family of action conventions.
+Công thức này thường chuyên biệt cho một nhóm nhiệm vụ, thường là thao tác,
+và một nhóm quy ước hành động hạn chế.
 
-Qwen-VLA instead targets a broader conditional sequence model:
+Thay vào đó, Qwen-VLA nhắm đến mô hình trình tự có điều kiện rộng hơn:
 
 $$
 p_\theta
 \left(
 y_{t:t+H-1}
-\mid
+\giữa
 o_t, x, e, z
-\right)
+\phải)
 $$
 
-where:
+ở đâu:
 
-- $o_t$ is visual context: one image, multiple cameras, video frames, or a history;
-- $x$ is the task instruction;
-- $e$ is the textual embodiment and control description;
-- $z$ is an optional task identifier;
-- $H$ is the prediction horizon;
-- $y_{t:t+H-1}$ is a future action or trajectory sequence.
+- $o_t$ là bối cảnh trực quan: một hình ảnh, nhiều camera, khung hình video hoặc lịch sử;
+- $x$ là lệnh nhiệm vụ;
+- $e$ là phương án văn bản và mô tả kiểm soát;
+- $z$ là mã định danh tác vụ tùy chọn;
+- $H$ là chân trời dự đoán;
+- $y_{t:t+H-1}$ là chuỗi hành động hoặc quỹ đạo trong tương lai.
 
-The output can therefore mean different things:
+Do đó, đầu ra có thể có nghĩa khác nhau:
 
 ```text
 Manipulation:
@@ -102,71 +102,71 @@ Trajectory-centric prediction:
     future spatial path of an embodied agent or other entity
 ```
 
-The shared abstraction is not “all outputs are robot joints.” It is:
+Khái niệm trừu tượng được chia sẻ không phải là “tất cả các đầu ra đều là khớp nối của robot”. Đó là:
 
-> Given visual-language context and an embodiment/control specification, predict a
-> sequence of physically meaningful real-valued vectors over time.
+> Với bối cảnh ngôn ngữ hình ảnh và đặc tả phương án/kiểm soát, hãy dự đoán
+> chuỗi các vectơ có giá trị thực có ý nghĩa vật lý theo thời gian.
 
 ---
 
-## 3. High-level architecture
+## 3. Kiến trúc cấp cao
 
 ```mermaid
 flowchart TD
-    IMG["Observed images or frame history"] --> VLM["Qwen3.5-4B VLM backbone"]
-    TXT["Instruction"] --> VLM
-    EMB["Embodiment-aware text prompt"] --> VLM
+    IMG["Hình ảnh được quan sát hoặc lịch sử khung hình"] --> VLM["Đường trục VLM Qwen3.5-4B"]
+    TXT["Hướng dẫn"] --> VLM
+    EMB["Prompt văn bản nhận biết hiện thân"] --> VLM
 
-    VLM --> H["Contextual VLM hidden states"]
+    VLM --> H["Trạng thái ẩn VLM theo ngữ cảnh"]
 
-    H --> LM["Language-model head"]
-    LM --> TEXT["Text response"]
+    H --> LM["Đầu mô hình ngôn ngữ"]
+    LM --> TEXT["Phản hồi văn bản"]
 
-    H --> PROJ["VLM-to-DiT projection"]
-    NOISE["Noisy action chunk"] --> AIN["Action input projection"]
-    TIME["Flow timestep"] --> TEMB["Timestep embedding"]
+    H --> PROJ["Phép chiếu VLM-to-DiT"]
+    NOISE["Đoạn action nhiễu"] --> AIN["Chiếu đầu vào hành động"]
+    TIME["Dấu thời gian dòng chảy"] --> TEMB["Nhúng dấu thời gian"]
 
-    PROJ --> DIT["16-block DiT action expert"]
+    PROJ --> DIT["Action expert DiT 16 khối"]
     AIN --> DIT
     TEMB --> DIT
 
-    DIT --> AOUT["Action output projection"]
-    AOUT --> FLOW["Predicted flow velocity"]
-    FLOW --> INT["A few Euler integration steps"]
-    INT --> ACTION["Continuous action or trajectory chunk"]
+    DIT --> AOUT["Chiếu đầu ra hành động"]
+    AOUT --> FLOW["Vận tốc dòng chảy dự đoán"]
+    FLOW --> INT["Một số bước tích hợp Euler"]
+    INT --> ACTION["Đoạn hành động hoặc quỹ đạo liên tục"]
 ```
 
-Qwen-VLA therefore has two conceptually different output paths:
+Do đó, Qwen-VLA có hai đường dẫn đầu ra khác nhau về mặt khái niệm:
 
-| Output path       | Output form                         | Training objective        |
+| Đường dẫn đầu ra | Mẫu đầu ra | Mục tiêu huấn luyện |
 | ----------------- | ----------------------------------- | ------------------------- |
-| VLM language head | Discrete text tokens                | Next-token cross-entropy  |
-| DiT action expert | Continuous action/trajectory tensor | Conditional flow matching |
+| Trưởng ngôn ngữ VLM | Token văn bản rời rạc | Entropy chéo token tiếp theo |
+| Action expert DiT | Tenor hành động/quỹ đạo liên tục | Khớp luồng có điều kiện |
 
-The VLM is responsible mainly for perception, grounding, instruction
-understanding, and contextual reasoning. The DiT specializes in precise,
-temporally coherent continuous action generation.
+VLM chịu trách nhiệm chủ yếu về nhận thức, nền tảng, hướng dẫn
+sự hiểu biết và lý luận theo ngữ cảnh. DiT chuyên về độ chính xác,
+tạo ra hành động liên tục mạch lạc theo thời gian.
 
 ---
 
-## 4. Qwen3.5 vision-language backbone
+## 4. Backbone thị giác-ngôn ngữ Qwen3.5
 
-Qwen-VLA uses **Qwen3.5-4B** as its cognitive backbone.
+Qwen-VLA sử dụng **Qwen3.5-4B** làm xương sống nhận thức.
 
-### 4.1 Input token construction
+### 4.1 Cấu trúc token đầu vào
 
-The backbone receives:
+Xương sống nhận được:
 
-- text tokens from the instruction;
-- text tokens from the embodiment-aware prompt;
-- visual tokens produced by the vision encoder;
-- potentially multiple images or temporal visual observations.
+- token văn bản từ hướng dẫn;
+- token văn bản từ prompt nhận biết phương án;
+- token trực quan được tạo bởi bộ mã hóa thị giác;
+- có thể có nhiều hình ảnh hoặc quan sát trực quan theo thời gian.
 
-Qwen3.5 is natively multimodal and uses early fusion. Visual embeddings are
-interleaved into the text-token stream rather than being processed by a completely
-separate downstream policy.
+Qwen3.5 vốn là đa phương thức và sử dụng phản ứng tổng hợp sớm. nhúng trực quan là
+được xen kẽ vào luồng token văn bản thay vì được xử lý hoàn toàn bởi một
+chính sách hạ nguồn riêng biệt.
 
-Conceptually:
+Về mặt khái niệm:
 
 ```text
 Embodiment tokens
@@ -180,9 +180,9 @@ One multimodal token sequence
 Qwen3.5 transformer
 ```
 
-### 4.2 What hidden states mean here
+### 4.2 Trạng thái ẩn ở đây có ý nghĩa gì
 
-For an input sequence of $N$ multimodal tokens, the VLM produces:
+Đối với chuỗi đầu vào của token đa phương thức $N$, VLM tạo ra:
 
 $$
 H_{\text{VLM}}
@@ -192,164 +192,164 @@ H_{\text{VLM}}
 \mathbb{R}^{N\times d_{\text{VLM}}}
 $$
 
-Each $h_i$ is a contextual representation. It is not an action and is not an
-ordinary decoded output token. It contains information gathered through the
-backbone about:
+Mỗi $h_i$ là một biểu diễn theo ngữ cảnh. Nó không phải là một hành động và không phải là một
+token đầu ra được giải mã thông thường. Nó chứa thông tin được thu thập thông qua
+xương sống về:
 
-- visual objects and their positions;
-- the referred target;
-- scene geometry;
-- instruction meaning;
-- embodiment and control convention;
-- relationships among all input tokens.
+- đối tượng trực quan và vị trí của chúng;
+- mục tiêu được đề cập;
+- hình học cảnh;
+- ý nghĩa hướng dẫn;
+- quy ước thực hiện và kiểm soát;
+- mối quan hệ giữa tất cả các token đầu vào.
 
-A learned linear layer maps these hidden states into the DiT channel width:
+Lớp tuyến tính đã học sẽ ánh xạ các trạng thái ẩn này vào độ rộng kênh DiT:
 
 $$
 C = H_{\text{VLM}}W_c
 $$
 
-where:
+ở đâu:
 
 $$
 C\in\mathbb{R}^{N\times d_{\text{DiT}}}
 $$
 
-These projected context tokens condition the action expert.
+Những token bối cảnh dự kiến này điều kiện hóa action expert.
 
 ---
 
-## 5. DiT flow-matching action expert
+## 5. Action expert DiT dùng flow matching
 
-## 5.1 Purpose
+## 5.1 Mục đích
 
-The action expert generates continuous action chunks rather than text-like action
-tokens.
+Action expert tạo ra các đoạn hành động liên tục thay vì hành động giống như văn bản
+token.
 
-The expert has approximately **1.15B parameters**, including:
+Chuyên gia có khoảng **1,15B thông số**, bao gồm:
 
-- 16 DiT blocks;
-- about 70.8M parameters per block;
-- roughly 1.13B parameters in the blocks collectively;
-- raw-action input and output projection MLPs;
-- VLM hidden-state projection;
-- timestep embedding;
-- output AdaLN modulation.
+- 16 khối DiT;
+- khoảng 70,8M tham số trên mỗi khối;
+- khoảng 1,13B tham số trong các khối;
+- MLP chiếu đầu vào và đầu ra hành động thô;
+- Phép chiếu trạng thái ẩn VLM;
+- nhúng dấu thời gian;
+- đầu ra điều chế AdaLN.
 
-The DiT is much more than a small linear policy head. It is a substantial
-Transformer dedicated to continuous trajectories.
+DiT không chỉ là một người đứng đầu chính sách tuyến tính nhỏ. Đó là một điều đáng kể
+Máy biến áp dành riêng cho quỹ đạo liên tục.
 
-## 5.2 Inputs to the action expert
+## 5.2 Đầu vào của action expert
 
-The action expert receives three main inputs:
+Action expert nhận được ba thông tin đầu vào chính:
 
-1. projected VLM context tokens;
-2. a noisy action chunk;
-3. a flow timestep $\tau$.
+1. token bối cảnh VLM dự kiến;
+2. một đoạn action nhiễu;
+3. bước thời gian của luồng $\tau$.
 
-Let the padded action tensor have shape:
+Hãy để tensor hành động đệm có hình dạng:
 
 $$
 Y_\tau \in \mathbb{R}^{H\times K}
 $$
 
-where:
+ở đâu:
 
-- $H$ is the common maximum action horizon;
-- $K$ is the common maximum number of action channels.
+- $H$ là chân trời tác động cực đại chung;
+- $K$ là số lượng kênh hành động tối đa phổ biến.
 
-An input MLP maps each raw action vector into the DiT hidden width:
+MLP đầu vào ánh xạ từng vectơ hành động thô vào chiều rộng ẩn DiT:
 
 $$
-A_\tau = \operatorname{MLP}_{\text{in}}(Y_\tau)
+A_\tau = \operatorname{MLP__{\text{in}}(Y_\tau)
 $$
 
-The model then joins context and action tokens into one sequence:
+Sau đó, mô hình sẽ kết hợp các token bối cảnh và hành động thành một chuỗi:
 
 $$
 S_\tau = [C;A_\tau]
 $$
 
-Unlike a simple cross-attention decoder, Qwen-VLA processes VLM context and noisy
-action tokens with **joint self-attention** inside a single-stream DiT.
+Không giống như bộ giải mã chú ý chéo đơn giản, Qwen-VLA xử lý bối cảnh VLM và nhiễu
+token hành động với **sự tự chú ý chung** bên trong DiT một luồng.
 
-## 5.3 DiT block
+## 5.3 Khối DiT
 
-A simplified block is:
+Một khối đơn giản hóa là:
 
 ```mermaid
 flowchart TD
-    X["Context and noisy-action token sequence"] --> N1["AdaLN conditioned on flow timestep"]
-    N1 --> SA["Joint self-attention"]
-    X --> R1["Residual add"]
+    X["Chuỗi token bối cảnh và action nhiễu"] --> N1["AdaLN được điều chỉnh theo dấu thời gian dòng chảy"]
+    N1 --> SA["Tự chú ý chung"]
+    X --> R1["Thêm dư"]
     SA --> R1
-    R1 --> N2["AdaLN conditioned on flow timestep"]
-    N2 --> FFN["Feed-forward MLP"]
-    R1 --> R2["Residual add"]
+    R1 --> N2["AdaLN được điều chỉnh theo dấu thời gian dòng chảy"]
+    N2 --> FFN["MLP chuyển tiếp nguồn cấp dữ liệu"]
+    R1 --> R2["Thêm dư"]
     FFN --> R2
-    R2 --> Y["Next DiT block"]
+    R2 --> Y["Khối DiT tiếp theo"]
 ```
 
-The expert uses:
+Chuyên gia sử dụng:
 
-- joint self-attention;
-- feed-forward MLP layers;
-- adaptive layer normalization;
-- timestep conditioning;
-- multi-section RoPE aligned with the backbone.
+- tự chú ý chung;
+- các lớp MLP chuyển tiếp nguồn cấp dữ liệu;
+- chuẩn hóa lớp thích ứng;
+- điều hòa dấu thời gian;
+- RoPE nhiều phần thẳng hàng với đường trục.
 
-### AdaLN (Adaptive Layer Normalization) timestep conditioning
+### Điều kiện hóa timestep bằng AdaLN (Chuẩn hóa lớp thích ứng)
 
-The denoising problem changes with $\tau$. At high noise, the network must infer
-the broad trajectory structure. Near the clean endpoint, it must refine details.
-AdaLN transforms the timestep embedding into modulation parameters that alter
-normalization within each block.
+Vấn đề khử nhiễu thay đổi với $\tau$. Ở mức nhiễu cao, mạng phải suy ra
+cấu trúc quỹ đạo rộng. Gần điểm cuối sạch, nó phải tinh chỉnh chi tiết.
+AdaLN biến đổi việc nhúng dấu thời gian vào các tham số điều chế làm thay đổi
+chuẩn hóa trong mỗi khối.
 
-A simplified representation is:
+Một biểu diễn đơn giản hóa là:
 
 $$
 \operatorname{AdaLN}(x,\tau)
 =
 \gamma(\tau)
 \odot
-\operatorname{Norm}(x)
+\operatorname{Định mức}(x)
 +
 \beta(\tau)
 $$
 
-The actual architecture can also use timestep-dependent gates for the residual
-branches. This tells every DiT block which stage of the flow process it is
-currently solving.
+Kiến trúc thực tế cũng có thể sử dụng các cổng phụ thuộc vào dấu thời gian cho phần dư
+chi nhánh. Điều này cho mọi khối DiT biết nó đang ở giai đoạn nào của quá trình xử lý dòng chảy.
+hiện đang giải quyết.
 
-## 5.4 Output
+## 5.4 Đầu ra
 
-The DiT predicts a velocity field:
+DiT dự đoán trường vận tốc:
 
 $$
 v_\theta
 \left(
 Y_\tau,\tau
-\mid
+\giữa
 o,x,e,z
-\right)
+\phải)
 \in
 \mathbb{R}^{H\times K}
 $$
 
-This is not directly the final action. At inference, the model begins from random
-noise and integrates the predicted velocity field for a small number of Euler
-steps until a clean action chunk is obtained.
+Đây không phải là hành động trực tiếp cuối cùng. Khi suy luận, mô hình bắt đầu từ ngẫu nhiên
+nhiễu và tích phân trường vận tốc dự đoán cho một số lượng nhỏ Euler
+các bước cho đến khi thu được một đoạn hành động rõ ràng.
 
 ---
 
-## 6. Unified action-and-trajectory representation
+## 6. Biểu diễn hành động và quỹ đạo thống nhất
 
-## 6.1 What “unified” means
+## 6.1 “Thống nhất” nghĩa là gì
 
-Qwen-VLA does **not** convert all datasets into one universal physical action
-definition.
+Qwen-VLA **không** chuyển đổi tất cả các tập dữ liệu thành một hành động vật lý chung
+định nghĩa.
 
-It preserves each dataset's native control semantics, such as:
+Nó bảo tồn ngữ nghĩa kiểm soát gốc của mỗi tập dữ liệu, chẳng hạn như:
 
 ```text
 Dataset A:
@@ -368,52 +368,52 @@ Dataset E:
     human wrist SE(3) motion + hand eigengrasps
 ```
 
-It unifies only:
+Nó chỉ thống nhất:
 
-- tensor rank and maximum shape;
-- channel placement convention;
-- padding;
-- validity masking;
-- neural decoder;
-- flow-matching training interface.
+- cấp tensor và hình dạng cực đại;
+- quy ước vị trí kênh;
+- đệm;
+- che giấu tính hợp lệ;
+- bộ giải mã thần kinh;
+- giao diện huấn luyện phù hợp với dòng chảy.
 
-## 6.2 Common padded tensor
+## 6.2 Tensor đệm dùng chung
 
-Every target is represented as:
+Mỗi mục tiêu được thể hiện dưới dạng:
 
 $$
 Y_0\in\mathbb{R}^{H\times K}
 $$
 
-A task that uses only $H_{\text{task}}$ timesteps and $c$ action dimensions fills
-the leading submatrix:
+Một tác vụ chỉ sử dụng dấu thời gian $H_{\text{task}}$ và kích thước hành động $c$ sẽ lấp đầy
+ma trận con hàng đầu:
 
 $$
 Y_0[0:H_{\text{task}},\,0:c]
 $$
 
-The rest is zero-padded.
+Phần còn lại là không đệm.
 
-A binary mask specifies valid entries:
+Mặt nạ nhị phân chỉ định các mục nhập hợp lệ:
 
 $$
 M\in\{0,1\}^{H\times K}
 $$
 
-with:
+với:
 
 $$
 M_{h,k}
 =
-\begin{cases}
+\bắt đầu{trường hợp}
 1, & h < H_{\text{task}}\ \text{and}\ k<c \\
-0, & \text{otherwise}
-\end{cases}
+0, & \text{others}
+\end{trường hợp}
 $$
 
-Example with $H=4$ and $K=8$:
+Ví dụ với $H=4$ và $K=8$:
 
-### Navigation sample using three channels
+### Mẫu điều hướng sử dụng ba kênh
 
 ```text
 Target Y:
@@ -435,7 +435,7 @@ Mask M:
 ]
 ```
 
-### Manipulation sample using seven channels
+### Mẫu thao tác sử dụng bảy kênh
 
 ```text
 [
@@ -445,18 +445,18 @@ Mask M:
 ]
 ```
 
-The mask prevents padded values from contributing to the loss.
+Mặt nạ ngăn chặn các giá trị bị đệm góp phần gây ra sự mất mát.
 
-## 6.3 Dataset-specific normalization
+## 6.3 Chuẩn hóa dành riêng cho tập dữ liệu
 
-Because a joint angle, a gripper aperture, and a navigation displacement have
-different units and scales, each dataset retains an appropriate normalization
-scheme.
+Bởi vì góc khớp, khẩu độ kẹp và chuyển vị điều hướng có
+các đơn vị và tỷ lệ khác nhau, mỗi tập dữ liệu giữ lại mức chuẩn hóa thích hợp
+kế hoạch.
 
-Conceptually:
+Về mặt khái niệm:
 
 $$
-\tilde{y}_{h,k}
+\tilde{y__{h,k}
 =
 \frac{
 y_{h,k}-\mu_{\mathcal{D},k}
@@ -465,24 +465,24 @@ y_{h,k}-\mu_{\mathcal{D},k}
 }
 $$
 
-or an equivalent robust normalization.
+hoặc một sự chuẩn hóa mạnh mẽ tương đương.
 
-The model is trained on normalized values. At inference, the predicted channels
-are denormalized using the target platform's dataset/control statistics before
-being passed to the controller.
+Mô hình được huấn luyện trên các giá trị chuẩn hóa. Khi suy luận, các kênh được dự đoán
+không được chuẩn hóa bằng cách sử dụng tập dữ liệu/thống kê kiểm soát của nền tảng đích trước đó
+được chuyển đến bộ điều khiển.
 
-This is essential. Merely padding different raw units into one tensor would create
-poorly balanced gradients and ambiguous numerical scales.
+Điều này là cần thiết. Chỉ cần đệm các đơn vị thô khác nhau vào một tensor sẽ tạo ra
+độ dốc cân bằng kém và thang số không rõ ràng.
 
 ---
 
-## 7. Action types handled by Qwen-VLA
+## 7. Các loại hành động được xử lý bởi Qwen-VLA
 
-## 7.1 Manipulation actions
+## 7.1 Hành động thao tác
 
-The manipulation data can include:
+Dữ liệu thao tác có thể bao gồm:
 
-### Delta end-effector control
+### Điều khiển end-effector dạng delta
 
 $$
 a_t =
@@ -493,7 +493,7 @@ g
 ]
 $$
 
-### Quaternion-based end-effector control
+### Điều khiển end-effector bằng quaternion
 
 $$
 a_t =
@@ -504,7 +504,7 @@ g
 ]
 $$
 
-### Absolute joint-position control
+### Kiểm soát vị trí khớp tuyệt đối
 
 $$
 a_t =
@@ -513,7 +513,7 @@ q_1,q_2,\ldots,q_n,g
 ]
 $$
 
-### Dexterous-hand control
+### Điều khiển bàn tay khéo léo
 
 $$
 a_t =
@@ -525,7 +525,7 @@ q^{\text{index}},
 ]
 $$
 
-### Bimanual control
+### Điều khiển hai tay
 
 $$
 a_t =
@@ -537,9 +537,9 @@ g_t^{\text{right}}
 ]
 $$
 
-## 7.2 Navigation trajectories
+## 7.2 Quỹ đạo điều hướng
 
-Navigation uses relative waypoints:
+Điều hướng sử dụng các điểm tham chiếu tương đối:
 
 $$
 a_h =
@@ -548,11 +548,11 @@ a_h =
 ]
 $$
 
-A chunk is:
+Một đoạn là:
 
 $$
 Y =
-\begin{bmatrix}
+\bắt đầu{bmatrix}
 \Delta x_1 & \Delta y_1 & \Delta\theta_1 \\
 \Delta x_2 & \Delta y_2 & \Delta\theta_2 \\
 \vdots & \vdots & \vdots \\
@@ -560,46 +560,46 @@ Y =
 \end{bmatrix}
 $$
 
-A downstream navigation controller converts this short trajectory into executable
-wheel, steering, or locomotion commands.
+Bộ điều khiển điều hướng xuôi dòng chuyển đổi quỹ đạo ngắn này thành có thể thực thi được
+các lệnh về bánh xe, lái hoặc chuyển động.
 
-## 7.3 Human egocentric action representation
+## 7.3 Biểu diễn hành động egocentric của con người
 
-For each hand, Qwen-VLA represents future wrist motion relative to the initial
-wrist frame:
+Đối với mỗi bàn tay, Qwen-VLA thể hiện chuyển động của cổ tay trong tương lai so với ban đầu
+khung cổ tay:
 
-- three-dimensional translation;
-- axis-angle rotation with three dimensions;
-- ten PCA hand-articulation coefficients called eigengrasps.
+- dịch ba chiều;
+- xoay góc trục với ba chiều;
+- 10 hệ số khớp nối tay PCA được gọi là eigengrasps.
 
-Per hand:
+Mỗi tay:
 
 $$
-6\ \text{wrist dimensions}
+6\ \text{kích thước cổ tay}
 +
-10\ \text{hand dimensions}
+10\ \text{kích thước bàn tay}
 =
 16
 $$
 
-For two hands:
+Đối với hai tay:
 
 $$
 16\times2=32
 $$
 
-Thus each human egocentric timestep contains 32 action dimensions.
+Do đó, mỗi dấu thời gian lấy cái tôi làm trung tâm của con người chứa đựng 32 chiều hành động.
 
-These targets are not immediately robot motor commands. They provide a broad
-human-manipulation prior and can support later robot transfer or retargeting.
+Những mục tiêu này không phải là lệnh của động cơ robot ngay lập tức. Họ cung cấp một cách rộng rãi
+thao tác của con người trước và có thể hỗ trợ việc chuyển giao hoặc nhắm mục tiêu lại robot sau này.
 
 ---
 
-## 8. Embodiment-aware prompt conditioning
+## 8. Điều kiện hóa prompt theo embodiment
 
-## 8.1 Prompt template
+## 8.1 Mẫu prompt
 
-The report specifies a prompt of the following form:
+Báo cáo chỉ định prompt có dạng sau:
 
 ```text
 The robot is {robot_tag} with {single arm / dual arms}
@@ -609,23 +609,23 @@ Please predict the next {chunk_size} control actions to execute
 the following task: {instruction}.
 ```
 
-The prompt communicates:
+Prompt truyền đạt:
 
-- robot/platform identity;
-- number and configuration of arms;
-- presence of a waist;
-- presence of a mobile base;
-- control frequency;
-- prediction horizon;
-- task instruction;
-- implicitly, the dataset/platform control convention learned during training.
+- nhận dạng robot/nền tảng;
+- số lượng và cấu hình của cánh tay;
+- sự hiện diện của thắt lưng;
+- sự hiện diện của một căn cứ di động;
+- tần số điều khiển;
+- chân trời dự đoán;
+- hướng dẫn nhiệm vụ;
+- ngầm định, quy ước kiểm soát tập dữ liệu/nền tảng đã học được trong quá trình huấn luyện.
 
-## 8.2 What it actually does
+## 8.2 Thực tế nó làm gì
 
-The prompt does not mechanically define kinematics like a URDF file. It does not
-contain joint limits, link lengths, or a controller implementation.
+Prompt không xác định động học một cách máy móc như tệp URDF. Nó không
+chứa các giới hạn chung, độ dài liên kết hoặc triển khai bộ điều khiển.
 
-Instead, repeated training examples teach the model an association:
+Thay vào đó, các ví dụ huấn luyện lặp đi lặp lại sẽ dạy cho mô hình một sự liên kết:
 
 ```text
 Embodiment/control prompt
@@ -637,41 +637,41 @@ Action dimensions and normalization
 Typical dynamics and motion patterns
 ```
 
-For example:
+Ví dụ:
 
 ```text
 "dual-arm ALOHA, 50 Hz, predict 50 actions"
 ```
 
-selects a different learned conditional action distribution from:
+chọn một phân phối hành động có điều kiện đã học khác từ:
 
 ```text
 "navigation agent, 5 Hz, predict 8 waypoints"
 ```
 
-The prompt is similar to a task or language tag in multitask learning, but carries
-more detailed control information.
+Prompt tương tự như một nhiệm vụ hoặc thẻ ngôn ngữ trong học tập đa nhiệm, nhưng mang theo
+thông tin điều khiển chi tiết hơn.
 
-## 8.3 What it does not guarantee
+## 8.3 Điều gì không đảm bảo
 
-Changing the prompt to a completely unseen robot name does not automatically make
-the model understand that robot.
+Việc thay đổi prompt thành tên robot hoàn toàn không được nhìn thấy sẽ không tự động thực hiện
+người mẫu hiểu được robot đó.
 
-Generalization still depends on:
+Khái quát hóa vẫn phụ thuộc vào:
 
-- whether similar embodiments appeared in training;
-- whether the new action channels are compatible;
-- whether normalization and decoding are defined;
-- whether the visual appearance and dynamics are sufficiently similar;
-- whether the downstream controller can execute the predicted convention.
+- liệu các phương án tương tự có xuất hiện trong quá trình huấn luyện hay không;
+- liệu các kênh hành động mới có tương thích hay không;
+- liệu chuẩn hóa và giải mã có được xác định hay không;
+- liệu hình thức trực quan và động lực học có đủ giống nhau hay không;
+- liệu bộ điều khiển xuôi dòng có thể thực hiện quy ước dự đoán hay không.
 
-The text prompt is a conditioning interface, not a replacement for robot data.
+Prompt văn bản là giao diện điều hòa, không phải là sự thay thế cho dữ liệu robot.
 
 ---
 
-## 9. Important point: default Qwen-VLA does not use robot state
+## 9. Điểm quan trọng: Qwen-VLA mặc định không sử dụng trạng thái robot
 
-Many modern action-expert VLAs explicitly feed proprioception such as:
+Nhiều VLA action expert hiện đại cung cấp khả năng nhận thức quyền sở hữu một cách rõ ràng như:
 
 $$
 s_t =
@@ -680,26 +680,26 @@ q_t,\dot q_t,g_t
 ]
 $$
 
-Qwen-VLA evaluated two state-injection approaches:
+Qwen-VLA đã đánh giá hai phương pháp tiêm trạng thái:
 
-1. encoding state in the VLM prompt;
-2. injecting state directly into the DiT.
+1. trạng thái mã hóa trong dấu nhắc VLM;
+2. tiêm trạng thái trực tiếp vào DiT.
 
-On RoboTwin-2.0, the reported results were:
+Trên RoboTwin-2.0, kết quả được báo cáo là:
 
-| Conditioning        | RoboTwin-Easy | RoboTwin-Hard |
+| Điều hòa | RoboTwin-Dễ dàng | RoboTwin-Hard |
 | ------------------- | ------------: | ------------: |
-| No state            |          88.7 |          87.4 |
-| State in VLM prompt |          89.3 |          88.7 |
-| State in DiT        |          89.4 |          88.3 |
+| Không có trạng thái |          88,7 |          87,4 |
+| Trạng thái trong dấu nhắc VLM |          89,3 |          88,7 |
+| Bang trong DiT |          89,4 |          88,3 |
 
-The improvement was small. The authors attribute this to:
+Sự cải thiện là nhỏ. Các tác giả gán điều này cho:
 
-- multi-view images already exposing the current robot configuration;
-- relative action prediction reducing dependence on an absolute state reference;
-- the engineering cost of maintaining many embodiment-specific state interfaces.
+- hình ảnh nhiều chế độ xem đã hiển thị cấu hình robot hiện tại;
+- dự đoán hành động tương đối làm giảm sự phụ thuộc vào tham chiếu trạng thái tuyệt đối;
+- chi phí kỹ thuật để duy trì nhiều giao diện trạng thái theo phương án cụ thể.
 
-Therefore, the default model keeps:
+Do đó, mô hình mặc định giữ:
 
 ```text
 Images
@@ -709,35 +709,35 @@ Instruction
 Embodiment-aware text prompt
 ```
 
-and does not require:
+và không yêu cầu:
 
 ```text
 Joint-angle state vector
 ```
 
-This is a design decision, not a claim that proprioception is generally useless.
-State would likely matter more when:
+Đây là một quyết định thiết kế, không phải là khẳng định rằng khả năng cảm nhận bản thể nói chung là vô dụng.
+Bang có thể sẽ quan trọng hơn khi:
 
-- the robot is partially hidden;
-- absolute joint actions are predicted;
-- contact forces matter;
-- velocity and dynamic state are important;
-- high-speed closed-loop control is required;
-- vision cannot infer the complete configuration.
+- robot bị ẩn một phần;
+- hành động chung tuyệt đối được dự đoán;
+- lực tiếp xúc quan trọng;
+- vận tốc và trạng thái động là quan trọng;
+- yêu cầu điều khiển vòng kín tốc độ cao;
+- tầm nhìn không thể suy ra cấu hình hoàn chỉnh.
 
 ---
 
-## 10. Flow-matching training objective
+## 10. Mục tiêu huấn luyện flow matching
 
-## 10.1 Interpolating clean actions and noise
+## 10.1 Nội suy các hành động sạch và nhiễu
 
-Let:
+Hãy:
 
-- $Y_0$ be the clean normalized target action;
-- $Y_1\sim\mathcal{N}(0,I)$ be Gaussian noise;
-- $\tau\in[0,1]$ be the flow timestep.
+- $Y_0$ là hành động mục tiêu chuẩn hóa rõ ràng;
+- $Y_1\sim\mathcal{N}(0,I)$ là nhiễu Gaussian;
+- $\tau\in[0,1]$ là dấu thời gian của luồng.
 
-Qwen-VLA constructs:
+Cấu trúc Qwen-VLA:
 
 $$
 Y_\tau
@@ -745,14 +745,14 @@ Y_\tau
 (1-\tau)Y_0+\tau Y_1
 $$
 
-So:
+Vì vậy:
 
 ```text
 τ = 0 → clean action
 τ = 1 → pure noise
 ```
 
-The target velocity along this linear path is:
+Vận tốc mục tiêu dọc theo đường tuyến tính này là:
 
 $$
 \frac{dY_\tau}{d\tau}
@@ -760,22 +760,22 @@ $$
 Y_1-Y_0
 $$
 
-The DiT learns:
+DiT học được:
 
 $$
 v_\theta
 \left(
 Y_\tau,\tau
-\mid
+\giữa
 o,x,e,z
-\right)
-\approx
+\phải)
+\xấp xỉ
 Y_1-Y_0
 $$
 
-## 10.2 Masked per-channel action loss
+## 10.2 Action loss có mask theo từng kênh
 
-For active channel $k$, the paper computes a timestep-masked mean squared error:
+Đối với kênh hoạt động $k$, bài viết tính toán lỗi bình phương trung bình được che dấu dấu thời gian:
 
 $$
 \ell_k
@@ -793,94 +793,94 @@ v_\theta(Y_\tau,\tau\mid o,x,e,z)_{h,k}
 }
 $$
 
-It then averages uniformly across the $c$ active channels:
+Sau đó, nó tính trung bình đồng đều trên các kênh hoạt động $c$:
 
 $$
-\mathcal{L}_{\text{act}}
+\mathcal{L__{\text{act}}
 =
 \mathbb{E}
 \left[
 \frac{1}{c}
 \sum_{k=0}^{c-1}
 \ell_k
-\right]
+\phải]
 $$
 
-This two-level averaging matters because otherwise:
+Việc tính trung bình hai cấp độ này rất quan trọng vì nếu không thì:
 
-- padded entries could affect the gradient;
-- long-horizon samples could dominate;
-- embodiments with more action channels could contribute more loss solely because
-  they have higher dimensionality.
+- các mục được đệm có thể ảnh hưởng đến độ dốc;
+- các mẫu có tầm nhìn dài có thể chiếm ưu thế;
+- các phương án có nhiều kênh hành động hơn có thể gây ra nhiều tổn thất hơn chỉ vì
+  chúng có chiều cao hơn.
 
-## 10.3 Vision-language objective
+## 10.3 Mục tiêu thị giác-ngôn ngữ
 
-For ordinary vision-language samples, the backbone retains standard next-token
-training:
+Đối với các mẫu thị giác-ngôn ngữ thông thường, xương sống giữ lại token tiếp theo tiêu chuẩn
+huấn luyện:
 
 $$
-\mathcal{L}_{\text{vl}}
+\mathcal{L__{\text{vl}}
 =
 -\sum_i
 \log
 p_\theta(w_i\mid w_{<i},o)
 $$
 
-This is applied to data such as:
+Điều này được áp dụng cho dữ liệu như:
 
-- general vision-language supervision;
-- spatial grounding;
-- embodied action captions;
-- autonomous-driving VQA.
+- giám sát thị giác-ngôn ngữ chung;
+- nối đất không gian;
+- chú thích hành động thể hiện;
+- VQA lái xe tự động.
 
-Its purpose is to preserve visual perception, language grounding, and reasoning
-while large amounts of action training modify the model.
+Mục đích của nó là bảo tồn nhận thức trực quan, nền tảng ngôn ngữ và lý luận
+trong khi một lượng lớn huấn luyện hành động sửa đổi mô hình.
 
-## 10.4 Joint objective
+## 10.4 Mục tiêu kết hợp
 
-The total objective is:
+Mục tiêu tổng thể là:
 
 $$
 \mathcal{L}
 =
 \lambda_{\text{act}}
-\mathcal{L}_{\text{act}}
+\mathcal{L__{\text{act}}
 +
 \lambda_{\text{vl}}
-\mathcal{L}_{\text{vl}}
+\mathcal{L__{\text{vl}}
 $$
 
-The coefficients are selected to balance gradient magnitudes between the action
-and language objectives.
+Các hệ số được chọn để cân bằng độ lớn gradient giữa tác động
+và mục tiêu ngôn ngữ.
 
 ---
 
-## 11. Four-stage training recipe
+## 11. Quy trình huấn luyện bốn giai đoạn
 
-Training the whole architecture jointly from the beginning is difficult because:
+Việc huấn luyện toàn bộ kiến trúc cùng nhau ngay từ đầu là khó khăn vì:
 
-- the Qwen3.5 VLM is already pretrained;
-- the DiT action expert begins randomly initialized;
-- a fresh DiT initially produces noisy, uninformative gradients;
-- image encoding is expensive;
-- the decoder must simultaneously learn action structure, flow dynamics,
-  embodiment conditioning, and visual grounding.
+- Qwen3.5 VLM đã được huấn luyện trước;
+- action expert DiT bắt đầu được khởi tạo ngẫu nhiên;
+- một DiT mới ban đầu tạo ra những gradient ồn ào, thiếu thông tin;
+- mã hóa hình ảnh đắt tiền;
+- bộ giải mã phải đồng thời tìm hiểu cấu trúc hoạt động, động lực học dòng chảy,
+  điều hòa phương án và nền tảng thị giác.
 
-Qwen-VLA separates these problems into four stages.
+Qwen-VLA chia các vấn đề này thành bốn giai đoạn.
 
 ```mermaid
 flowchart LR
-    PRE["Pretrained Qwen3.5 VLM<br/>Random DiT"] --> T2A["Stage I<br/>Text-to-Action"]
-    T2A --> CPT["Stage II<br/>Continued Pretraining"]
-    CPT --> SFT1["Stage III-A<br/>Multitask SFT"]
-    CPT --> SFT2["Stage III-B<br/>Real-robot SFT"]
-    SFT1 --> RL["Stage IV<br/>RL in SimplerEnv"]
-    RL --> INST["Qwen-VLA-Instruct"]
+    PRE["Qwen3.5 đã được huấn luyện trước VLM<br/>Random DiT"] --> T2A["Giai đoạn I<br/>Chuyển văn bản thành hành động"]
+    T2A --> CPT["Giai đoạn II<br/>Tiếp tục huấn luyện trước"]
+    CPT --> SFT1["Giai đoạn III-A<br/>SFT đa nhiệm"]
+    CPT --> SFT2["Giai đoạn III-B<br/>SFT robot thực"]
+    SFT1 --> RL["Giai đoạn IV<br/>RL trong SimplerEnv"]
+    RL --> INST["Qwen-VLA-Hướng dẫn"]
 ```
 
-## 11.1 Stage I: Text-to-Action DiT pretraining
+## 11.1 Giai đoạn I: Huấn luyện trước DiT chuyển văn bản thành hành động
 
-### Frozen and trainable parts
+### Các thành phần được đóng băng và có thể huấn luyện được
 
 ```text
 Qwen3.5 VLM: frozen
@@ -888,7 +888,7 @@ DiT action expert: trainable
 Images: withheld
 ```
 
-The inputs are:
+Các đầu vào là:
 
 ```text
 Task instruction
@@ -900,9 +900,9 @@ Noisy target action
 Flow timestep
 ```
 
-The target is the clean action trajectory through the flow-matching loss.
+Mục tiêu là quỹ đạo hành động rõ ràng thông qua tổn thất phù hợp với dòng chảy.
 
-The paper interprets this as **structured decompression**:
+Bài viết giải thích điều này là **giải nén có cấu trúc**:
 
 ```text
 Compact language:
@@ -915,26 +915,26 @@ High-dimensional trajectory:
     hundreds or thousands of continuous values
 ```
 
-This stage teaches the DiT:
+Giai đoạn này dạy DiT:
 
-- the overall geometry of action distributions;
-- temporal coherence across action chunks;
-- how task language selects a behavior family;
-- how embodiment prompts change the motor parameterization;
-- how to solve the flow-matching denoising problem.
+- hình học tổng thể của phân phối hành động;
+- sự gắn kết về mặt thời gian giữa các khối hành động;
+- cách ngôn ngữ tác vụ chọn một họ hành vi;
+- cách gợi ý của phương án thay đổi tham số động cơ;
+- làm thế nào để giải quyết vấn đề khử nhiễu phù hợp với dòng chảy.
 
-Because images are absent, the DiT cannot take a visual shortcut. It first learns a
-language-indexed action prior.
+Vì không có hình ảnh nên DiT không thể sử dụng lối tắt trực quan. Đầu tiên nó học một
+hành động được lập chỉ mục ngôn ngữ trước đó.
 
-### Limitation of T2A alone
+### Giới hạn riêng của T2A
 
-Text alone cannot determine the exact trajectory in a specific scene. For example,
-“pick up the cup” does not tell the policy where the cup is. T2A learns the broad
-shape and semantics of the behavior, not scene-grounded control.
+Chỉ văn bản thôi thì không thể xác định quỹ đạo chính xác trong một cảnh cụ thể. Ví dụ,
+“Nhấc cốc lên” không cho chính sách biết cốc ở đâu. T2A học rộng
+hình dạng và ngữ nghĩa của hành vi chứ không phải sự kiểm soát dựa trên bối cảnh.
 
-## 11.2 Stage II: multimodal continued pretraining
+## 11.2 Giai đoạn II: tiếp tục huấn luyện trước đa phương thức
 
-The model then unfreezes both modules:
+Mô hình sau đó giải phóng cả hai mô-đun:
 
 ```text
 Qwen3.5 VLM: trainable
@@ -942,7 +942,7 @@ DiT action expert: trainable
 Images: included
 ```
 
-The main purpose is visual grounding:
+Mục đích chính là nền tảng trực quan:
 
 ```text
 Language-indexed action prior
@@ -952,96 +952,96 @@ Actual scene observations
 Scene-specific executable trajectory
 ```
 
-The training mixture contains heterogeneous action and vision-language examples.
-Within a batch, samples from different task families are mixed according to fixed
-sampling ratios.
+Hỗn hợp huấn luyện chứa các ví dụ về hành động và thị giác-ngôn ngữ không đồng nhất.
+Trong một đợt, các mẫu từ các nhóm nhiệm vụ khác nhau được trộn theo các nguyên tắc cố định.
+tỷ lệ lấy mẫu.
 
-This stage teaches:
+Giai đoạn này dạy:
 
-- object and goal grounding;
-- spatial-to-kinematic mapping;
-- cross-embodiment transfer;
-- navigation trajectories;
-- robot and human motion priors;
-- continued vision-language capabilities.
+- nền tảng đối tượng và mục tiêu;
+- lập bản đồ không gian và động học;
+- chuyển giao chéo phương án;
+- quỹ đạo điều hướng;
+- ưu tiên chuyển động của robot và con người;
+- tiếp tục khả năng thị giác-ngôn ngữ.
 
-The resulting checkpoint is Qwen-VLA-Base or the base from which later
-specialization proceeds.
+Điểm kiểm tra kết quả là Qwen-VLA-Base hoặc cơ sở mà sau này
+chuyên môn hóa tiến hành.
 
-## 11.3 Stage III: supervised fine-tuning
+## 11.3 Giai đoạn III: tinh chỉnh có giám sát
 
-SFT starts from the continued-pretraining checkpoint and splits into two tracks.
+SFT bắt đầu từ điểm kiểm tra tiếp tục huấn luyện trước và chia thành hai đường.
 
-### Multitask SFT
+### SFT đa nhiệm
 
-It jointly uses curated examples from:
+Nó cùng sử dụng các ví dụ được tuyển chọn từ:
 
-- manipulation;
-- navigation;
-- visual question answering;
-- spatial grounding;
-- other embodied tasks.
+- thao túng;
+- điều hướng;
+- trả lời câu hỏi trực quan;
+- nối đất không gian;
+- các nhiệm vụ thể hiện khác.
 
-The data are sampled with task and embodiment balancing so a dominant dataset does
-not overwhelm smaller task families.
+Dữ liệu được lấy mẫu với sự cân bằng giữa nhiệm vụ và phương án để một tập dữ liệu vượt trội thực hiện
+không áp đảo các nhóm nhiệm vụ nhỏ hơn.
 
-### Real-robot SFT
+### SFT robot thật
 
-A separate branch fine-tunes on in-house teleoperation data for physical robot
-deployment.
+Một nhánh riêng biệt tinh chỉnh dữ liệu vận hành từ xa nội bộ cho robot vật lý
+triển khai.
 
-This tests whether broad cross-task pretraining transfers to real hardware with
-relatively targeted data.
+Điều này kiểm tra xem quá trình huấn luyện trước đa tác vụ có chuyển sang phần cứng thực với
+dữ liệu được nhắm mục tiêu tương đối.
 
-## 11.4 Stage IV: reinforcement learning
+## 11.4 Giai đoạn IV: học tăng cường
 
-SFT maximizes imitation likelihood, but high demonstration likelihood does not
-directly optimize successful closed-loop execution.
+SFT tối đa hóa khả năng bắt chước, nhưng khả năng trình diễn cao thì không
+trực tiếp tối ưu hóa việc thực hiện vòng kín thành công.
 
-Qwen-VLA therefore applies reinforcement learning starting from the multitask SFT
-checkpoint.
+Do đó, Qwen-VLA áp dụng học tăng cường bắt đầu từ SFT đa nhiệm
+trạm kiểm soát.
 
-The reported RL setup uses:
+Thiết lập RL được báo cáo sử dụng:
 
-- one simulation environment: SimplerEnv;
-- sparse binary task-success rewards;
-- executed closed-loop trajectories.
+- một môi trường mô phỏng: SimplerEnv;
+- phần thưởng thành công nhiệm vụ nhị phân thưa thớt;
+- thực hiện quỹ đạo vòng kín.
 
-Conceptually:
+Về mặt khái niệm:
 
 $$
 \max_\theta
-\mathbb{E}_{\pi_\theta}
+\mathbb{E__{\pi_\theta}
 [
-R(\text{executed trajectory})
+R(\text{quỹ đạo đã thực hiện})
 ]
 $$
 
-The final checkpoint is Qwen-VLA-Instruct.
+Điểm kiểm tra cuối cùng là Qwen-VLA-Instruct.
 
-A notable experimental choice is that RL is narrow—one simulated environment—while
-evaluation spans other environments and tasks. The authors use this to test whether
-success-oriented policy refinement transfers beyond the RL environment.
+Một lựa chọn thử nghiệm đáng chú ý là RL hẹp—một môi trường mô phỏng—trong khi
+đánh giá kéo dài các môi trường và nhiệm vụ khác. Các tác giả sử dụng điều này để kiểm tra xem liệu
+chuyển giao sàng lọc chính sách theo định hướng thành công ngoài môi trường RL.
 
 ---
 
-## 12. Pretraining data mixture
+## 12. Hỗn hợp dữ liệu huấn luyện trước
 
-The reported continued-pretraining mixture is:
+Hỗn hợp tiếp tục huấn luyện trước được báo cáo là:
 
-| Data family                           | Sampling proportion |
+| Họ dữ liệu | Tỷ lệ lấy mẫu |
 | ------------------------------------- | ------------------: |
-| Robot manipulation trajectories       |               74.2% |
-| Human egocentric trajectories         |                6.0% |
-| Navigation trajectories               |                7.5% |
-| Synthetic simulation trajectories     |                3.7% |
-| General vision-language data          |                3.4% |
-| Spatial grounding data                |                2.5% |
-| Autonomous-driving VQA                |                2.4% |
-| Fine-grained embodied action captions |                0.2% |
-| **Total**                       |    **100.0%** |
+| Quỹ đạo thao tác của robot |               74,2% |
+| Quỹ đạo ích kỷ của con người |                6,0% |
+| Quỹ đạo điều hướng |                7,5% |
+| Quỹ đạo mô phỏng tổng hợp |                3,7% |
+| Dữ liệu thị giác-ngôn ngữ chung |                3,4% |
+| Dữ liệu nối đất không gian |                2,5% |
+| VQA lái xe tự hành |                2,4% |
+| Chú thích hành động được thể hiện chi tiết |                0,2% |
+| **Tổng cộng** |    **100,0%** |
 
-The mixture combines several kinds of supervision:
+Hỗn hợp kết hợp một số loại giám sát:
 
 ```text
 Robot trajectories
@@ -1063,17 +1063,17 @@ General VL data
     → preservation of broad visual-language capability
 ```
 
-Robot manipulation is the majority, but the non-robot data are not merely
-auxiliary decoration. They provide semantic and trajectory priors intended to
-improve generalization.
+Thao tác của robot chiếm đa số, nhưng dữ liệu không phải của robot không chỉ đơn thuần
+trang trí phụ trợ. Họ cung cấp các ưu tiên về ngữ nghĩa và quỹ đạo nhằm mục đích
+cải thiện tính tổng quát.
 
 ---
 
-## 13. Detailed training-sample construction
+## 13. Cách xây dựng mẫu huấn luyện chi tiết
 
-Suppose the raw dataset contains a dual-arm manipulation episode.
+Giả sử tập dữ liệu thô chứa một tập thao tác hai cánh tay.
 
-### 13.1 Raw example
+### 13.1 Ví dụ thô
 
 ```text
 Cameras:
@@ -1097,7 +1097,7 @@ Target:
     next 32 control steps
 ```
 
-### 13.2 Text prompt
+### 13.2 Prompt bằng văn bản
 
 ```text
 The robot is ALOHA with dual arms.
@@ -1106,9 +1106,9 @@ Please predict the next 32 control actions to execute the following task:
 Place the red bowl on top of the blue bowl.
 ```
 
-### 13.3 Action target
+### 13.3 Mục tiêu hành động
 
-Suppose each timestep uses:
+Giả sử mỗi dấu thời gian sử dụng:
 
 ```text
 7 left-arm joints
@@ -1117,49 +1117,49 @@ Suppose each timestep uses:
 1 right gripper
 ```
 
-Then:
+Sau đó:
 
 $$
 c=16
 $$
 
-and the native target has shape:
+và mục tiêu gốc có hình dạng:
 
 $$
-A_{\text{native}}
+A_{\text{bản địa}}
 \in
 \mathbb{R}^{32\times16}
 $$
 
-After normalization and padding:
+Sau khi chuẩn hóa và đệm:
 
 $$
 Y_0\in\mathbb{R}^{H\times K}
 $$
 
-where the first $32\times16$ region is valid and the rest is padded.
+trong đó vùng $32\times16$ đầu tiên hợp lệ và phần còn lại được đệm.
 
-### 13.4 Flow-training construction
+### 13.4 Tạo mẫu huấn luyện flow matching
 
-Sample:
+mẫu:
 
 $$
 Y_1\sim\mathcal{N}(0,I)
 $$
 
-and:
+và:
 
 $$
 \tau\sim p(\tau)
 $$
 
-Construct:
+Xây dựng:
 
 $$
 Y_\tau=(1-\tau)Y_0+\tau Y_1
 $$
 
-The model inputs are:
+Các đầu vào của mô hình là:
 
 ```text
 Multiview images
@@ -1168,17 +1168,17 @@ Noisy action Yτ
 Flow timestep τ
 ```
 
-The action target is:
+Mục tiêu hành động là:
 
 $$
 Y_1-Y_0
 $$
 
-The action loss is evaluated only where $M=1$.
+Mất hành động chỉ được đánh giá khi $M=1$.
 
-### 13.5 Mixed batch
+### 13.5 Lô hỗn hợp
 
-A single minibatch may contain:
+Một minibatch có thể chứa:
 
 ```text
 Sample 1: ALOHA bimanual joint actions
@@ -1189,21 +1189,21 @@ Sample 5: spatial-grounding text answer
 Sample 6: general image question answering
 ```
 
-Not every sample uses both losses:
+Không phải mọi mẫu đều sử dụng cả hai tổn thất:
 
-- action samples contribute to $\mathcal{L}_{\text{act}}$;
-- text-response samples contribute to $\mathcal{L}_{\text{vl}}$;
-- some multimodal examples may provide both forms of supervision depending on
-  their construction.
+- mẫu hành động đóng góp cho $\mathcal{L}_{\text{act}}$;
+- mẫu phản hồi văn bản đóng góp cho $\mathcal{L}_{\text{vl}}$;
+- một số ví dụ đa phương thức có thể cung cấp cả hai hình thức giám sát tùy thuộc vào
+  việc xây dựng của họ.
 
-The shared backbone is updated by the combined mixture, while the DiT is updated by
-continuous-action samples.
+Đường trục dùng chung được cập nhật bởi hỗn hợp kết hợp, trong khi DiT được cập nhật bởi
+mẫu hành động liên tục
 
 ---
 
-## 14. End-to-end inference dataflow: manipulation
+## 14. Luồng dữ liệu suy luận end-to-end: thao tác
 
-Consider:
+Hãy xem xét:
 
 ```text
 Instruction:
@@ -1219,7 +1219,7 @@ Observation:
     front image + wrist image
 ```
 
-### Step 1: construct the prompt
+### Bước 1: xây dựng prompt
 
 ```text
 The robot is {robot tag} with a single arm.
@@ -1228,10 +1228,10 @@ Please predict the next 16 control actions to execute the following task:
 Pick up the red cup.
 ```
 
-### Step 2: encode images
+### Bước 2: mã hóa hình ảnh
 
-The ViT converts each image into patch-level visual features. Spatial merging
-reduces the token count and aligns the features with the VLM hidden width.
+ViT chuyển đổi từng hình ảnh thành các đặc điểm hình ảnh ở cấp độ bản vá. Hợp nhất không gian
+giảm số lượng token và căn chỉnh các tính năng với độ rộng ẩn VLM.
 
 ```text
 RGB images
@@ -1245,11 +1245,11 @@ spatial merging
 visual tokens
 ```
 
-### Step 3: run the VLM
+### Bước 3: chạy VLM
 
-Visual and prompt tokens pass through Qwen3.5.
+Token trực quan và nhắc nhở đi qua Qwen3.5.
 
-The contextual hidden sequence encodes information such as:
+Chuỗi ẩn theo ngữ cảnh mã hóa thông tin như:
 
 ```text
 the red cup is left of center
@@ -1258,12 +1258,12 @@ the requested object is the cup, not the bowl
 the active interface is a 7D delta end-effector action
 ```
 
-These statements are conceptual interpretations of the representation; the model
-does not necessarily output them as explicit text.
+Những tuyên bố này là những diễn giải mang tính khái niệm của sự biểu đạt; người mẫu
+không nhất thiết xuất chúng dưới dạng văn bản rõ ràng.
 
-### Step 4: initialize noisy action
+### Bước 4: khởi tạo action nhiễu
 
-Create:
+Tạo:
 
 $$
 Y_{\tau=1}
@@ -1271,23 +1271,23 @@ Y_{\tau=1}
 \mathcal{N}(0,I)
 $$
 
-with shape:
+với hình dạng:
 
 $$
 H\times K
 $$
 
-### Step 5: flow integration
+### Bước 5: tích hợp luồng
 
-For Euler steps from $\tau=1$ toward $\tau=0$:
+Đối với các bước Euler từ $\tau=1$ tới $\tau=0$:
 
-1. project the current noisy action into DiT tokens;
-2. concatenate it with projected VLM hidden states;
-3. condition the DiT through the timestep embedding and AdaLN;
-4. predict the velocity field;
-5. update the action tensor.
+1. chiếu action nhiễu hiện tại vào token DiT;
+2. nối nó với các trạng thái ẩn VLM được chiếu;
+3. điều chỉnh DiT thông qua việc nhúng dấu thời gian và AdaLN;
+4. dự đoán trường vận tốc;
+5. cập nhật tensor hành động.
 
-For a negative step $\Delta\tau$:
+Đối với bước phủ định $\Delta\tau$:
 
 $$
 Y_{\tau+\Delta\tau}
@@ -1298,9 +1298,9 @@ Y_\tau
 v_\theta(Y_\tau,\tau\mid o,x,e)
 $$
 
-### Step 6: decode the valid channels
+### Bước 6: giải mã các kênh hợp lệ
 
-Suppose the platform uses:
+Giả sử nền tảng sử dụng:
 
 $$
 [
@@ -1310,9 +1310,9 @@ g
 ]
 $$
 
-Only the first seven channels are retained, then denormalized.
+Chỉ có bảy kênh đầu tiên được giữ lại, sau đó không chuẩn hóa.
 
-### Step 7: controller execution
+### Bước 7: thực thi bộ điều khiển
 
 ```text
 Predicted end-effector deltas
@@ -1326,28 +1326,28 @@ Motor controller
 Physical motion
 ```
 
-### Step 8: closed-loop replanning
+### Bước 8: tái quy hoạch khép kín
 
-After executing part of the chunk, the system receives new images and predicts
-again.
+Sau khi thực hiện một phần của chunk, hệ thống sẽ nhận được hình ảnh mới và dự đoán
+một lần nữa.
 
 ```mermaid
 flowchart LR
-    OBS["New images"] --> POLICY["Qwen-VLA"]
-    POLICY --> CHUNK["Action chunk"]
-    CHUNK --> EXEC["Execute first part"]
-    EXEC --> WORLD["Robot and scene change"]
+    OBS["Hình ảnh mới"] --> POLICY["Qwen-VLA"]
+    POLICY --> CHUNK["Đoạn hành động"]
+    CHUNK --> EXEC["Thực hiện phần đầu tiên"]
+    EXEC --> WORLD["Robot và thay đổi cảnh"]
     WORLD --> OBS
 ```
 
-This avoids executing an entire long trajectory open-loop after the scene has
-changed.
+Điều này tránh việc thực hiện toàn bộ vòng mở quỹ đạo dài sau khi cảnh đã kết thúc.
+đã thay đổi.
 
 ---
 
-## 15. End-to-end inference dataflow: navigation
+## 15. Luồng dữ liệu suy luận end-to-end: điều hướng
 
-Consider:
+Hãy xem xét:
 
 ```text
 Instruction:
@@ -1360,7 +1360,7 @@ Embodiment:
     8-waypoint horizon
 ```
 
-The perception and VLM stages are similar, but the valid action channels mean:
+Các giai đoạn nhận thức và VLM tương tự nhau, nhưng các kênh hành động hợp lệ có nghĩa là:
 
 $$
 [
@@ -1368,7 +1368,7 @@ $$
 ]
 $$
 
-The output is:
+Đầu ra là:
 
 $$
 Y
@@ -1376,7 +1376,7 @@ Y
 \mathbb{R}^{8\times3}
 $$
 
-Example:
+Ví dụ:
 
 ```text
 [
@@ -1388,32 +1388,32 @@ Example:
 ]
 ```
 
-This is a short local trajectory. A navigation controller then handles:
+Đây là một quỹ đạo địa phương ngắn. Sau đó, bộ điều khiển điều hướng sẽ xử lý:
 
-- wheel or locomotion commands;
-- low-level path tracking;
-- dynamic constraints;
-- collision avoidance, depending on system integration.
+- lệnh bánh xe hoặc đầu máy;
+- theo dõi đường dẫn cấp thấp;
+- ràng buộc động;
+- tránh va chạm, tùy thuộc vào sự tích hợp hệ thống.
 
-Qwen-VLA predicts where the embodied agent should move, not necessarily the raw
-left- and right-wheel motor signals.
+Qwen-VLA dự đoán nơi agent được thể hiện sẽ di chuyển, không nhất thiết là nguyên
+tín hiệu động cơ bánh trái và bánh phải.
 
 ---
 
-## 16. How Qwen-VLA differs from “normal” VLAs
+## 16. Qwen-VLA khác với VLA “bình thường” như thế nào
 
-There is no single normal VLA architecture. The comparison is clearest against two
-major families.
+Không có kiến trúc VLA bình thường duy nhất. Sự so sánh rõ ràng nhất là giữa hai
+các gia đình lớn.
 
-## 16.1 Versus autoregressive action-token VLAs
+## 16.1 So với VLA token hành động tự hồi quy
 
-Representative models:
+Các mẫu đại diện:
 
 - RT-2;
-- original OpenVLA.
+- OpenVLA gốc.
 
-These models quantize actions and generate them using the language-model output
-mechanism.
+Các mô hình này lượng tử hóa các hành động và tạo ra chúng bằng cách sử dụng đầu ra mô hình ngôn ngữ
+cơ chế.
 
 ```text
 Image + instruction
@@ -1429,7 +1429,7 @@ action token 2
 decode tokens into continuous control
 ```
 
-Qwen-VLA instead uses:
+Thay vào đó, Qwen-VLA sử dụng:
 
 ```text
 Image + instruction + embodiment prompt
@@ -1441,61 +1441,61 @@ continuous flow-matching DiT
 parallel multi-step action tensor
 ```
 
-| Property                           | RT-2 / original OpenVLA style           | Qwen-VLA                                               |
+| Bất động sản | RT-2 / kiểu OpenVLA gốc | Qwen-VLA |
 | ---------------------------------- | --------------------------------------- | ------------------------------------------------------ |
-| Action generation                  | Autoregressive discrete tokens          | Continuous flow matching                               |
-| Main action decoder                | VLM language head                       | Separate 1.15B DiT                                     |
-| Temporal form                      | Often next action or serialized actions | Action chunk                                           |
-| Quantization                       | Required                                | Not required for action output                         |
-| Main scope                         | Robot manipulation                      | Manipulation, navigation, human and other trajectories |
-| Multiple action conventions        | Dataset remapping/tokenization          | Padded shared tensor + mask + prompt                   |
-| Text generation                    | Same autoregressive head                | VLM language head remains separate                     |
-| High-frequency trajectory modeling | More difficult due to serialization     | Natural continuous chunk prediction                    |
+| Tạo hành động | Token rời rạc tự động | Kết hợp dòng chảy liên tục |
+| Bộ giải mã hành động chính | Trưởng ngôn ngữ VLM | Riêng 1,15B DiT |
+| Dạng tạm thời | Thường là hành động tiếp theo hoặc hành động tuần tự | Đoạn hành động |
+| Lượng tử hóa | Bắt buộc | Không cần thiết cho đầu ra hành động |
+| Phạm vi chính | Thao tác robot | Thao tác, điều hướng, con người và các quỹ đạo khác |
+| Nhiều quy ước hành động | Ánh xạ lại/token tập dữ liệu | Tenor chia sẻ có đệm + mặt nạ + dấu nhắc |
+| Tạo văn bản | Cùng một cái đầu tự thoái lui | Đầu ngôn ngữ VLM vẫn tách biệt |
+| Mô hình quỹ đạo tần số cao | Khó khăn hơn do tuần tự hóa | Dự đoán chunk liên tục tự nhiên |
 
-## 16.2 Versus π0 and π0.5
+## 16.2 So với π0 và π0.5
 
-π0 is much closer architecturally to Qwen-VLA:
+π0 có kiến trúc gần với Qwen-VLA hơn nhiều:
 
-- pretrained VLM;
-- separate flow-matching action expert;
-- continuous action chunks;
-- cross-embodiment training.
+- VLM được huấn luyện trước;
+- action expert phù hợp với dòng chảy riêng biệt;
+- khối hành động liên tục;
+- huấn luyện theo phương án chéo.
 
-The main distinction is not “Qwen-VLA has a DiT while π0 has no action expert.”
-Both belong to the modern VLM-plus-flow-action-expert family, although their
-specific Transformer integration differs.
+Điểm khác biệt chính không phải là “Qwen-VLA có DiT trong khi π0 không có action expert”.
+Cả hai đều thuộc nhóm action expert VLM-plus-flow-action hiện đại, mặc dù
+tích hợp Transformer cụ thể khác nhau.
 
-| Property              | π0 family                                              | Qwen-VLA                                                                 |
+| Bất động sản | họ π0 | Qwen-VLA |
 | --------------------- | ------------------------------------------------------- | ------------------------------------------------------------------------ |
-| Core focus            | General robot manipulation and mobile manipulation      | Unified embodied tasks including manipulation and navigation             |
-| Backbone              | PaliGemma-derived VLM in π0                            | Qwen3.5-4B native multimodal VLM                                         |
-| Continuous output     | Flow-matching action chunk                              | Flow-matching action/trajectory chunk                                    |
-| Robot state           | Explicit robotics-specific state processing             | Omitted in default framework after ablation                              |
-| Action expert         | Separate robotics-specific expert weights               | Single-stream 16-block DiT                                               |
-| Conditioning          | Images, language, state and embodiment/data conventions | Images, language and embodiment-aware textual prompt                     |
-| Output families       | Robot actions across multiple configurations            | Robot actions, waypoints, human trajectories, broader trajectory targets |
-| Unification mechanism | Cross-embodiment robot policy design                    | Fixed$H\times K$ interface, leading-channel padding, mask and prompt   |
-| Training warm-up      | Broad pretraining/post-training recipe                  | Explicit image-free Text-to-Action stage before multimodal CPT           |
-| RL stage              | Depends on model/version and recipe                     | Explicit sparse-success RL stage reported for Qwen-VLA-Instruct          |
+| Trọng tâm cốt lõi | Thao tác robot nói chung và thao tác di động | Các tác vụ được thể hiện thống nhất bao gồm thao tác và điều hướng |
+| Xương sống | VLM có nguồn gốc từ PaliGemma trong π0 | VLM đa phương thức gốc Qwen3.5-4B |
+| Đầu ra liên tục | Đoạn hành động phù hợp với luồng | Đoạn hành động/quỹ đạo phù hợp với dòng chảy |
+| Trạng thái robot | Xử lý trạng thái dành riêng cho robot rõ ràng | Bị bỏ qua trong khung mặc định sau khi cắt bỏ |
+| Action expert | Trọng lượng chuyên gia dành riêng cho robot | DiT 16 khối luồng đơn |
+| Điều hòa | Các quy ước về hình ảnh, ngôn ngữ, trạng thái và cách thể hiện/dữ liệu | Prompt văn bản nhận biết hình ảnh, ngôn ngữ và cách thể hiện |
+| Họ đầu ra | Hành động của robot trên nhiều cấu hình | Hành động của robot, điểm tham chiếu, quỹ đạo của con người, mục tiêu quỹ đạo rộng hơn |
+| Cơ chế thống nhất | Thiết kế chính sách robot đa phương án | Đã sửa lỗi giao diện$H\times K$, phần đệm, mặt nạ và prompt kênh hàng đầu |
+| Khởi động luyện tập | Công thức tổng hợp trước/sau huấn luyện | Giai đoạn Chuyển văn bản thành hành động không có hình ảnh rõ ràng trước CPT đa phương thức |
+| Giai đoạn RL | Phụ thuộc vào kiểu máy/phiên bản và công thức | Đã báo cáo giai đoạn RL thành công thưa thớt rõ ràng cho Qwen-VLA-Instruct |
 
-Qwen-VLA is therefore not a completely unrelated replacement for π0. It expands a
-similar modern action-expert idea into a more heterogeneous action-and-trajectory
-foundation model.
+Do đó, Qwen-VLA không phải là sự thay thế hoàn toàn không liên quan cho π0. Nó mở rộng một
+ý tưởng action expert hiện đại tương tự thành một quỹ đạo và hành động không đồng nhất hơn
+mô hình nền tảng.
 
-## 16.3 Versus specialist navigation models
+## 16.3 So với các mô hình điều hướng chuyên dụng
 
-Many navigation VLAs use:
+Nhiều VLA điều hướng sử dụng:
 
-- a VLM;
-- a small MLP waypoint head;
-- navigation-specific visual history processing;
-- one fixed waypoint output format.
+- một VLM;
+- một đầu điểm MLP nhỏ;
+- xử lý lịch sử trực quan dành riêng cho điều hướng;
+- một định dạng đầu ra điểm cố định.
 
-Qwen-VLA instead uses the same large DiT action expert for navigation and
-manipulation, so navigation is one control mode within a wider continuous
-trajectory framework.
+Thay vào đó, Qwen-VLA sử dụng action expert DiT lớn tương tự để điều hướng và
+thao tác, do đó điều hướng là một chế độ điều khiển trong phạm vi liên tục rộng hơn
+khung quỹ đạo.
 
-The trade-off is:
+Sự đánh đổi là:
 
 ```text
 Specialist head:
@@ -1507,46 +1507,46 @@ Unified DiT:
 
 ---
 
-## 17. Why the Text-to-Action stage can work
+## 17. Tại sao giai đoạn Chuyển văn bản thành hành động có thể hoạt động
 
-At first, predicting exact actions without images appears impossible. It is
-impossible to recover one uniquely correct scene-specific action from language
-alone.
+Lúc đầu, việc dự đoán hành động chính xác mà không có hình ảnh dường như là không thể. Đó là
+không thể khôi phục một hành động cụ thể theo cảnh chính xác duy nhất từ ngôn ngữ
+một mình.
 
-However, flow matching models a **conditional distribution**, not a deterministic
-lookup table.
+Tuy nhiên, việc so khớp luồng mô hình **phân phối có điều kiện**, không phải là mô hình xác định
+bảng tra cứu.
 
-For:
+Dành cho:
 
 ```text
 "pick up the cup"
 ```
 
-the model can learn broad regularities:
+mô hình có thể tìm hiểu các quy luật rộng rãi:
 
-- approach before grasp;
-- close the gripper near the object;
-- lift after grasping;
-- produce smooth temporally correlated motion;
-- respect the selected action dimension and frequency;
-- use both arms differently from one arm.
+- tiếp cận trước khi nắm bắt;
+- đóng dụng cụ kẹp gần vật thể;
+- nhấc lên sau khi nắm;
+- tạo ra chuyển động tương quan trơn tru theo thời gian;
+- tôn trọng chiều hướng và tần suất hành động đã chọn;
+- sử dụng cả hai cánh tay khác với một cánh tay.
 
-T2A therefore learns:
+Do đó T2A học được:
 
 $$
-p(Y\mid x,e)
+p(Y\giữa x,e)
 $$
 
-CPT later learns the sharper scene-grounded distribution:
+CPT sau đó học được cách phân phối dựa trên cảnh sắc nét hơn:
 
 $$
 p(Y\mid o,x,e)
 $$
 
-The image reduces uncertainty by providing object positions, current geometry, and
-scene constraints.
+Hình ảnh làm giảm sự không chắc chắn bằng cách cung cấp vị trí đối tượng, hình dạng hiện tại và
+những hạn chế của cảnh.
 
-A useful interpretation is:
+Một cách giải thích hữu ích là:
 
 ```text
 T2A:
@@ -1558,39 +1558,39 @@ CPT:
 
 ---
 
-## 18. What is shared and what remains embodiment-specific
+## 18. Điều gì được chia sẻ và điều gì vẫn mang tính cụ thể của từng embodiment
 
-## Shared model components
+## Các thành phần mô hình được chia sẻ
 
-- visual perception;
-- language understanding;
-- spatial grounding;
-- VLM hidden representation;
-- DiT parameters;
-- flow-matching algorithm;
-- padded tensor interface;
-- loss implementation;
-- general temporal and physical priors.
+- nhận thức trực quan;
+- hiểu biết ngôn ngữ;
+- nối đất không gian;
+- Biểu diễn ẩn VLM;
+- Thông số DiT;
+- thuật toán kết hợp dòng chảy;
+- giao diện tensor đệm;
+- thực hiện mất mát;
+- các ưu tiên chung về thời gian và thể chất.
 
-## Still embodiment-specific
+## Vẫn đặc thù theo embodiment
 
-- prompt text;
-- active action dimensions;
-- action-channel meaning;
-- action normalization;
-- control frequency;
-- horizon;
-- coordinate frame;
-- rotation convention;
-- controller and denormalization;
-- hardware safety limits;
-- low-level execution interface.
+- văn bản nhắc nhở;
+- kích thước hành động tích cực;
+- ý nghĩa kênh hành động;
+- bình thường hóa hành động;
+- tần số điều khiển;
+- đường chân trời;
+- khung tọa độ;
+- quy ước luân chuyển;
+- bộ điều khiển và không chuẩn hóa;
+- giới hạn an toàn phần cứng;
+- Giao diện thực thi cấp thấp.
 
-Therefore:
+Vì vậy:
 
-> One shared neural model does not eliminate the need for a robot adapter.
+> Một mô hình thần kinh dùng chung không loại bỏ nhu cầu về bộ chuyển đổi robot.
 
-A deployment adapter still needs to define:
+Bộ điều hợp triển khai vẫn cần xác định:
 
 ```text
 camera preprocessing
@@ -1605,9 +1605,9 @@ safety validation
 
 ---
 
-## 19. Practical implementation sketch
+## 19. Phác thảo triển khai thực tế
 
-A simplified training record could look like:
+Một hồ sơ huấn luyện đơn giản có thể trông như sau:
 
 ```python
 sample = {
@@ -1628,7 +1628,7 @@ sample = {
 }
 ```
 
-Preprocessing:
+Tiền xử lý:
 
 ```python
 normalized = normalize_by_dataset(
@@ -1645,7 +1645,7 @@ mask = construct_mask(
 )
 ```
 
-Training concept:
+Khái niệm huấn luyện:
 
 ```python
 noise = torch.randn_like(target)
@@ -1673,31 +1673,31 @@ action_loss = masked_channel_balanced_mse(
 )
 ```
 
-This code is illustrative rather than copied from the official implementation.
+Mã này mang tính minh họa chứ không phải sao chép từ bản triển khai chính thức.
 
 ---
 
-## 20. Strengths of the design
+## 20. Điểm mạnh của thiết kế
 
-### Broad supervision reuse
+### Tái sử dụng giám sát trên diện rộng
 
-One model can learn from datasets that would normally require separate policies.
+Một mô hình có thể học hỏi từ các bộ dữ liệu thường yêu cầu các chính sách riêng biệt.
 
-### Preserved vision-language capability
+### Bảo toàn năng lực thị giác-ngôn ngữ
 
-The VLM objective reduces catastrophic forgetting during action training.
+Mục tiêu VLM làm giảm tình trạng quên thảm họa trong quá trình huấn luyện hành động.
 
-### Continuous trajectory quality
+### Chất lượng quỹ đạo liên tục
 
-Flow matching supports smooth, multimodal, high-dimensional action chunks without
-per-dimension action-token quantization.
+Kết hợp luồng hỗ trợ các đoạn hành động mượt mà, đa phương thức, có chiều cao mà không cần
+lượng tử hóa token hành động theo chiều.
 
-### No per-platform output heads
+### Không cần output head riêng cho từng nền tảng
 
-The same DiT handles multiple channel counts and horizons through prompt
-conditioning and masking.
+Cùng một DiT xử lý số lượng kênh và phạm vi kênh thông qua dấu nhắc
+điều hòa và che đậy.
 
-### Better separation of concerns
+### Phân tách trách nhiệm rõ hơn
 
 ```text
 VLM:
@@ -1710,56 +1710,56 @@ Robot adapter:
     physical interpretation and execution
 ```
 
-### Structured training curriculum
+### Lộ trình huấn luyện có cấu trúc
 
-T2A prevents the randomly initialized action expert from immediately destabilizing
-the pretrained VLM.
-
----
-
-## 21. Limitations and open questions
-
-### Unified tensor does not equal universal embodiment transfer
-
-A new robot still requires a known action schema, normalization, controller, and
-usually adaptation data.
-
-### No default proprioception
-
-Vision-only state inference can fail under occlusion, contact, dynamic motion, or
-partial observability.
-
-### Large action expert
-
-A 1.15B DiT is computationally expensive compared with a small MLP head.
-
-### Joint-training interference
-
-Manipulation, navigation, and vision-language objectives can compete. The report
-notes that action-oriented joint training can modestly regress some pure
-vision-language or navigation measures.
-
-### Action data scarcity
-
-Embodied data remain much smaller and less diverse than Internet-scale
-vision-language data.
-
-### Mostly short-horizon evaluation
-
-Long-duration execution, recovery, persistent memory, and repeated failure handling
-remain open challenges.
-
-### Exact semantics remain external
-
-The prompt conditions the model, but coordinate frames, units, normalization,
-hardware constraints, and safety validation must still be defined by the data and
-deployment system.
+T2A ngăn action expert được khởi tạo ngẫu nhiên gây mất ổn định ngay lập tức
+VLM đã được huấn luyện trước.
 
 ---
 
-## 22. Final conceptual model
+## 21. Hạn chế và câu hỏi mở
 
-The most accurate way to understand Qwen-VLA is:
+### Tensor thống nhất không đồng nghĩa với chuyển giao embodiment phổ quát
+
+Một robot mới vẫn yêu cầu một lược đồ hành động đã biết, sự chuẩn hóa, bộ điều khiển và
+thường là dữ liệu thích ứng.
+
+### Mặc định không dùng proprioception
+
+Suy luận trạng thái chỉ có tầm nhìn có thể thất bại khi bị tắc, tiếp xúc, chuyển động động hoặc
+khả năng quan sát một phần.
+
+### Action expert lớn
+
+DiT 1,15B có chi phí tính toán đắt hơn so với đầu MLP nhỏ.
+
+### Nhiễu giữa các nhiệm vụ khi huấn luyện chung
+
+Các mục tiêu thao tác, điều hướng và thị giác-ngôn ngữ có thể cạnh tranh. Báo cáo
+lưu ý rằng huấn luyện chung theo định hướng hành động có thể giảm nhẹ một số
+thị giác-ngôn ngữ hoặc các biện pháp điều hướng.
+
+### Sự khan hiếm dữ liệu hành động
+
+Dữ liệu được thể hiện vẫn nhỏ hơn và kém đa dạng hơn nhiều so với quy mô Internet
+dữ liệu thị giác-ngôn ngữ.
+
+### Chủ yếu là đánh giá trong thời gian ngắn
+
+Thực thi, phục hồi, bộ nhớ liên tục và xử lý lỗi lặp đi lặp lại trong thời gian dài
+vẫn là những thách thức mở.
+
+### Ngữ nghĩa chính xác vẫn ở bên ngoài
+
+Prompt điều kiện cho mô hình, nhưng tọa độ khung, đơn vị, chuẩn hóa,
+các ràng buộc về phần cứng và xác nhận an toàn vẫn phải được xác định bởi dữ liệu và
+hệ thống triển khai.
+
+---
+
+## 22. Mô hình khái niệm tổng kết
+
+Cách chính xác nhất để hiểu Qwen-VLA là:
 
 ```text
 It is not one universal robot controller with one universal action meaning.
@@ -1768,50 +1768,50 @@ It is one shared multimodal model and one shared continuous trajectory generator
 that can learn several embodiment-specific action languages.
 ```
 
-The embodiment prompt tells the model which action language is active. The padded
-tensor and mask provide a common computational structure. The VLM supplies
-multimodal understanding. The DiT turns that understanding into a coherent
-continuous sequence.
+Prompt phương án cho mô hình biết ngôn ngữ hành động nào đang hoạt động. Các đệm
+tensor và mặt nạ cung cấp một cấu trúc tính toán chung. Nguồn cung cấp VLM
+sự hiểu biết đa phương thức. DiT biến sự hiểu biết đó thành một sự mạch lạc
+trình tự liên tục.
 
 ```mermaid
 flowchart TD
-    WORLD["Visual world"] --> PERCEPT["Qwen3.5 perception and reasoning"]
-    LANGUAGE["Task instruction"] --> PERCEPT
-    INTERFACE["Embodiment and control prompt"] --> PERCEPT
+    WORLD["Thế giới thị giác"] --> PERCEPT["Nhận thức và lý luận Qwen3.5"]
+    LANGUAGE["Hướng dẫn nhiệm vụ"] --> PERCEPT
+    INTERFACE["Dấu nhắc thực hiện và kiểm soát"] --> PERCEPT
 
-    PERCEPT --> COMMON["Shared contextual hidden space"]
-    COMMON --> GENERATOR["Shared DiT trajectory generator"]
+    PERCEPT --> COMMON["Không gian ẩn theo ngữ cảnh được chia sẻ"]
+    COMMON --> GENERATOR["Trình tạo quỹ đạo DiT được chia sẻ"]
 
-    GENERATOR --> M["Manipulation action chunk"]
-    GENERATOR --> N["Navigation waypoint chunk"]
-    GENERATOR --> H["Human wrist and hand trajectory"]
-    GENERATOR --> T["Other continuous trajectory target"]
+    GENERATOR --> M["Đoạn hành động thao tác"]
+    GENERATOR --> N["Đoạn điểm điều hướng"]
+    GENERATOR --> H["Quỹ đạo cổ tay và bàn tay của con người"]
+    GENERATOR --> T["Mục tiêu quỹ đạo liên tục khác"]
 
-    M --> ADAPT1["Robot-specific adapter and controller"]
-    N --> ADAPT2["Navigation controller"]
-    H --> ADAPT3["Retargeting or representation consumer"]
+    M --> ADAPT1["Bộ điều hợp và bộ điều khiển dành riêng cho robot"]
+    N --> ADAPT2["Bộ điều khiển điều hướng"]
+    H --> ADAPT3["Nhắm mục tiêu lại hoặc đại diện cho người tiêu dùng"]
 ```
 
-The architecture's novelty is the combination of:
+Sự mới lạ của kiến trúc là sự kết hợp của:
 
-1. a strong natively multimodal Qwen backbone;
-2. a large continuous DiT action expert;
-3. prompt-conditioned heterogeneous action semantics;
-4. padded and masked unified action tensors;
-5. staged Text-to-Action, continued-pretraining, SFT, and RL training;
-6. simultaneous preservation of language output and continuous embodied output.
+1. một xương sống Qwen đa phương thức mạnh mẽ;
+2. một action expert DiT liên tục lớn;
+3. ngữ nghĩa hành động không đồng nhất có điều kiện kịp thời;
+4. tensor hành động thống nhất đệm và mặt nạ;
+5. huấn luyện Chuyển văn bản thành hành động, huấn luyện tiếp tục trước, SFT và RL;
+6. Bảo toàn đồng thời đầu ra ngôn ngữ và đầu ra được thể hiện liên tục.
 
 ---
 
-## References
+## Tài liệu tham khảo
 
-1. Qwen Team. **Qwen-VLA: Unifying Vision-Language-Action Modeling across Tasks,
-   Environments, and Robot Embodiments.** arXiv:2605.30280, 2026.
-2. Physical Intelligence. **π0: A Vision-Language-Action Flow Model for General
-   Robot Control.** arXiv:2410.24164, 2024.
-3. Kim et al. **OpenVLA: An Open-Source Vision-Language-Action Model.**
+1. Đội Qwen. **Qwen-VLA: Thống nhất mô hình hóa hành động-ngôn ngữ-tầm nhìn giữa các nhiệm vụ,
+   Môi trường và Phương án Robot.** arXiv:2605.30280, 2026.
+2. Trí tuệ thể chất. **π0: Mô hình luồng hành động-ngôn ngữ-tầm nhìn dành cho chung
+   Điều khiển Robot.** arXiv:2410.24164, 2024.
+3. Kim và cộng sự. **OpenVLA: Mô hình hành động-ngôn ngữ-tầm nhìn nguồn mở.**
    arXiv:2406.09246, 2024.
-4. Brohan et al. **RT-2: Vision-Language-Action Models Transfer Web Knowledge to
-   Robotic Control.** arXiv:2307.15818, 2023.
-5. Lipman et al. **Flow Matching for Generative Modeling.** 2023.
-6. Peebles and Xie. **Scalable Diffusion Models with Transformers.** 2023.
+4. Brohan và cộng sự. **RT-2: Các mô hình Hành động-Ngôn ngữ-Tầm nhìn Chuyển giao Kiến thức Web tới
+   Điều khiển bằng robot.** arXiv:2307.15818, 2023.
+5. Lipman và cộng sự. **Kết hợp dòng chảy cho mô hình sáng tạo.** 2023.
+6. Peebles và Xie. **Mô hình khuếch tán có thể mở rộng bằng máy biến áp.** 2023.

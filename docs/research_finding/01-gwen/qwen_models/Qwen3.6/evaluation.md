@@ -1,4 +1,4 @@
-# Qwen3.6-35B-A3B — Evaluation
+# Qwen3.6-35B-A3B — Đánh giá
 
 > Các điểm dưới đây là **reported results** từ model card chính thức. Cần phân biệt benchmark public, benchmark có scaffold/judge riêng và benchmark nội bộ của Qwen.
 
@@ -71,25 +71,25 @@
 
 ## 3. Kết quả so sánh Qwen3.5 → Qwen3.6
 
-| Benchmark | Qwen3.5-35B-A3B | Qwen3.6-35B-A3B | Delta |
+| Benchmark | Qwen3.5-35B-A3B | Qwen3.6-35B-A3B | Đồng bằng |
 |---|---:|---:|---:|
-| SWE-bench Verified | 70.0 | 73.4 | +3.4 |
-| SWE-bench Multilingual | 60.3 | 67.2 | +6.9 |
-| SWE-bench Pro | 44.6 | 49.5 | +4.9 |
-| Terminal-Bench 2.0 | 40.5 | 51.5 | +11.0 |
+| Băng ghế dự bị SWE đã được xác minh | 70,0 | 73,4 | +3,4 |
+| SWE-băng ghế dự bị đa ngôn ngữ | 60,3 | 67,2 | +6,9 |
+| Ghế dự bị SWE Pro | 44,6 | 49,5 | +4,9 |
+| Terminal-Băng ghế dự bị 2.0 | 40,5 | 51,5 | +11.0 |
 | MCPMark | 27.0 | 37.0 | +10.0 |
-| SkillsBench Avg5 | 4.4 | 28.7 | +24.3 |
-| NL2Repo | 20.5 | 29.4 | +8.9 |
-| DeepPlanning | 22.8 | 25.9 | +3.1 |
-| MMLU-Pro | 85.3 | 85.2 | -0.1 |
-| GPQA | 84.2 | 86.0 | +1.8 |
+| SkillBench Trung bình5 | 4.4 | 28,7 | +24,3 |
+| NL2Repo | 20,5 | 29,4 | +8,9 |
+| Lập kế hoạch sâu | 22.8 | 25,9 | +3,1 |
+| MMLU-Pro | 85,3 | 85,2 | -0,1 |
+| GPQA | 84,2 | 86,0 | +1,8 |
 | HLE | 22.4 | 21.4 | -1.0 |
-| LiveCodeBench v6 | 74.6 | 80.4 | +5.8 |
-| AIME26 | 91.0 | 92.7 | +1.7 |
-| MMMU | 81.4 | 81.7 | +0.3 |
-| MathVista mini | 86.2 | 86.4 | +0.2 |
-| RealWorldQA | 84.1 | 85.3 | +1.2 |
-| HallusionBench | 67.9 | 69.8 | +1.9 |
+| LiveCodeBench v6 | 74,6 | 80,4 | +5,8 |
+| AIME26 | 91.0 | 92,7 | +1,7 |
+| MMMU | 81,4 | 81,7 | +0,3 |
+| MathVista mini | 86,2 | 86,4 | +0,2 |
+| RealWorldQA | 84.1 | 85,3 | +1,2 |
+| HallusionBench | 67,9 | 69,8 | +1,9 |
 
 ## 4. Nhận xét
 
@@ -110,10 +110,10 @@ Các điểm agent không chỉ đo model thuần túy. SWE-bench, Terminal-Benc
 
 ## 6. Nguồn và mã đánh giá
 
-- [Qwen3.6 official repository](https://github.com/QwenLM/Qwen3.6)
-- [Qwen3.6 model collection](https://huggingface.co/collections/Qwen/qwen36)
-- [Qwen3.6-35B-A3B model card](https://huggingface.co/Qwen/Qwen3.6-35B-A3B)
-- [Qwen3.6-27B model card](https://huggingface.co/Qwen/Qwen3.6-27B)
+- [Kho lưu trữ chính thức của Qwen3.6](https://github.com/QwenLM/Qwen3.6)
+- [Bộ sưu tập mô hình Qwen3.6](https://huggingface.co/collections/Qwen/qwen36)
+- [Thẻ mẫu Qwen3.6-35B-A3B](https://huggingface.co/Qwen/Qwen3.6-35B-A3B)
+- [Thẻ mẫu Qwen3.6-27B](https://huggingface.co/Qwen/Qwen3.6-27B)
 - [Qwen-Agent: agent framework, MCP và tool use](https://github.com/QwenLM/Qwen-Agent)
 - [SWE-bench](https://github.com/SWE-bench/SWE-bench)
 - [LiveCodeBench](https://github.com/livecodebench/livecodebench)
@@ -121,7 +121,7 @@ Các điểm agent không chỉ đo model thuần túy. SWE-bench, Terminal-Benc
 - [MMMU](https://github.com/MMMU-Benchmark/MMMU)
 - [MathVista](https://github.com/lupantech/MathVista)
 - [HallusionBench](https://github.com/FuxiaoLiu/LRV-Instruction)
-- [HLE-Verified dataset](https://huggingface.co/datasets/skylenage/HLE-Verified)
+- [Tập dữ liệu đã được xác minh HLE](https://huggingface.co/datasets/skylenage/HLE-Verified)
 - [Terminal-Bench](https://github.com/terminal-bench/terminal-bench)
 - [SkillsBench](https://github.com/benchflow-ai/skillsbench)
 - [NL2Repo](https://github.com/epoch-research/NL2Repo)
