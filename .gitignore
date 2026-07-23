@@ -58,8 +58,6 @@ htmlcov/
 *.safetensors
 *.tfrecord
 
-# Downloaded research papers; keep the Markdown findings in Git
-/docs/papers/**/*.pdf
 
 # Notebook, tool, and temporary files
 .ipynb_checkpoints/

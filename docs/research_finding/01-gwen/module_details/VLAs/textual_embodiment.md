@@ -14,7 +14,7 @@ taxonomy; the clearest implementation examined here is Qwen-VLA's *embodiment-aw
 conditioning*.
 
 Research performed on **2026-07-21**. The starting local analysis was
-[Qwen-VLA Architecture, Training, and End-to-End Dataflow](../../specific_qwen_version/qwen_vla.md).
+[Qwen-VLA Architecture, Training, and End-to-End Dataflow](../../qwen_models/Qwen-VLA/qwen_vla_details.md).
 Claims below were then checked against primary papers and official repositories.
 
 ## Short answer

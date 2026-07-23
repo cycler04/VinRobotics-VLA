@@ -10,7 +10,7 @@
 > claims because their internal configs are not public.
 >
 > **Baseline:** For the full unchanged architecture and training background, see
-> [Qwen3.5: Architecture, Data Flow, Pre-training, and Post-training](qwen3.5_architecture_and_training.md).
+> [Qwen3.5: Architecture, Data Flow, Pre-training, and Post-training](../Qwen3.5/qwen3.5_architecture_and_training.md).
 
 ## Short answer
 

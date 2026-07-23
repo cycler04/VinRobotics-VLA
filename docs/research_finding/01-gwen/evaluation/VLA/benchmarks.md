@@ -5,7 +5,7 @@
 >
 > **Scope:** Qwen-VLA arXiv:2605.30280v2 and its official repository, checked on
 > 2026-07-22. Architecture and training are covered in
-> [qwen_vla.md](../../qwen_models/qwen_vla.md).
+> [qwen_vla_details.md](../../qwen_models/Qwen-VLA/qwen_vla_details.md).
 
 ## Short answer
 
