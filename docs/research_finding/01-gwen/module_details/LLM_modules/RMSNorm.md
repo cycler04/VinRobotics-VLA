@@ -1,14 +1,16 @@
-# RMSNorm and Pre-Normalized Residual Blocks
+# RMSNorm và khối residual tiền chuẩn hóa
 
-**Improves:** LayerNorm as the normalization inside a Transformer block.
-**Primary goal:** retain scale control while removing LayerNorm's mean-centering
-operation; in Qwen it is used before each sublayer (`pre-norm`).
+**Cải tiến:** LayerNorm với vai trò phép chuẩn hóa bên trong khối Transformer.
+**Mục tiêu chính:** duy trì kiểm soát tỷ lệ trong khi loại bỏ phép trừ trung bình
+của LayerNorm; trong Qwen, RMSNorm được dùng trước mỗi tầng con (`pre-norm`).
 
-Simple explaination: Replace 2 heavy computation: **means, variace** with 1 computation: **RMS** to increase speed without reduce perfomance.
+**Giải thích đơn giản:** thay hai phép tính nặng là **trung bình** và **phương sai**
+bằng một phép tính **RMS** để tăng tốc mà không làm giảm hiệu năng trong các thiết
+lập được báo cáo.
 
-## LayerNorm versus RMSNorm
+## So sánh LayerNorm và RMSNorm
 
-For a hidden vector `x` of width `d`, LayerNorm computes:
+Với vector ẩn `x` có chiều rộng `d`, LayerNorm tính:
 
 $$
 \begin{aligned}
@@ -21,8 +23,8 @@ $$
 \end{aligned}
 $$
 
-It is invariant to both re-centering and positive re-scaling of the input.
-RMSNorm removes the mean subtraction:
+Phép này bất biến với cả việc dịch tâm và đổi tỷ lệ dương của đầu vào. RMSNorm
+loại bỏ phép trừ trung bình:
 
 $$
 \begin{aligned}
@@ -33,22 +35,24 @@ $$
 \end{aligned}
 $$
 
-The common LLM form keeps a learned per-channel scale `gamma` and usually has no learned bias `beta`. It is invariant to re-scaling but not to adding a constant
-shift. The RMSNorm paper's central hypothesis is that LayerNorm's re-centering
-invariance is dispensable; it reports comparable task performance and **lower
-runtime** in its tested RNN and Transformer settings.
+Dạng thường gặp trong LLM giữ hệ số tỷ lệ học được theo từng kênh `gamma` và
+thường không có bias học được `beta`. Nó bất biến với đổi tỷ lệ nhưng không bất
+biến khi cộng một độ dịch hằng. Giả thuyết trung tâm của bài báo RMSNorm là có
+thể bỏ tính bất biến với dịch tâm của LayerNorm; bài báo báo cáo hiệu năng tác vụ
+tương đương và **runtime thấp hơn** trong các thiết lập RNN và Transformer được
+thử nghiệm.
 ([Zhang and Sennrich, 2019](https://arxiv.org/abs/1910.07467))
 
-The paper's **7–64% runtime** reductions are measurements on its particular models
-and hardware, not a universal modern-LLM speedup. In current fused GPU kernels,
-the real gain depends on memory traffic, fusion, dtype, hidden width, and the
-fraction of total time spent in normalization.
+Mức giảm **7–64% runtime** trong bài báo là kết quả đo trên các mô hình và phần
+cứng cụ thể, không phải mức tăng tốc phổ quát cho LLM hiện đại. Với các kernel
+GPU hợp nhất hiện nay, lợi ích thực phụ thuộc vào lưu lượng bộ nhớ, mức hợp nhất,
+dtype, chiều rộng ẩn và tỷ lệ tổng thời gian dành cho chuẩn hóa.
 
-## Why pre-norm matters separately
+## Vì sao vị trí pre-norm là một vấn đề riêng
 
-Normalization type and normalization placement are different choices.
+Loại phép chuẩn hóa và vị trí đặt phép chuẩn hóa là hai lựa chọn khác nhau.
 
-Original post-norm block:
+Khối post-norm gốc:
 
 $$
 \begin{aligned}
@@ -57,7 +61,7 @@ z &= \operatorname{LayerNorm}\!\left(y+\operatorname{FFN}(y)\right)
 \end{aligned}
 $$
 
-Qwen-style pre-norm block:
+Khối pre-norm kiểu Qwen:
 
 $$
 \begin{aligned}
@@ -66,34 +70,33 @@ z &= y+\operatorname{FFN/MoE}\!\left(\operatorname{RMSNorm}(y)\right)
 \end{aligned}
 $$
 
-The pre-norm residual path contains an identity route from `x` to later layers.
-This helps gradient flow through a deep stack because the residual stream is not
-forced through a normalization operation at every skip connection. RMSNorm then
-controls the magnitude of each sublayer's input without rewriting the residual
-stream itself.
+Đường residual pre-norm chứa một đường đồng nhất từ `x` tới các tầng sau. Điều
+này hỗ trợ dòng gradient qua một stack sâu vì dòng residual không bị buộc đi qua
+phép chuẩn hóa tại mọi kết nối tắt. Sau đó RMSNorm kiểm soát độ lớn đầu vào của
+từng tầng con mà không viết lại chính dòng residual.
 
-## Dataflow example
+## Ví dụ về luồng dữ liệu
 
 ```mermaid
 flowchart TD
-    X["Residual x"] --> N1["RMSNorm\nx divided by RMS(x), scaled by gamma"]
+    X["Residual x"] --> N1["RMSNorm\nx chia cho RMS(x), nhân tỷ lệ gamma"]
     N1 --> A["Attention"]
 
-    X --> ADD1["Add"]
+    X --> ADD1["Cộng"]
     A --> ADD1
 
     ADD1 --> Y["Residual y"]
 
     Y --> N2["RMSNorm"]
-    N2 --> F["SwiGLU FFN or MoE"]
+    N2 --> F["SwiGLU FFN hoặc MoE"]
 
-    Y --> ADD2["Add"]
+    Y --> ADD2["Cộng"]
     F --> ADD2
 
-    ADD2 --> Z["Next-layer residual"]
+    ADD2 --> Z["Residual của tầng kế tiếp"]
 ```
 
-For a simplified token state `x = [3, 4]` with `gamma = [1, 1]` and no epsilon:
+Với trạng thái token đơn giản hóa `x = [3, 4]`, `gamma = [1, 1]` và không có epsilon:
 
 $$
 \begin{aligned}
@@ -105,32 +108,32 @@ $$
 \end{aligned}
 $$
 
-RMSNorm preserves the direction of `x` and rescales its RMS magnitude. LayerNorm
-would first subtract `3.5`, yielding a direction based only on deviations from
-the mean. This makes clear what computation was removed; it does not by itself
-prove that one representation is universally better.
+RMSNorm giữ nguyên hướng của `x` và đổi tỷ lệ độ lớn RMS. LayerNorm trước tiên sẽ
+trừ `3.5`, tạo ra một hướng chỉ dựa trên độ lệch so với trung bình. Ví dụ này làm
+rõ phép tính nào đã bị loại bỏ; bản thân nó không chứng minh biểu diễn nào tốt hơn
+trong mọi trường hợp.
 
-## Limits and failure modes
+## Giới hạn và chế độ lỗi
 
-- RMSNorm does not constrain the mean of activations. Other parts of the network
-  must tolerate or learn around mean shifts.
-- The learned `gamma` can itself grow; normalization is not a complete guarantee
-  against unstable attention logits or massive activations.
-- Pre-norm makes optimization easier at depth, but can change representation
-  scaling and final-layer behavior; a final normalization is normally still
-  applied before the LM head.
-- RMSNorm and QK-Norm act at different locations: RMSNorm normalizes the block input; QK-Norm normalizes projected query/key heads immediately before their dot products.
+- RMSNorm không ràng buộc giá trị trung bình của activation. Các phần khác của
+  mạng phải chịu được hoặc học cách xử lý độ dịch trung bình.
+- Bản thân `gamma` học được có thể tăng; chuẩn hóa không bảo đảm hoàn toàn tránh
+  logit attention bất ổn hoặc activation có độ lớn cực đại.
+- Pre-norm giúp tối ưu stack sâu dễ hơn nhưng có thể thay đổi tỷ lệ biểu diễn và
+  hành vi tầng cuối; thông thường vẫn áp dụng phép chuẩn hóa cuối trước LM head.
+- RMSNorm và QK-Norm hoạt động ở các vị trí khác nhau: RMSNorm chuẩn hóa đầu vào
+  khối; QK-Norm chuẩn hóa query/key head đã chiếu ngay trước phép tích vô hướng.
 
-## How Qwen uses it
+## Cách Qwen sử dụng RMSNorm
 
-**Verified:** Qwen2 uses RMSNorm with pre-normalization for training stability.
-([Qwen2 Technical Report, §2.2.1](https://arxiv.org/abs/2407.10671))
+**Đã xác minh:** Qwen2 sử dụng RMSNorm với tiền chuẩn hóa để ổn định quá trình
+huấn luyện. ([Báo cáo kỹ thuật Qwen2, §2.2.1](https://arxiv.org/abs/2407.10671))
 
-**Verified:** Qwen3 retains RMSNorm/pre-norm and separately adds QK-Norm.
-([Qwen3 Technical Report, §2](https://arxiv.org/abs/2505.09388))
+**Đã xác minh:** Qwen3 tiếp tục dùng RMSNorm/pre-norm và bổ sung QK-Norm riêng.
+([Báo cáo kỹ thuật Qwen3, §2](https://arxiv.org/abs/2505.09388))
 
-**Verified:** Qwen3-Next reports a further variant, zero-centered and
-weight-decayed RMSNorm, because the team observed abnormally large norm weights
-with its prior QK-Norm design. This is a later stability modification, not the
-definition of ordinary RMSNorm.
-([official Qwen3-Next architecture post](https://qwen.ai/blog?id=e34c4305036ce60d55a0791b170337c2b70ae51d))
+**Đã xác minh:** Qwen3-Next báo cáo một biến thể xa hơn: RMSNorm có tâm bằng
+không và weight decay, do nhóm quan sát thấy trọng số norm lớn bất thường với
+thiết kế QK-Norm trước đó. Đây là sửa đổi về độ ổn định về sau, không phải định
+nghĩa của RMSNorm thông thường.
+([Bài viết kiến trúc Qwen3-Next chính thức](https://qwen.ai/blog?id=e34c4305036ce60d55a0791b170337c2b70ae51d))

@@ -1,113 +1,113 @@
 
-# Deep Architectural Comparison: LLM vs VLM
+# So sánh sâu kiến trúc LLM và VLM
 
-> This version uses Mermaid diagrams, markdown tables, and structured
-> layouts for readability.
+> Phiên bản này sử dụng sơ đồ Mermaid, bảng Markdown và bố cục có cấu trúc để
+> dễ đọc.
 
-## 1. High-Level Architecture
+## 1. Kiến trúc cấp cao
 
 ```mermaid
 flowchart LR
-    T[Raw Text] --> TK[Tokenizer]
-    TK --> E[Token Embedding]
-    E --> LLM[Transformer Decoder]
-    LLM --> O[Generated Text]
+    T[Văn bản thô] --> TK[Tokenizer]
+    TK --> E[Embedding token]
+    E --> LLM[Decoder Transformer]
+    LLM --> O[Văn bản được sinh]
 ```
 
 ```mermaid
 flowchart LR
-    I[Image] --> VE[Vision Encoder]
-    TXT[Text] --> TK[Tokenizer]
-    TK --> TE[Text Embedding]
+    I[Ảnh] --> VE[Vision encoder]
+    TXT[Văn bản] --> TK[Tokenizer]
+    TK --> TE[Embedding văn bản]
     VE --> PJ[Projector / Connector]
-    TE --> FUSION[Token Concatenation / Fusion]
+    TE --> FUSION[Nối / hợp nhất token]
     PJ --> FUSION
     FUSION --> LLM[Transformer Decoder]
-    LLM --> OUT[Generated Text]
+    LLM --> OUT[Văn bản được sinh]
 ```
 
-## 2. Architectural Comparison
+## 2. So sánh kiến trúc
 
-  Component              LLM              VLM
+  Thành phần             LLM              VLM
 
 ---
 
-  Input                  Text             Text + Image / Video
-  Tokenizer              Text tokenizer   Text tokenizer + image patch embedding
+  Đầu vào                Văn bản          Văn bản + ảnh / video
+  Tokenizer              Tokenizer văn bản Tokenizer văn bản + embedding patch ảnh
   Vision encoder         ✗                ✓
-  Multimodal connector   ✗                ✓
-  Transformer backbone   Decoder-only     Usually the same decoder
-  Output                 Text             Usually text, sometimes actions or boxes
+  Connector đa phương thức ✗              ✓
+  Backbone Transformer   Chỉ decoder      Thường là cùng loại decoder
+  Đầu ra                 Văn bản          Thường là văn bản, đôi khi là hành động hoặc hộp giới hạn
 
-## 3. End-to-End Dataflow
+## 3. Luồng dữ liệu đầu cuối
 
 ```mermaid
 flowchart TD
-    A[RGB Image 224x224x3] --> B[Patchify]
-    B --> C[196 Patch Embeddings]
+    A[Ảnh RGB 224x224x3] --> B[Chia thành patch]
+    B --> C[196 embedding patch]
     C --> D[Vision Transformer]
-    D --> E[Visual Features]
+    D --> E[Đặc trưng thị giác]
     E --> F[Projector]
-    G[Instruction Text] --> H[Tokenizer]
-    H --> I[Text Embeddings]
-    F --> J[Concatenate Tokens]
+    G[Văn bản hướng dẫn] --> H[Tokenizer]
+    H --> I[Embedding văn bản]
+    F --> J[Nối token]
     I --> J
-    J --> K[Transformer Layers]
-    K --> L[Next Token Prediction]
+    J --> K[Các tầng Transformer]
+    K --> L[Dự đoán token kế tiếp]
 ```
 
-## 4. LLM Pipeline
+## 4. Pipeline LLM
 
-  Stage                 Output
+  Giai đoạn             Đầu ra
 
 ---
 
-  Tokenization          Integer IDs
-  Embedding             Hidden vectors (e.g. 4096-D)
-  Positional Encoding   Sequence information
-  Transformer Blocks    Contextual representations
-  LM Head               Vocabulary logits
-  Softmax               Next-token probabilities
+  Token hóa             ID số nguyên
+  Embedding             Vector ẩn (ví dụ 4096 chiều)
+  Mã hóa vị trí         Thông tin trình tự
+  Các khối Transformer  Biểu diễn theo ngữ cảnh
+  LM head               Logit trên bộ từ vựng
+  Softmax               Xác suất token kế tiếp
 
-## 5. VLM Additional Pipeline
+## 5. Pipeline bổ sung của VLM
 
 ```mermaid
 flowchart LR
-    IMG[Image]
-    IMG --> P[Patch Embedding]
+    IMG[Ảnh]
+    IMG --> P[Embedding patch]
     P --> VIT[Vision Transformer]
-    VIT --> PROJ[Projection MLP]
-    PROJ --> TOK[Visual Tokens]
+    VIT --> PROJ[MLP chiếu]
+    PROJ --> TOK[Token thị giác]
 ```
 
-Typical example:
+Ví dụ điển hình:
 
-  Step                         Shape
+  Bước                         Shape
 
 ---
 
-  Input image              224×224×3
-  Patch size                   16×16
-  Number of patches              196
-  ViT hidden size               1024
-  LLM hidden size               4096
-  Projected token size          4096
+  Ảnh đầu vào               224×224×3
+  Kích thước patch              16×16
+  Số patch                        196
+  Kích thước ẩn ViT              1024
+  Kích thước ẩn LLM              4096
+  Kích thước token sau chiếu     4096
 
-## 6. Transformer Block (Shared)
+## 6. Khối Transformer dùng chung
 
 ```mermaid
 flowchart TD
-    X[Input]
+    X[Đầu vào]
     X --> LN1[LayerNorm]
     LN1 --> ATTN[Multi-Head Self Attention]
-    ATTN --> ADD1[Residual Add]
+    ATTN --> ADD1[Cộng residual]
     ADD1 --> LN2[LayerNorm]
-    LN2 --> FFN[Feed Forward Network]
-    FFN --> ADD2[Residual Add]
-    ADD2 --> OUT[Output]
+    LN2 --> FFN[Mạng feed-forward]
+    FFN --> ADD2[Cộng residual]
+    ADD2 --> OUT[Đầu ra]
 ```
 
-### Attention Equations
+### Các phương trình attention
 
 ```text
 Q = XW_Q
@@ -117,108 +117,105 @@ V = XW_V
 Attention(Q,K,V) = softmax(QKᵀ / √d) V
 ```
 
-## 7. How Image and Text Interact
+## 7. Cách ảnh và văn bản tương tác
 
 ```mermaid
 flowchart LR
-    subgraph Visual
+    subgraph Visual[Thị giác]
         V1[Patch 1]
         V2[Patch 2]
         V3[Patch 3]
     end
 
-    subgraph Text
-        T1["What"]
-        T2["color"]
-        T3["mug"]
+    subgraph Text[Văn bản]
+        T1["Cái cốc"]
+        T2["màu"]
+        T3["gì"]
     end
 
-    T3 -.attends to.-> V2
-    T2 -.attends to.-> V3
+    T3 -.attention tới.-> V2
+    T2 -.attention tới.-> V3
 ```
 
-## 8. Tensor Shapes Through the Network
+## 8. Shape tensor xuyên suốt mạng
 
-  Stage               Example Shape
+  Giai đoạn           Shape ví dụ
 
 ---
 
-  Image               (224,224,3)
-  Patch embeddings    (196,768)
-  ViT output          (196,1024)
-  Projector output    (196,4096)
-  Text embeddings     (18,4096)
-  Combined sequence   (214,4096)
-  Decoder output      (214,4096)
-  Vocabulary logits   (214,VocabSize)
+  Ảnh                 (224,224,3)
+  Embedding patch     (196,768)
+  Đầu ra ViT          (196,1024)
+  Đầu ra projector    (196,4096)
+  Embedding văn bản   (18,4096)
+  Chuỗi kết hợp       (214,4096)
+  Đầu ra decoder      (214,4096)
+  Logit bộ từ vựng    (214,VocabSize)
 
-## 9. Complete Inference Flow
+## 9. Luồng suy luận hoàn chỉnh
 
 ```mermaid
 sequenceDiagram
-    participant User
+    participant User as Người dùng
     participant VisionEncoder
     participant Projector
     participant LLM
 
-    User->>VisionEncoder: RGB Image
-    VisionEncoder-->>Projector: Visual Features
-    User->>LLM: Prompt Tokens
-    Projector-->>LLM: Visual Tokens
-    LLM->>LLM: Multi-layer Self Attention
-    LLM-->>User: Generated Response
+    User->>VisionEncoder: Ảnh RGB
+    VisionEncoder-->>Projector: Đặc trưng thị giác
+    User->>LLM: Token prompt
+    Projector-->>LLM: Token thị giác
+    LLM->>LLM: Self-attention nhiều tầng
+    LLM-->>User: Phản hồi được sinh
 ```
 
-## 10. Major Architectural Families
+## 10. Các họ kiến trúc chính
 
 ---
 
-  Model          Vision Module  Connector      LLM Backbone   Fusion
+  Mô hình        Mô-đun thị giác Connector     Backbone LLM   Cách hợp nhất
 
 ---
 
-  LLaVA          ViT            Linear / MLP   Llama          Token
-                                                              concatenation
+  LLaVA          ViT            Tuyến tính / MLP Llama        Nối token
 
-  BLIP-2         ViT            Q-Former       Frozen LLM     Cross attention
+  BLIP-2         ViT            Q-Former       LLM đóng băng  Cross-attention
 
-  Flamingo       ViT            Perceiver      Frozen LLM     Interleaved
-                                Resampler                     cross attention
+  Flamingo       ViT            Perceiver      LLM đóng băng  Cross-attention
+                                Resampler                     xen kẽ
 
-  InternVL       InternViT      MLP            InternLM       Token
-                                                              concatenation
+  InternVL       InternViT      MLP            InternLM       Nối token
 
-  Qwen2.5-VL /   ViT            Native         Qwen           Native
-  Qwen3.x-VL                    connector                     multimodal
+  Qwen2.5-VL /   ViT            Connector      Qwen           Đa phương thức
+  Qwen3.x-VL                    bản địa                       bản địa
 
-GPT-4o /       Proprietary    Native         Proprietary    End-to-end
-  Gemini                                                      multimodal
+  GPT-4o /       Độc quyền      Bản địa        Độc quyền      Đa phương thức
+  Gemini                                                      đầu cuối
 ------------------------------------------------------------------------
 
-## 11. Summary
+## 11. Tóm tắt
 
 ---
 
-  Aspect                  LLM                     VLM
+  Khía cạnh               LLM                     VLM
 
 ---
 
-  Core reasoning          Transformer             Same transformer in
-                                                  most models
+  Cơ chế suy luận cốt lõi Transformer             Cùng loại Transformer
+                                                  trong phần lớn mô hình
 
-  New modules             None                    Vision encoder +
+  Mô-đun mới              Không có                Vision encoder +
                                                   connector
 
-  Biggest research focus  Scaling & reasoning     Vision-language
-                                                  alignment, token
-                                                  efficiency, multimodal
-                                                  fusion
+  Trọng tâm nghiên cứu    Mở rộng quy mô và       Căn chỉnh thị giác-ngôn ngữ,
+  lớn nhất                suy luận                 hiệu quả token và hợp nhất
+                                                  đa phương thức
 
-Mathematical core       Self-attention          Same self-attention;
-                                                  only inputs differ
+  Cốt lõi toán học        Self-attention          Cùng cơ chế self-attention;
+                                                  chỉ khác đầu vào
 --------------------------------------------------------------------
 
-Conceptually:
+Về mặt khái niệm:
 
 ```text
 VLM = Vision Encoder + Multimodal Connector + LLM

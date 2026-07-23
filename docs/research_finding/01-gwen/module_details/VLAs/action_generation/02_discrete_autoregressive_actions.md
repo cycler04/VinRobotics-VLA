@@ -1,137 +1,130 @@
-# Discrete Autoregressive Action Generation
+# Sinh action tự hồi quy rời rạc
 
-> **Scope.** VLA policies that serialize robot actions into discrete symbols
-> and generate them with the VLM's autoregressive next-token machinery.
-> Representative systems: RT-2, OpenVLA, and π0-FAST. Sources checked
-> 2026-07-21.
+> **Phạm vi.** Các policy VLA tuần tự hóa action robot thành ký hiệu rời rạc
+> và sinh chúng bằng cơ chế next-token tự hồi quy của VLM. Các hệ thống tiêu
+> biểu: RT-2, OpenVLA và π0-FAST. Nguồn được kiểm tra ngày 2026-07-21.
 
-## Core idea
+## Ý tưởng cốt lõi
 
-This family converts continuous control targets into a finite vocabulary, then
-trains the same causal language-model interface used for text:
+Họ này chuyển mục tiêu điều khiển liên tục thành một vocabulary hữu hạn, rồi
+train bằng cùng giao diện mô hình ngôn ngữ nhân quả dùng cho văn bản:
 
 ```text
-continuous action or chunk
+action hoặc chunk liên tục
         -> tokenizer
         -> [z1, z2, ..., zK]
         -> next-token cross-entropy
 
-at inference:
-context -> z1 -> z2 -> ... -> zK -> detokenizer -> continuous commands
+tại inference:
+ngữ cảnh -> z1 -> z2 -> ... -> zK -> detokenizer -> lệnh liên tục
 ```
 
-The decisive feature is not merely that an integer appears somewhere in the
-pipeline. The action symbols are generated **autoregressively**: each predicted
-token becomes context for the next token.
+Đặc điểm quyết định không chỉ là một số nguyên xuất hiện đâu đó trong pipeline.
+Các ký hiệu action được sinh **tự hồi quy**: mỗi token được dự đoán trở thành
+ngữ cảnh cho token tiếp theo.
 
-## RT-2: actions as text tokens
+## RT-2: action dưới dạng token văn bản
 
-RT-2 converts the robot action into a text-token-compatible sequence and
-co-fine-tunes a pretrained VLM on robot trajectories and web-scale
-vision-language tasks. Each continuous dimension follows RT-1's 256-bin
-discretization; the resulting integers are represented as ordinary numeric
-tokens in PaLI-X or reserved action tokens in PaLM-E. During robot-action
-decoding, the vocabulary is constrained to valid action symbols.
+RT-2 chuyển action robot thành một chuỗi tương thích với token văn bản và
+co-fine-tune một VLM pretrained trên trajectory robot cùng các tác vụ
+vision-language quy mô web. Mỗi chiều liên tục dùng phép rời rạc hóa 256 bin
+của RT-1; các số nguyên tạo ra được biểu diễn thành token số thông thường trong
+PaLI-X hoặc token action dành riêng trong PaLM-E. Khi decode action robot,
+vocabulary được giới hạn ở các ký hiệu action hợp lệ.
 [RT-2, §III-B](https://arxiv.org/abs/2307.15818)
 
-This makes the policy conceptually simple:
+Điều này làm cho policy đơn giản về mặt khái niệm:
 
 ```text
-image + instruction -> VLM -> "1 128 91  ..." -> bin centers -> robot action
+hình ảnh + chỉ dẫn -> VLM -> "1 128 91  ..." -> tâm bin -> action robot
 ```
 
-The main attraction is joint training: web answers and robot actions share the
-same sequence-model interface and parameters. The cost is sequential decoding
-and quantization of every motor dimension.
+Điểm hấp dẫn chính là joint training: câu trả lời web và action robot dùng chung
+giao diện sequence model và tham số. Đổi lại, mỗi chiều motor đều phải decode
+tuần tự và lượng tử hóa.
 
-## OpenVLA: reserved vocabulary entries
+## OpenVLA: các mục vocabulary dành riêng
 
-OpenVLA uses a 7B Llama-2-based Prismatic VLM. For each action dimension it:
+OpenVLA dùng Prismatic VLM 7B dựa trên Llama-2. Với mỗi chiều action, nó:
 
-1. takes the 1st-to-99th-percentile training-data interval;
-2. divides it into 256 bins;
-3. replaces the 256 least-used Llama tokenizer entries with action tokens;
-4. trains standard next-token prediction, applying cross-entropy only to the
-   action outputs.
+1. lấy khoảng percentile thứ 1 đến 99 của dữ liệu training;
+2. chia khoảng đó thành 256 bin;
+3. thay 256 mục ít dùng nhất của Llama tokenizer bằng token action;
+4. train dự đoán next-token chuẩn, chỉ áp dụng cross-entropy lên đầu ra action.
 
 [OpenVLA, §3.2](https://arxiv.org/abs/2406.09246)
 
-Percentile bounds reduce sensitivity to outliers, but semantics and bounds are
-still dataset-specific. A token ID is not a universal physical action until the
-correct dataset statistics and embodiment mapping are applied.
+Giới hạn percentile làm giảm độ nhạy với outlier, nhưng semantics và giới hạn
+vẫn đặc thù theo dataset. Một token ID không phải action vật lý phổ quát cho đến
+khi áp dụng đúng thống kê dataset và ánh xạ embodiment.
 
-## FAST and π0-FAST: compress before predicting
+## FAST và π0-FAST: nén trước khi dự đoán
 
-Naive binning emits one token for every dimension at every timestep. On smooth,
-high-frequency trajectories, adjacent values are strongly correlated; a model
-can reduce token loss by copying recent tokens without learning the chunk's
-global shape. FAST changes the target representation before autoregressive
-prediction. [FAST, §§III-V](https://arxiv.org/abs/2501.09747)
+Chia bin đơn giản phát ra một token cho mỗi chiều tại mỗi timestep. Trên các
+trajectory trơn, tần số cao, những giá trị liền kề tương quan mạnh; mô hình có
+thể giảm token loss bằng cách sao chép token gần đây mà không học hình dạng tổng
+thể của chunk. FAST thay đổi biểu diễn mục tiêu trước khi dự đoán tự hồi quy.
+[FAST, §§III-V](https://arxiv.org/abs/2501.09747)
 
-The FAST tokenizer performs:
+FAST tokenizer thực hiện:
 
 ```text
-1-second continuous action chunk
-  -> per-dimension percentile normalization
-  -> discrete cosine transform (DCT)
-  -> scale and round frequency coefficients
-  -> flatten low frequencies first across action dimensions
+action chunk liên tục dài 1 giây
+  -> chuẩn hóa percentile theo từng chiều
+  -> biến đổi cosine rời rạc (DCT)
+  -> scale và làm tròn hệ số tần số
+  -> flatten các tần số thấp trước trên các chiều action
   -> byte-pair encoding (BPE)
-  -> variable-length discrete token sequence
+  -> chuỗi token rời rạc có độ dài thay đổi
 ```
 
-Low-frequency coefficients describe the overall trajectory first. Rounding
-makes the coefficient matrix sparse; BPE merges recurring integer patterns and
-runs of zeros. The transform is fast to decode, although coefficient rounding
-means the full continuous-to-discrete pipeline is lossy. FAST+ fixes a reusable
-BPE vocabulary trained on about one million one-second action chunks from
-multiple embodiments. [FAST, §V-B-C](https://arxiv.org/abs/2501.09747)
+Các hệ số tần số thấp mô tả trajectory tổng thể trước. Phép làm tròn khiến ma
+trận hệ số thưa; BPE gộp các pattern số nguyên lặp lại và những dải số 0. Phép
+biến đổi được decode nhanh, dù việc làm tròn hệ số khiến toàn bộ pipeline từ
+liên tục sang rời rạc bị mất mát. FAST+ cố định một BPE vocabulary có thể tái
+sử dụng, được train trên khoảng một triệu action chunk dài một giây từ nhiều
+embodiment. [FAST, §V-B-C](https://arxiv.org/abs/2501.09747)
 
-π0-FAST is the π0/PaliGemma backbone trained to emit these compressed tokens
-instead of using π0's flow-matching action expert. FAST therefore changes the
-**action tokenizer and target sequence**, not the causal decoder's fundamental
-next-token computation. In the paper's evaluated mixture it matched the
-reported π0 flow model performance while training up to 5x faster; that result
-does not prove parity on every robot or data distribution.
+π0-FAST là backbone π0/PaliGemma được train để phát ra các token đã nén này thay
+vì dùng flow-matching action expert của π0. Vì vậy FAST thay đổi **action
+tokenizer và chuỗi mục tiêu**, không thay đổi phép tính next-token nền tảng của
+causal decoder. Trên hỗn hợp đánh giá trong paper, nó đạt hiệu năng ngang mô
+hình flow π0 được báo cáo trong khi training nhanh hơn tới 5 lần; kết quả đó
+không chứng minh hai cách tương đương trên mọi robot hoặc phân phối dữ liệu.
 
-## Important boundary cases
+## Các trường hợp biên quan trọng
 
-- **RT-1:** discrete and non-autoregressive in its final action output. The
-  authors removed autoregressive action conditioning because it added latency
-  without a meaningful gain in their ablation. It emits per-dimension
-  categorical outputs directly for the current step. See
-  [continuous/direct prediction](01_continuous_regression.md).
-- **π0.5:** uses FAST tokens to make large-scale pretraining efficient, then
-  adds a flow-matching expert for fine-grained continuous low-level inference.
-  It belongs to both the discrete-token training story and the
-  [flow-expert story](04_flow_matching_transformer_expert.md), depending on the
-  phase being discussed.
-- **Detokenization is not the robot controller:** mapping symbols back to
-  normalized numbers still precedes embodiment conversion, safety limits, and
-  low-level execution.
+- **RT-1:** rời rạc và không tự hồi quy ở đầu ra action cuối. Các tác giả loại
+  bỏ điều kiện hóa action tự hồi quy vì nó tăng độ trễ mà không cải thiện đáng
+  kể trong ablation. RT-1 phát trực tiếp đầu ra phân loại theo từng chiều cho
+  bước hiện tại. Xem [dự đoán liên tục/trực tiếp](01_continuous_regression.md).
+- **π0.5:** dùng token FAST để pretraining quy mô lớn hiệu quả, sau đó thêm một
+  flow-matching expert để inference cấp thấp liên tục, chi tiết. Tùy giai đoạn
+  đang xét, nó vừa thuộc câu chuyện training bằng token rời rạc, vừa thuộc
+  [câu chuyện flow expert](04_flow_matching_transformer_expert.md).
+- **Detokenization không phải robot controller:** ánh xạ ký hiệu trở lại số đã
+  chuẩn hóa vẫn đứng trước chuyển đổi embodiment, giới hạn an toàn và thực thi cấp thấp.
 
-## Strengths and limitations
+## Điểm mạnh và giới hạn
 
-Strengths:
+Điểm mạnh:
 
-- reuses VLM vocabulary, causal Transformer, cross-entropy loss, and scalable
-  next-token training infrastructure;
-- can interleave text, reasoning, and action symbols in one output space;
-- defines an explicit likelihood over action-token sequences;
-- FAST compresses high-frequency chunks without adding a learned action expert.
+- tái sử dụng vocabulary VLM, causal Transformer, cross-entropy loss và hạ tầng
+  training next-token có khả năng mở rộng;
+- có thể xen kẽ văn bản, reasoning và ký hiệu action trong một không gian đầu ra;
+- định nghĩa likelihood tường minh trên các chuỗi action-token;
+- FAST nén chunk tần số cao mà không thêm action expert được học.
 
-Limitations:
+Giới hạn:
 
-- autoregressive latency grows with the number of generated action tokens;
-- naive bins discard within-bin precision and ignore temporal structure;
-- one mistake changes the context for later tokens;
-- token validity, normalization statistics, and action semantics must travel
-  with the checkpoint;
-- FAST adds a reconstruction/compression trade-off and variable token length;
-  it improves the target representation but does not eliminate sequential
-  decoding.
+- độ trễ tự hồi quy tăng theo số token action được sinh;
+- cách chia bin đơn giản làm mất độ chính xác bên trong bin và bỏ qua cấu trúc thời gian;
+- một lỗi sẽ thay đổi ngữ cảnh của các token sau;
+- tính hợp lệ của token, thống kê chuẩn hóa và semantics của action phải đi cùng checkpoint;
+- FAST tạo thêm đánh đổi reconstruction/compression và độ dài token thay đổi;
+  nó cải thiện biểu diễn mục tiêu nhưng không loại bỏ decode tuần tự.
 
-## Sources
+## Nguồn
 
 - Brohan et al. *RT-2: Vision-Language-Action Models Transfer Web Knowledge to
   Robotic Control*, §III-B, arXiv:2307.15818.

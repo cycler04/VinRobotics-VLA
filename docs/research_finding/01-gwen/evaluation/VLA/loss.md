@@ -1,42 +1,42 @@
-# Losses Used in Qwen Vision-Language-Action Models
+# Các hàm mất mát được dùng trong những mô hình Thị giác-Ngôn ngữ-Hành động Qwen
 
-> **Question:** How do Qwen-VLA and the specialized Qwen robotics models train
-> actions, language, policies and future video?
+> **Câu hỏi:** Qwen-VLA và các mô hình Qwen chuyên biệt cho robot huấn luyện
+> hành động, ngôn ngữ, chính sách và video tương lai như thế nào?
 >
-> **Scope:** Published objectives in Qwen-VLA, Qwen-RobotManip,
-> Qwen-RobotNav and Qwen-RobotWorld. Research checked on 2026-07-21.
+> **Phạm vi:** Các mục tiêu đã công bố trong Qwen-VLA, Qwen-RobotManip,
+> Qwen-RobotNav và Qwen-RobotWorld. Nghiên cứu được kiểm tra ngày 2026-07-21.
 
-## Short answer
+## Câu trả lời ngắn
 
-These models do not share one interchangeable “VLA loss”:
+Các mô hình này không dùng chung một “hàm mất mát VLA” có thể thay thế lẫn nhau:
 
-| Model/stage | Learned output | Main published objective |
+| Mô hình/giai đoạn | Đầu ra được học | Mục tiêu chính đã công bố |
 |---|---|---|
-| Qwen-VLA pretraining/SFT | action chunks + text | masked flow-matching MSE + next-token NLL |
-| Qwen-VLA RL | closed-loop action policy + value | PPO clipped actor objective + clipped value MSE |
-| Qwen-RobotManip | continuous action chunks + text | masked flow matching + next-token NLL; action-only SFT by default |
-| Qwen-RobotNav | eight 3D waypoints + text | trajectory MSE + next-token NLL |
-| Qwen-RobotWorld | future video latents | conditional flow matching with condition masks |
+| Tiền huấn luyện/SFT Qwen-VLA | các đoạn hành động + văn bản | MSE khớp dòng có mặt nạ + NLL từ tố kế tiếp |
+| RL Qwen-VLA | chính sách hành động vòng kín + giá trị | mục tiêu tác tử cắt ngưỡng PPO + MSE giá trị cắt ngưỡng |
+| Qwen-RobotManip | các đoạn hành động liên tục + văn bản | khớp dòng có mặt nạ + NLL từ tố kế tiếp; mặc định SFT chỉ dùng hành động |
+| Qwen-RobotNav | tám điểm mốc 3D + văn bản | MSE quỹ đạo + NLL từ tố kế tiếp |
+| Qwen-RobotWorld | các biến tiềm ẩn của video tương lai | khớp dòng có điều kiện với các mặt nạ điều kiện |
 
-Loss scale depends on action representation, horizon, timestep distribution,
-mask and reduction. It must be paired with score definitions in
-[metrics.md](metrics.md) and the evaluation protocol in
+Thang đo mất mát phụ thuộc vào biểu diễn hành động, đường chân trời, phân phối bước thời
+gian, mặt nạ và phép rút gọn. Nó phải được xem cùng với các định nghĩa điểm số trong
+[metrics.md](metrics.md) và giao thức đánh giá trong
 [benchmarks.md](benchmarks.md).
 
-## Qwen-VLA action flow matching
+## Khớp dòng hành động của Qwen-VLA
 
-Let the clean action chunk be $Y_0\in\mathbb{R}^{H\times K}$ and sample Gaussian
-noise $Y_1\sim\mathcal{N}(0,I)$. At noise time $\tau$, training constructs
+Gọi đoạn hành động sạch là $Y_0\in\mathbb{R}^{H\times K}$ và lấy mẫu nhiễu Gauss
+$Y_1\sim\mathcal{N}(0,I)$. Tại thời điểm nhiễu $\tau$, quá trình huấn luyện dựng
 
 $$
 Y_\tau=(1-\tau)Y_0+\tau Y_1,
 $$
 
-and asks the action expert to predict the constant velocity $Y_1-Y_0$.
+và yêu cầu chuyên gia hành động dự đoán vận tốc không đổi $Y_1-Y_0$.
 
-Because datasets have different action dimensions and episodes can end inside a
-chunk, Qwen-VLA uses mask $M_{h,k}$ and first averages over valid timesteps for
-each action channel:
+Vì các tập dữ liệu có số chiều hành động khác nhau và phiên có thể kết thúc ở giữa một
+đoạn, Qwen-VLA dùng mặt nạ $M_{h,k}$ và trước tiên lấy trung bình trên các bước thời
+gian hợp lệ cho từng kênh hành động:
 
 $$
 \ell_k=
@@ -46,29 +46,29 @@ v_\theta(Y_\tau,\tau,o,x)_{h,k}-(Y_1-Y_0)_{h,k}
 {\sum_h M_{h,k}}.
 $$
 
-It then gives each of the $c$ active channels equal weight:
+Sau đó, mô hình gán trọng số bằng nhau cho từng kênh trong số $c$ kênh đang hoạt động:
 
 $$
 \mathcal{L}_{\mathrm{act}}
 =\mathbb{E}\left[\frac{1}{c}\sum_{k<c}\ell_k\right].
 $$
 
-This two-level reduction is important. Padding has no gradient, longer valid
-chunks do not automatically receive more weight, and a high-DoF embodiment does
-not dominate only because it has more active scalar channels. It does **not**
-make channel units semantically equivalent; dataset-specific normalization and
-action definitions still matter. [Qwen-VLA, Sections 2.4–2.5][qwen-vla]
+Phép rút gọn hai cấp này rất quan trọng. Phần đệm không có gradien, các đoạn hợp lệ
+dài hơn không tự động nhận trọng số lớn hơn, và một hiện thân có số bậc tự do cao không
+chiếm ưu thế chỉ vì có nhiều kênh vô hướng đang hoạt động hơn. Phép rút gọn này **không**
+làm cho đơn vị của các kênh tương đương nhau về ngữ nghĩa; phép chuẩn hóa và định nghĩa
+hành động riêng cho từng tập dữ liệu vẫn có ý nghĩa. [Qwen-VLA, Mục 2.4–2.5][qwen-vla]
 
-## Joint vision-language and action training
+## Huấn luyện chung thị giác-ngôn ngữ và hành động
 
-The auxiliary language objective is next-token negative log likelihood:
+Mục tiêu ngôn ngữ phụ trợ là âm log hợp lý của từ tố kế tiếp:
 
 $$
 \mathcal{L}_{\mathrm{vl}}
 =-\sum_i \log p_\theta(w_i\mid w_{<i},o_{1:t}),
 $$
 
-and the joint objective is
+và mục tiêu chung là
 
 $$
 \mathcal{L}
@@ -76,30 +76,29 @@ $$
 +\lambda_{\mathrm{vl}}\mathcal{L}_{\mathrm{vl}}.
 $$
 
-The stages use it differently:
+Các giai đoạn sử dụng mục tiêu này theo những cách khác nhau:
 
-| Stage | Trainable part and signal | Published weighting/noise rule |
+| Giai đoạn | Thành phần có thể huấn luyện và tín hiệu | Quy tắc trọng số/nhiễu đã công bố |
 |---|---|---|
-| Text-to-action alignment | Action expert; text/embodiment prompt conditions flow matching | VLM frozen; Sigmoid-Normal time sampling |
-| Continual pretraining | VLM and action expert; VL and action data are co-trained | weights tuned to balance gradient magnitude; numeric values not disclosed; Beta time sampling |
-| Supervised fine-tuning | mixed manipulation, navigation and VL targets | VL 0.1; manipulation action 1.0; navigation action 1.0; Beta time sampling |
+| Căn chỉnh văn bản-hành động | Chuyên gia hành động; lời nhắc văn bản/hiện thân điều kiện hóa phép khớp dòng | VLM bị đóng băng; lấy mẫu thời gian Sigmoid-Normal |
+| Tiền huấn luyện liên tục | VLM và chuyên gia hành động; dữ liệu VL và hành động được đồng huấn luyện | các trọng số được điều chỉnh để cân bằng độ lớn gradien; không công bố giá trị số; lấy mẫu thời gian Beta |
+| Tinh chỉnh có giám sát | kết hợp các mục tiêu thao tác, điều hướng và VL | VL 0.1; hành động thao tác 1.0; hành động điều hướng 1.0; lấy mẫu thời gian Beta |
 
-Manipulation uses action horizon 16 and navigation horizon 8 during SFT. The
-paper's ablations show that the timestep distribution is not a cosmetic detail:
-Sigmoid-Normal works best for text-to-action alignment, while Beta works best
-for SFT. [Qwen-VLA, Sections 3–5.2][qwen-vla]
+Trong SFT, thao tác dùng đường chân trời hành động 16 còn điều hướng dùng đường chân trời
+8. Các thí nghiệm loại trừ của bài báo cho thấy phân phối bước thời gian không phải là một
+chi tiết mang tính hình thức: Sigmoid-Normal hoạt động tốt nhất cho căn chỉnh văn bản-hành
+động, còn Beta hoạt động tốt nhất cho SFT. [Qwen-VLA, Mục 3–5.2][qwen-vla]
 
-## Qwen-VLA reinforcement learning
+## Học tăng cường Qwen-VLA
 
-Qwen-VLA starts RL from the multi-task SFT checkpoint and applies PPO. With
-probability ratio
+Qwen-VLA bắt đầu RL từ điểm kiểm tra SFT đa nhiệm và áp dụng PPO. Với tỷ số xác suất
 
 $$
 r_t(\theta)=\frac{\pi_\theta(a_t\mid s_t)}
 {\pi_{\theta_{\mathrm{old}}}(a_t\mid s_t)},
 $$
 
-the clipped actor objective is
+mục tiêu tác tử cắt ngưỡng là
 
 $$
 \mathcal{L}_{\mathrm{actor}}
@@ -109,36 +108,35 @@ $$
 \right].
 $$
 
-The published total is
+Tổng mục tiêu được công bố là
 
 $$
 \mathcal{L}_{\mathrm{RL}}
 =\mathcal{L}_{\mathrm{actor}}+c_v\mathcal{L}_{\mathrm{value}},
 $$
 
-where the critic uses a clipped MSE. Reported settings are
-$\epsilon=0.2$, discount $\gamma=0.99$, GAE $\lambda=0.95$, $c_v=1$, four PPO
-epochs, actor learning rate $5\times10^{-6}$ and value-head learning rate
-$10^{-4}$. The VLM features are stop-gradient inputs to the value head.
+trong đó bộ phê bình sử dụng MSE cắt ngưỡng. Các thiết lập được báo cáo gồm
+$\epsilon=0.2$, hệ số chiết khấu $\gamma=0.99$, GAE $\lambda=0.95$, $c_v=1$, bốn
+vòng huấn luyện PPO, tốc độ học của tác tử $5\times10^{-6}$ và tốc độ học của đầu giá trị
+$10^{-4}$. Các đặc trưng VLM là đầu vào ngắt gradien cho đầu giá trị.
 
-Flow matching does not directly expose a tractable action log-probability. The
-paper converts the probability-flow ODE into an SDE with Gaussian transitions
-and recomputes the log-probability at one sampled denoising step. Reward is
-sparse and binary—1 only for episode success, otherwise 0—and no learned reward
-model is used. Rewards and advantages operate at action-chunk level with
-$H=16$. The published total equation does not show an entropy or KL penalty, so
-one should not add those terms to the documented objective. [Qwen-VLA, Section
-4.2][qwen-vla]
+Khớp dòng không trực tiếp cung cấp một log xác suất hành động có thể tính toán thuận lợi. Bài báo chuyển
+ODE dòng xác suất thành một SDE với các chuyển tiếp Gauss và tính lại log xác suất tại
+một bước khử nhiễu được lấy mẫu. Phần thưởng thưa và nhị phân—chỉ bằng 1 khi phiên
+thành công, ngược lại bằng 0—và không sử dụng mô hình phần thưởng được học. Phần thưởng
+và lợi thế hoạt động ở cấp đoạn hành động với $H=16$. Phương trình tổng đã công bố không
+thể hiện hạng phạt entropy hoặc KL, vì vậy không nên thêm các hạng đó vào mục tiêu được
+ghi nhận. [Qwen-VLA, Mục 4.2][qwen-vla]
 
-SFT supplies most of the reported downstream gain; PPO adds a smaller increase
-on its SimplerEnv rollout domain and mostly small changes elsewhere. This is a
-reminder that a sophisticated loss does not by itself imply a large behavioral
-gain.
+SFT mang lại phần lớn mức cải thiện hạ nguồn được báo cáo; PPO bổ sung một mức tăng nhỏ
+hơn trên miền triển khai SimplerEnv của nó và chủ yếu chỉ tạo ra những thay đổi nhỏ ở nơi
+khác. Đây là lời nhắc rằng một hàm mất mát tinh vi tự nó không đồng nghĩa với mức cải
+thiện hành vi lớn.
 
 ## Qwen-RobotManip
 
-Qwen-RobotManip changes the interpolation direction. For clean action $a$,
-noise $\epsilon\sim\mathcal{N}(0,I)$ and $t\sim\mathrm{Beta}(1,1.5)$:
+Qwen-RobotManip thay đổi hướng nội suy. Với hành động sạch $a$, nhiễu
+$\epsilon\sim\mathcal{N}(0,I)$ và $t\sim\mathrm{Beta}(1,1.5)$:
 
 $$
 x_t=(1-t)\epsilon+ta,
@@ -146,34 +144,36 @@ x_t=(1-t)\epsilon+ta,
 u=a-\epsilon.
 $$
 
-The model regresses $u$ with squared error. Its published masked reduction
-averages over valid entries per sample and then over the batch. The validity
-mask combines action-dimension validity, timestep/episode-boundary validity and
-per-hand visibility. This differs from Qwen-VLA's equal-per-channel reduction,
-so raw action-loss values are not comparable across the two papers.
+Mô hình hồi quy $u$ bằng sai số bình phương. Phép rút gọn có mặt nạ được công bố lấy
+trung bình trên các phần tử hợp lệ của từng mẫu, rồi lấy trung bình trên lô. Mặt nạ
+hợp lệ kết hợp tính hợp lệ của chiều hành động, tính hợp lệ của bước thời gian/ranh giới
+phiên và khả năng quan sát của từng tay. Cách này khác với phép rút gọn gán trọng số
+bằng nhau cho từng kênh của Qwen-VLA, do đó không thể so sánh các giá trị mất mát hành
+động thô giữa hai bài báo.
 
-RobotManip combines this loss with next-token likelihood during pretraining:
+Trong quá trình tiền huấn luyện, RobotManip kết hợp hàm mất mát này với hợp lý của từ tố
+kế tiếp:
 
 $$
 \mathcal{L}=\mathcal{L}_{\mathrm{FM}}
 +0.1\,\mathcal{L}_{\mathrm{VLM}}.
 $$
 
-Its pretraining samples VLA and VL data at a 9:1 ratio and repeats each action
-sample with eight independently sampled noise/timestep pairs. Default
-task-specific SFT uses only flow matching, without the VLM term. The report does
-not document an RL, preference or distillation stage. [Qwen-RobotManip,
-Sections 3–4][robotmanip]
+Quá trình tiền huấn luyện của mô hình lấy mẫu dữ liệu VLA và VL theo tỷ lệ 9:1 và lặp
+lại mỗi mẫu hành động với tám cặp nhiễu/bước thời gian được lấy mẫu độc lập. SFT dành
+riêng cho từng tác vụ mặc định chỉ dùng khớp dòng, không có hạng VLM. Báo cáo không ghi
+nhận giai đoạn RL, ưu tiên hoặc chưng cất. [Qwen-RobotManip,
+Mục 3–4][robotmanip]
 
-An important negative result appears in its context ablation: a configuration
-can obtain low training loss by copying recent actions yet perform poorly at
-task success. Optimization loss and closed-loop competence must therefore be
-reported separately.
+Một kết quả âm quan trọng xuất hiện trong thí nghiệm loại trừ ngữ cảnh: một cấu hình có
+thể đạt mất mát huấn luyện thấp bằng cách sao chép các hành động gần đây nhưng lại đạt
+kết quả kém về mức độ thành công của tác vụ. Vì vậy, mất mát tối ưu hóa và năng lực vòng
+kín phải được báo cáo riêng.
 
 ## Qwen-RobotNav
 
-Qwen-RobotNav predicts eight waypoints with three coordinates each. Its
-trajectory term is direct regression:
+Qwen-RobotNav dự đoán tám điểm mốc, mỗi điểm mốc có ba tọa độ. Hạng quỹ đạo của mô hình
+là phép hồi quy trực tiếp:
 
 $$
 \mathcal{L}_{\mathrm{traj}}
@@ -184,56 +184,58 @@ $$
 \quad \lambda=1.0.
 $$
 
-The trajectory term is active only for navigation samples; the VL term is the
-standard next-token objective. Training mixes 85% trajectory data with 15%
-navigation-related VL data. Coordinates are normalized per dataset using the
-99th percentile and mapped to $[-1,1]$, so a numeric MSE has no universal
-distance unit. The report does not describe flow matching, RL, preference or
-distillation losses. [Qwen-RobotNav, Sections 2.5–2.6][robotnav]
+Hạng quỹ đạo chỉ hoạt động đối với các mẫu điều hướng; hạng VL là mục tiêu từ tố kế
+tiếp tiêu chuẩn. Quá trình huấn luyện trộn 85% dữ liệu quỹ đạo với 15% dữ liệu VL liên
+quan đến điều hướng. Các tọa độ được chuẩn hóa riêng cho từng tập dữ liệu bằng phân vị thứ
+99 và ánh xạ vào $[-1,1]$, vì vậy một giá trị MSE dạng số không có đơn vị khoảng cách
+phổ quát. Báo cáo không mô tả các hàm mất mát khớp dòng, RL, ưu tiên hoặc chưng cất.
+[Qwen-RobotNav, Mục 2.5–2.6][robotnav]
 
 ## Qwen-RobotWorld
 
-Qwen-RobotWorld is a future-video model, not an action policy. It encodes video
-with a VAE, corrupts the latent with Gaussian noise, and learns conditional flow
-matching. Noise time follows a log-normal distribution with a shift adapted to
-sequence length. A frozen Qwen2.5-VL encoder supplies language/action guidance.
+Qwen-RobotWorld là mô hình video tương lai, không phải chính sách hành động. Mô hình mã
+hóa video bằng VAE, làm nhiễu biến tiềm ẩn bằng nhiễu Gauss và học khớp dòng có điều kiện.
+Thời điểm nhiễu tuân theo phân phối log-chuẩn với một độ dịch được điều chỉnh theo độ dài
+chuỗi. Một bộ mã hóa Qwen2.5-VL bị đóng băng cung cấp chỉ dẫn ngôn ngữ/hành động.
 
-Conditioning frames are excluded from the denoising loss:
+Các khung hình điều kiện bị loại khỏi hàm mất mát khử nhiễu:
 
-- in text-image-to-video, the first-frame latent is fixed at $t=0$;
-- in Scene2Robot, both the scene condition and robot-reference segment are
-  fixed at $t=0$;
-- only the future generation segment receives denoising gradients.
+- trong tác vụ văn bản-hình ảnh-sang-video, biến tiềm ẩn của khung hình đầu tiên được cố
+  định tại $t=0$;
+- trong Scene2Robot, cả điều kiện cảnh và phân đoạn tham chiếu robot đều được cố định tại
+  $t=0$;
+- chỉ phân đoạn sinh tương lai nhận gradien khử nhiễu.
 
-The report does not print the exact velocity/MSE equation, objective weights,
-a separate VAE reconstruction loss, or whether the VAE itself is trained. These
-details remain `Unknown`. Its video loss must not be compared numerically with
-robot action loss or treated as evidence of executable policy success.
-[Qwen-RobotWorld, Sections 3–4][robotworld]
+Báo cáo không in phương trình vận tốc/MSE chính xác, các trọng số mục tiêu, một hàm mất
+mát tái dựng VAE riêng biệt, hoặc việc bản thân VAE có được huấn luyện hay không. Những
+chi tiết này vẫn ở trạng thái `Unknown`. Không được so sánh bằng số hàm mất mát video
+của mô hình với hàm mất mát hành động robot hoặc xem nó là bằng chứng về sự thành công
+của một chính sách có thể thực thi. [Qwen-RobotWorld, Mục 3–4][robotworld]
 
-## Comparison checklist
+## Danh sách kiểm tra khi so sánh
 
-Before interpreting two loss curves, match all of the following:
+Trước khi diễn giải hai đường cong mất mát, hãy đối chiếu tất cả các yếu tố sau:
 
-- output representation, units and normalization statistics;
-- horizon, active dimensions and exact mask;
-- per-token, per-channel, per-entry or per-sample reduction;
-- flow interpolation direction, target velocity and noise-time distribution;
-- VL/action sampling ratio and objective coefficients;
-- rollout policy, reward, discount, advantage and PPO clipping for RL;
-- dataset, split, batch composition and checkpoint stage.
+- biểu diễn đầu ra, đơn vị và thống kê chuẩn hóa;
+- đường chân trời, các chiều đang hoạt động và mặt nạ chính xác;
+- phép rút gọn theo từng từ tố, từng kênh, từng phần tử hoặc từng mẫu;
+- hướng nội suy dòng, vận tốc mục tiêu và phân phối thời điểm nhiễu;
+- tỷ lệ lấy mẫu VL/hành động và các hệ số mục tiêu;
+- chính sách triển khai, phần thưởng, hệ số chiết khấu, lợi thế và phép cắt ngưỡng PPO cho RL;
+- tập dữ liệu, tập phân chia, thành phần lô và giai đoạn điểm kiểm tra.
 
-Log `action_loss`, `vl_loss`, `actor_loss`, `value_loss`, reward and success rate
-as separate fields. A weighted total alone cannot show which component changed.
+Hãy ghi `action_loss`, `vl_loss`, `actor_loss`, `value_loss`, phần thưởng và tỷ lệ thành
+công thành các trường riêng biệt. Chỉ một tổng có trọng số không thể cho biết thành phần
+nào đã thay đổi.
 
-## Sources
+## Nguồn
 
-- Wang et al. *Qwen-VLA*. [Paper][qwen-vla] · [Local PDF][qwen-vla-local]
-- Qwen Team. *Qwen-RobotManip*. [Paper][robotmanip] ·
-  [Local PDF][robotmanip-local]
-- Qwen Team. *Qwen-RobotNav*. [Paper][robotnav] · [Local PDF][robotnav-local]
-- Qwen Team. *Qwen-RobotWorld*. [Paper][robotworld] ·
-  [Local PDF][robotworld-local]
+- Wang và cộng sự. *Qwen-VLA*. [Bài báo][qwen-vla] · [PDF cục bộ][qwen-vla-local]
+- Nhóm Qwen. *Qwen-RobotManip*. [Bài báo][robotmanip] ·
+  [PDF cục bộ][robotmanip-local]
+- Nhóm Qwen. *Qwen-RobotNav*. [Bài báo][robotnav] · [PDF cục bộ][robotnav-local]
+- Nhóm Qwen. *Qwen-RobotWorld*. [Bài báo][robotworld] ·
+  [PDF cục bộ][robotworld-local]
 
 [qwen-vla]: https://arxiv.org/abs/2605.30280v2
 [qwen-vla-local]: ../../../papers/05-gwen/vla-specific/qwen_vla_2605.30280.pdf

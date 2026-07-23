@@ -1,170 +1,170 @@
-# Evaluating Qwen Models
+# Đánh giá mô hình Qwen
 
-> **Research question:** Which benchmarks are useful for evaluating the Qwen
-> family as a language, vision-language, and agent backbone, especially before
-> using it inside a VLA system?
+> **Câu hỏi nghiên cứu:** Điểm chuẩn nào hữu ích cho việc đánh giá Qwen
+> gia đình như một ngôn ngữ, ngôn ngữ tầm nhìn và xương sống tác nhân, đặc biệt là trước
+> sử dụng nó bên trong hệ thống VLA?
 >
-> **Scope:** Qwen3, Qwen3.5, Qwen3.6, and Qwen2.5-VL. Qwen-VLA's closed-loop
-> policy evaluation is documented separately in
-> [VLA/benchmarks.md](../VLA/benchmarks.md). Research checked on 2026-07-22.
+> **Phạm vi:** Qwen3, Qwen3.5, Qwen3.6 và Qwen2.5-VL. Vòng kín của Qwen-VLA
+> đánh giá chính sách được ghi lại riêng biệt trong
+> [VLA/benchmarks.md](../VLA/benchmarks.md). Nghiên cứu được kiểm tra vào ngày 22-07-2026.
 
-## Short answer
+## Câu trả lời ngắn
 
-There is no single meaningful "Qwen score." A useful evaluation has three
-layers:
+Không có một "điểm Qwen" nào có ý nghĩa duy nhất. Một đánh giá hữu ích có ba
+lớp:
 
-1. **language and reasoning** for instruction understanding, planning, and tool
-   use;
-2. **vision-language** for perception, OCR, grounding, spatial reasoning, and
-   temporal understanding;
-3. **task execution** for agents or robots, where an answer benchmark is no
-   substitute for success in an environment.
+1. **ngôn ngữ và lý luận** để hiểu hướng dẫn, lập kế hoạch và công cụ
+   sử dụng;
+2. **ngôn ngữ tầm nhìn** dành cho nhận thức, OCR, nền tảng, lý luận không gian và
+   sự hiểu biết tạm thời;
+3. **thực thi nhiệm vụ** dành cho tổng đài viên hoặc robot, trong đó không có điểm chuẩn cho câu trả lời
+   thay thế cho sự thành công trong một môi trường.
 
-For a robotics backbone, MMMU alone is insufficient. The minimum useful panel is
-`MMMU-Pro + MathVista + OCRBench + RefCOCO/RefSpatialBench + VideoMME`, followed
-by a closed-loop VLA suite. The Qwen3.5 model card reports all of these capability
-families, while the Qwen-VLA paper shows that they still do not predict robot
-success by themselves. [Qwen3.5 model card][qwen35-card]
-[Qwen-VLA report, Sections 5 and 7][qwen-vla]
+Đối với xương sống robot, chỉ riêng MMMU là không đủ. Bảng hữu ích tối thiểu là
+`MMMU-Pro + MathVista + OCRBench + RefCOCO/RefSpatialBench + VideoMME`, đã theo dõi
+bởi bộ VLA vòng kín. Thẻ mẫu Qwen3.5 báo cáo tất cả các khả năng này
+gia đình, trong khi bài báo Qwen-VLA cho thấy họ vẫn không dự đoán được robot
+thành công của chính mình. [Thẻ mẫu Qwen3.5] [qwen35-card]
+[Báo cáo Qwen-VLA, Phần 5 và 7][qwen-vla]
 
-## What each benchmark family measures
+## Mỗi nhóm điểm chuẩn đo lường điều gì
 
-| Capability | Representative benchmarks | What the score supports | What it does not establish |
+| Năng lực | Điểm chuẩn đại diện | Điểm số hỗ trợ điều gì | Những gì nó không thiết lập |
 |---|---|---|---|
-| Knowledge | MMLU-Pro, MMLU-Redux, GPQA-Diamond | Broad academic knowledge and difficult QA | Grounded perception or action reliability |
-| Instruction following | IFEval, IFBench, MultiChallenge | Constraint and format compliance | Physical feasibility or recovery from failure |
-| Reasoning | MATH-500, AIME, HLE, MathVista | Text or visual reasoning under a defined answer protocol | Stable long-horizon control |
-| Coding and agents | LiveCodeBench, SWE-bench, BFCL, Terminal-Bench | Code generation, repository repair, function calling, tool execution | General visual grounding or robotics |
-| General VQA | MMMU/MMMU-Pro, MMStar, RealWorldQA | Multi-domain image understanding | Precise object localization and temporal control |
-| OCR and documents | OCRBench, OmniDocBench, TextVQA | Text recognition and document reasoning | 3D geometry or manipulation |
-| Spatial grounding | RefCOCO, RefSpatialBench, EmbSpatialBench, CountBench | Reference resolution, location, relations, and counting | Executable trajectory quality |
-| Video | VideoMME, VideoMMMU, MLVU, MVBench | Temporal and long-video understanding | Closed-loop interaction with changing state |
+| Kiến thức | MMLU-Pro, MMLU-Redux, GPQA-Diamond | Kiến thức học thuật rộng và khó QA | Nhận thức có căn cứ hoặc độ tin cậy của hành động |
+| Hướng dẫn sau | IFEval, IFBench, Đa thử thách | Ràng buộc và tuân thủ định dạng | Tính khả thi về mặt vật lý hoặc khả năng phục hồi sau thất bại |
+| Lý luận | MATH-500, AIME, HLE, MathVista | Lý luận bằng văn bản hoặc hình ảnh theo một giao thức trả lời xác định | Kiểm soát đường chân trời dài ổn định |
+| Mã hóa và đại lý | LiveCodeBench, SWE-bench, BFCL, Băng ghế đầu cuối | Tạo mã, sửa chữa kho lưu trữ, gọi hàm, thực thi công cụ | Nền tảng trực quan chung hoặc robot |
+| Tổng hợp VQA | MMMU/MMMU-Pro, MMStar, RealWorldQA | Hiểu hình ảnh đa miền | Định vị đối tượng chính xác và kiểm soát thời gian |
+| OCR và tài liệu | OCRBench, OmniDocBench, TextVQA | Nhận dạng văn bản và suy luận tài liệu | Hình học hoặc thao tác 3D |
+| Nối đất không gian | RefCOCO, RefSpatialBench, EmbSpatialBench, CountBench | Độ phân giải tham chiếu, vị trí, mối quan hệ và cách đếm | Chất lượng quỹ đạo có thể thực hiện được |
+| Video | VideoMME, VideoMMMU, MLVU, MVBench | Hiểu biết về thời gian và video dài | Tương tác vòng kín với trạng thái thay đổi |
 
-The Qwen3 technical report explicitly separates general knowledge, alignment,
-math/reasoning, coding/agents, and multilingual evaluation. Qwen2.5-VL and
-Qwen3.5 add separate panels for general VQA, OCR/document understanding,
-grounding, and video. These groupings are more informative than averaging all
-scores into one number. [Qwen3 report, Section 4.6][qwen3]
-[Qwen2.5-VL report, Section 4][qwen25-vl]
+Báo cáo kỹ thuật Qwen3 phân biệt rõ ràng kiến ​​thức chung, căn chỉnh,
+toán/lý luận, mã hóa/tác nhân và đánh giá đa ngôn ngữ. Qwen2.5-VL và
+Qwen3.5 thêm các bảng riêng biệt để hiểu chung về VQA, OCR/tài liệu,
+nối đất và video. Những nhóm này có nhiều thông tin hơn so với việc lấy trung bình tất cả
+điểm thành một số. [Báo cáo Qwen3, Phần 4.6] [qwen3]
+[Báo cáo Qwen2.5-VL, Phần 4] [qwen25-vl]
 
-## Benchmark protocol boundaries
+## Ranh giới giao thức điểm chuẩn
 
-Metric formulas and interpretations are isolated in [metrics.md](metrics.md).
-The protocol choices below determine what prediction reaches each metric and are
-therefore part of the benchmark report, not the metric definition.
+Các công thức và cách diễn giải số liệu được tách biệt trong [metrics.md](metrics.md).
+Các lựa chọn giao thức bên dưới xác định dự đoán nào đạt đến từng số liệu và
+do đó là một phần của báo cáo điểm chuẩn chứ không phải định nghĩa số liệu.
 
-| Benchmark | Protocol that must be pinned | Current Qwen evidence |
+| Điểm chuẩn | Giao thức phải được ghim | Bằng chứng Qwen hiện tại |
 |---|---|---|
-| GPQA-Diamond | Prompt, answer parser, decoding and samples per question | Qwen3 draws 10 samples per question and averages their correctness; this is not `pass@10` |
-| IFEval | Strict/loose evaluator and prompt/instruction aggregation | Qwen3 reports strict-prompt accuracy. Qwen3.5's bare `IFEval` label leaves the exact variant unresolved |
-| OCRBench | Original/v2 release, official scorer and displayed scale | Original OCRBench totals 1,000 binary item points. Qwen2.5-VL reports raw totals such as 885; Qwen3.5 reports 89.4 without documenting whether this is exactly a `/10` normalization |
-| RefCOCO | Split set, box parser and aggregation across val/testA/testB | Qwen3.5 reports `RefCOCO(avg)` but does not identify the constituent splits |
-| Video-MME | Version, subtitle condition, frame/FPS sampler and answer-only parser | Qwen3.5 identifies with/without-subtitle rows but does not publish the complete frame policy |
-| SWE-bench | Dataset revision, agent scaffold, tools, context, timeout and attempts | The reported value is a system result; model weights alone do not reproduce it |
-| BFCL | Version, category set, handler/evaluator and category aggregation | Qwen3 uses BFCL v3 and Qwen3.5 uses BFCL-V4; the numbers are not directly comparable |
+| GPQA-Diamond | Nhắc nhở, trả lời trình phân tích cú pháp, giải mã và mẫu cho mỗi câu hỏi | Qwen3 lấy 10 mẫu cho mỗi câu hỏi và tính trung bình độ chính xác của chúng; đây không phải là `pass@10` |
+| IFEval | Công cụ đánh giá chặt chẽ/lỏng lẻo và tổng hợp nhắc nhở/hướng dẫn | Qwen3 báo cáo độ chính xác nhanh chóng. Nhãn `IFEval` trần của Qwen3.5 để lại biến thể chính xác chưa được giải quyết |
+| OCRBench | Bản phát hành gốc/v2, cầu thủ ghi bàn chính thức và thang điểm hiển thị | OCRBench gốc có tổng cộng 1.000 điểm mục nhị phân. Qwen2.5-VL báo cáo tổng số thô như 885; Qwen3.5 báo cáo 89.4 mà không ghi lại liệu đây có chính xác là chuẩn hóa `/10` hay không |
+| Tham chiếuCOCO | Tập hợp phân tách, trình phân tích cú pháp hộp và tổng hợp trên val/testA/testB | Qwen3.5 báo cáo `RefCOCO(avg)` nhưng không xác định được các phần tách thành phần |
+| Video-MME | Phiên bản, điều kiện phụ đề, bộ lấy mẫu khung/FPS và trình phân tích cú pháp chỉ trả lời | Qwen3.5 xác định các hàng có/không có phụ đề nhưng không công bố chính sách khung hoàn chỉnh |
+| SWE-bench | Sửa đổi tập dữ liệu, khung tác nhân, công cụ, bối cảnh, thời gian chờ và số lần thử | Giá trị được báo cáo là kết quả của hệ thống; trọng lượng mô hình một mình không tái tạo nó |
+| BFCL | Phiên bản, bộ danh mục, trình xử lý/đánh giá và tổng hợp danh mục | Qwen3 sử dụng BFCL v3 và Qwen3.5 sử dụng BFCL-V4; những con số không thể so sánh trực tiếp |
 
-IFEval's official loose evaluator is not arbitrary fuzzy matching. It tests a
-fixed set of output variants such as removing the first/last line or asterisks;
-strict checks the unchanged response. [IFEval implementation][ifeval-code]
-[Qwen3 evaluation settings][qwen3]
+Công cụ đánh giá lỏng lẻo chính thức của IFEval không phải là kết hợp mờ tùy ý. Nó kiểm tra một
+tập hợp các biến thể đầu ra cố định, chẳng hạn như xóa dòng đầu tiên/cuối cùng hoặc dấu hoa thị;
+kiểm tra nghiêm ngặt phản hồi không thay đổi. [Triển khai IFEval][ifeval-code]
+[Cài đặt đánh giá Qwen3] [qwen3]
 
-## Verified result snapshots
+## Ảnh chụp nhanh kết quả đã được xác minh
 
-The tables below are **publisher-reported**, not reproduced locally. They are
-included to show what conclusions the official protocols support, not to create a
-universal leaderboard.
+Các bảng bên dưới là **do nhà xuất bản báo cáo**, không được sao chép cục bộ. Họ là
+được đưa vào để cho thấy những kết luận nào mà các nghị định thư chính thức ủng hộ, chứ không phải để tạo ra một kết luận
+bảng xếp hạng phổ quát.
 
-### Language and agent evolution
+### Sự phát triển ngôn ngữ và tác nhân
 
-| Model and mode | MMLU-Pro | GPQA-Diamond | Coding/agent evidence | Supported interpretation |
+| Mô hình và chế độ | MMLU-Pro | GPQA-Diamond | Bằng chứng mã hóa/tác nhân | Phiên dịch được hỗ trợ |
 |---|---:|---:|---|---|
-| Qwen3-235B-A22B, thinking | not reported in the paper's Table 11 | 71.1 | BFCL v3 70.8; LiveCodeBench v5 70.7 | Strong reasoning/agent model under a long sampling budget |
-| Qwen3.5-27B | 86.1 | 85.5 | SWE-bench Verified 72.4; BFCL-V4 68.5 | Much smaller native-multimodal model with strong language and agent scores |
-| Qwen3.6-27B | 86.2 | 87.8 | SWE-bench Verified 77.2; Terminal-Bench 2.0 59.3 | Clearer gain in coding-agent execution than in general knowledge |
+| Qwen3-235B-A22B, đang suy nghĩ | không được báo cáo trong Bảng 11 của tờ báo | 71.1 | BFCL v3 70.8; LiveCodeBench v5 70.7 | Mô hình lý luận/tác nhân mạnh mẽ với ngân sách lấy mẫu dài |
+| Qwen3.5-27B | 86,1 | 85,5 | SWE-bench Đã xác minh 72.4; BFCL-V4 68.5 | Mô hình đa phương thức bản địa nhỏ hơn nhiều với điểm số tác nhân và ngôn ngữ mạnh mẽ |
+| Qwen3.6-27B | 86,2 | 87,8 | SWE-bench Đã xác minh 77.2; Thiết Bị Đầu Cuối-Băng Ghế 2.0 59.3 | Đạt được lợi ích rõ ràng hơn trong việc thực thi tác nhân mã hóa so với kiến ​​thức chung |
 
-Sources: [Qwen3 report, Tables 11-12][qwen3],
-[Qwen3.5-27B model card][qwen35-card], and
-[Qwen3.6-27B model card][qwen36-card].
+Nguồn: [Báo cáo Qwen3, Bảng 11-12] [qwen3],
+[Thẻ mẫu Qwen3.5-27B] [qwen35-card] và
+[Thẻ mẫu Qwen3.6-27B] [qwen36-card].
 
-**Verified:** Qwen3 thinking and non-thinking results use different sampling
-settings. Qwen3.6's coding-agent evaluations also depend on a specified scaffold,
-context window, tool set, timeout, and repeated runs. Therefore, values should
-only be compared when those settings match. [Qwen3 report, Section 4.6][qwen3]
-[Qwen3.6 evaluation notes][qwen36-card]
+**Đã xác minh:** Kết quả suy nghĩ và không suy nghĩ của Qwen3 sử dụng cách lấy mẫu khác nhau
+cài đặt. Việc đánh giá tác nhân mã hóa của Qwen3.6 cũng phụ thuộc vào một giàn giáo cụ thể,
+cửa sổ ngữ cảnh, bộ công cụ, thời gian chờ và các lần chạy lặp lại. Vì vậy, các giá trị nên
+chỉ được so sánh khi các cài đặt đó khớp. [Báo cáo Qwen3, Phần 4.6] [qwen3]
+[Ghi chú đánh giá Qwen3.6] [qwen36-card]
 
-### Vision-language snapshot
+### Ảnh chụp nhanh ngôn ngữ tầm nhìn
 
-The official Qwen3.5-27B card reports the following selected scores:
+Thẻ Qwen3.5-27B chính thức báo cáo số điểm được chọn sau:
 
-| Capability | Benchmark | Qwen3.5-27B |
+| Năng lực | Điểm chuẩn | Qwen3.5-27B |
 |---|---|---:|
-| Expert multimodal reasoning | MMMU-Pro | 75.0 |
-| Visual mathematics | MathVista-mini | 87.8 |
-| Document/OCR | OCRBench | 89.4 |
-| Referring/spatial | RefCOCO average | 90.9 |
-| Embodied spatial reasoning | EmbSpatialBench | 84.5 |
-| Long video, subtitles disabled | VideoMME | 82.8 |
+| Lý luận đa phương thức chuyên gia | MMMU-Pro | 75,0 |
+| Toán học trực quan | MathVista-mini | 87,8 |
+| Tài liệu/OCR | OCRBench | 89,4 |
+| Giới thiệu/không gian | RefCOCO trung bình | 90,9 |
+| Lý luận không gian thể hiện | EmbSpatialBench | 84,5 |
+| Video dài, phụ đề bị tắt | VideoMME | 82,8 |
 
-These numbers support broad visual competence, but they are not action metrics.
-A VLM can identify an object or answer a spatial question while still producing
-unsafe, delayed, or dynamically inconsistent actions. [Qwen3.5 model card,
-Vision Language table][qwen35-card]
+Những con số này hỗ trợ năng lực thị giác rộng rãi nhưng chúng không phải là thước đo hành động.
+VLM có thể xác định một đối tượng hoặc trả lời câu hỏi về không gian trong khi vẫn tạo ra
+hành động không an toàn, bị trì hoãn hoặc không nhất quán. [Thẻ mẫu Qwen3.5,
+Bảng ngôn ngữ thị giác[qwen35-card]
 
-## Recommended evaluation for this workspace
+## Đánh giá đề xuất cho không gian làm việc này
 
-### Backbone gate
+### Cổng xương sống
 
-Use the same checkpoint, processor, image/video sampling policy, prompt template,
-generation mode, and maximum output length for every run. Record:
+Sử dụng cùng một điểm kiểm tra, bộ xử lý, chính sách lấy mẫu hình ảnh/video, mẫu lời nhắc,
+chế độ tạo và độ dài đầu ra tối đa cho mỗi lần chạy. Ghi:
 
-- exact model revision and dtype/quantization;
-- native image resolution and video frame/FPS policy;
-- thinking or non-thinking mode and decoding parameters;
-- benchmark version, split, metric, evaluator, and number of samples;
-- latency, peak memory, and failures in addition to task score.
+- sửa đổi mô hình chính xác và dtype/lượng tử hóa;
+- độ phân giải hình ảnh gốc và khung video/chính sách FPS;
+- chế độ suy nghĩ hoặc không suy nghĩ và giải mã các thông số;
+- phiên bản chuẩn, phân chia, số liệu, người đánh giá và số lượng mẫu;
+- độ trễ, bộ nhớ tối đa và lỗi cũng như điểm nhiệm vụ.
 
-For early selection, run a compact panel:
+Để lựa chọn sớm, hãy chạy một bảng nhỏ gọn:
 
-| Priority | Benchmark type | Reason for a VLA project |
+| Ưu tiên | Loại điểm chuẩn | Lý do cho dự án VLA |
 |---|---|---|
-| P0 | RefCOCO or RefSpatialBench | Tests whether language refers to the correct object or region |
-| P0 | VideoMME without subtitles | Tests temporal perception without leaking an answer through text |
-| P0 | MathVista or EmbSpatialBench | Tests spatial and diagrammatic reasoning |
-| P1 | OCRBench | Useful when robot scenes contain labels, displays, or signs |
-| P1 | IFEval | Checks control-instruction compliance |
-| P2 | MMLU-Pro/GPQA | Broad sanity check, but weakly coupled to robot control |
+| P0 | RefCOCO hoặc RefSpatialBench | Kiểm tra xem ngôn ngữ có đề cập đến đúng đối tượng hoặc khu vực hay không |
+| P0 | VideoMME không có phụ đề | Kiểm tra nhận thức về thời gian mà không để lộ câu trả lời qua văn bản |
+| P0 | MathVista hoặc EmbSpatialBench | Kiểm tra lý luận không gian và sơ đồ |
+| P1 | OCRBench | Hữu ích khi cảnh robot có nhãn, màn hình hoặc biển báo |
+| P1 | IFEval | Kiểm tra việc tuân thủ hướng dẫn kiểm soát |
+| P2 | MMLU-Pro/GPQA | Kiểm tra độ tỉnh táo trên diện rộng nhưng kết hợp yếu với điều khiển robot |
 
-### Policy gate
+### Cổng chính sách
 
-Only promote a backbone after a closed-loop evaluation reports success rate,
-generalization split, control frequency, action horizon, wall-clock latency, and
-failure categories. See [VLA/benchmarks.md](../VLA/benchmarks.md).
+Chỉ quảng bá đường trục sau khi đánh giá vòng kín báo cáo tỷ lệ thành công,
+phân chia tổng quát, tần số điều khiển, chân trời hành động, độ trễ đồng hồ treo tường và
+các hạng mục thất bại. Xem [VLA/benchmarks.md](../VLA/benchmarks.md).
 
-## Limits and unknowns
+## Giới hạn và những điều chưa biết
 
-- **Verified:** Official score tables mix public and internal benchmarks, and
-  some agent results rely on internal scaffolds or modified task subsets.
-- **Verified:** Qwen3 thinking/non-thinking, Qwen3.5, and Qwen3.6 tables do not
-  all share the same decoding protocol or benchmark version.
-- **Unknown:** The degree of training-data overlap for every public benchmark is
-  not disclosed. A high score may combine generalization with memorization.
-- **Inferred:** For VLA backbone selection, grounding and video scores are more
-  task-relevant than a small difference in MMLU-Pro, but the final relationship
-  must be measured through downstream policy evaluation.
+- **Đã xác minh:** Bảng điểm chính thức kết hợp các điểm chuẩn công khai và nội bộ, và
+  một số kết quả tác nhân dựa vào khung nội bộ hoặc tập hợp con nhiệm vụ đã sửa đổi.
+- **Đã xác minh:** Các bảng Qwen3 suy nghĩ/không suy nghĩ, Qwen3.5 và Qwen3.6 không
+  tất cả đều có chung giao thức giải mã hoặc phiên bản chuẩn.
+- **Không xác định:** Mức độ chồng chéo dữ liệu đào tạo cho mọi điểm chuẩn công khai là
+  không được tiết lộ. Điểm cao có thể kết hợp khái quát hóa với ghi nhớ.
+- **Suy ra:** Đối với lựa chọn đường trục VLA, điểm nối đất và video cao hơn
+  liên quan đến nhiệm vụ hơn một sự khác biệt nhỏ trong MMLU-Pro, nhưng mối quan hệ cuối cùng
+  phải được đo lường thông qua đánh giá chính sách cấp dưới.
 
-## Sources
+## Nguồn
 
-- Qwen Team. *Qwen3 Technical Report*, arXiv:2505.09388, 2025.
-  [Paper][qwen3] · [Local PDF][qwen3-local]
-- Qwen Team. *Qwen3.5-27B model card*, accessed 2026-07-22.
-  [Model card][qwen35-card]
-- Qwen Team. *Qwen3.6-27B model card*, accessed 2026-07-22.
-  [Model card][qwen36-card]
-- Bai et al. *Qwen2.5-VL Technical Report*, arXiv:2502.13923, 2025.
-  [Paper][qwen25-vl] · [Local PDF][qwen25-vl-local]
-- Wang et al. *Qwen-VLA*, arXiv:2605.30280v2, 2026.
-  [Paper][qwen-vla]
-- Zhou et al. *IFEval*. [Paper][ifeval] · [Official implementation][ifeval-code]
+- Đội Qwen. *Báo cáo kỹ thuật Qwen3*, arXiv:2505.09388, 2025.
+  [Giấy][qwen3] · [PDF cục bộ][qwen3-local]
+- Đội Qwen. *Thẻ mẫu Qwen3.5-27B*, truy cập 22-07-2026.
+  [Thẻ mẫu] [qwen35-card]
+- Đội Qwen. *Thẻ mẫu Qwen3.6-27B*, truy cập 22-07-2026.
+  [Thẻ mẫu] [qwen36-card]
+- Bài và cộng sự. *Báo cáo kỹ thuật Qwen2.5-VL*, arXiv:2502.13923, 2025.
+  [Giấy][qwen25-vl] · [PDF cục bộ][qwen25-vl-local]
+- Vương và cộng sự. *Qwen-VLA*, arXiv:2605.30280v2, 2026.
+  [Giấy][qwen-vla]
+- Chu và cộng sự. *IFEval*. [Giấy][ifeval] · [Triển khai chính thức][ifeval-code]
 
 [qwen3]: https://arxiv.org/abs/2505.09388
 [qwen3-local]: ../../../papers/05-gwen/gwen-overview/qwen3_technical_report_2505.09388.pdf
@@ -173,5 +173,5 @@ failure categories. See [VLA/benchmarks.md](../VLA/benchmarks.md).
 [qwen25-vl]: https://arxiv.org/abs/2502.13923
 [qwen25-vl-local]: ../../../papers/05-gwen/gwen-overview/qwen2.5_vl_2502.13923.pdf
 [qwen-vla]: https://arxiv.org/abs/2605.30280
-[ifeval]: https://arxiv.org/abs/2311.07911
-[ifeval-code]: https://github.com/google-research/google-research/blob/master/instruction_following_eval/evaluation_lib.py
+[nếu có]: https://arxiv.org/abs/2311.07911
+[mã ifeval]: https://github.com/google-research/google-research/blob/master/instruction_following_eval/evaluation_lib.py

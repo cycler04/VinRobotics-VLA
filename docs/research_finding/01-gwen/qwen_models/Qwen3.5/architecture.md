@@ -1,35 +1,35 @@
 # Qwen3.5 — Kiến trúc
 
-> **Scope.** Tài liệu này dùng các thông tin công khai trong blog/model card/config của Qwen. Các con số có thể khác theo checkpoint; khi thuyết trình cần ghi rõ model cụ thể. Qwen3.5 là **native multimodal causal language model**, không chỉ là LLM text được gắn thêm vision ở cuối.
+> **Phạm vi.** Tài liệu này dùng thông tin công khai trong blog, model card và config của Qwen. Các con số có thể khác theo checkpoint; khi thuyết trình cần ghi rõ mô hình cụ thể. Qwen3.5 là **mô hình ngôn ngữ nhân quả đa phương thức bản địa**, không chỉ là LLM văn bản được gắn thêm thị giác ở cuối.
 
 ## 1. Luồng dữ liệu tổng thể
 
 ```text
-Image / Video ──> Resize, patch/frame sampling ──> Vision Encoder
+Ảnh / Video ──> Đổi kích thước, lấy mẫu patch/frame ──> Vision encoder
                                                         │
                                                         v
-                                             Visual features / tokens
+                                             Đặc trưng / token thị giác
                                                         │
-Text ───────────────> Tokenizer ────────────────────────┤
+Văn bản ────────────> Tokenizer ────────────────────────┤
                                                         v
-                                      Unified multimodal token sequence
+                                      Chuỗi token đa phương thức thống nhất
                                                         │
                                                         v
-                             Qwen3.5 hybrid language model (causal)
-                              │  DeltaNet blocks + gated attention blocks
-                              │  Dense FFN hoặc sparse MoE FFN
+                             Mô hình ngôn ngữ lai Qwen3.5 (nhân quả)
+                              │  Các khối DeltaNet + attention có gate
+                              │  FFN dày đặc hoặc MoE FFN thưa
                               v
-                   Next-token logits / thinking / answer / tool calls
+                   Logit token kế tiếp / suy luận / câu trả lời / lệnh gọi công cụ
 ```
 
-**Early fusion** nghĩa là text token và visual token được đưa vào cùng một chuỗi để backbone tối ưu chung bằng objective causal language modeling. Đây là khác biệt quan trọng so với pipeline “frozen vision encoder → projector → text LLM” kiểu late fusion.
+**Hợp nhất sớm** nghĩa là token văn bản và token thị giác được đưa vào cùng một chuỗi để backbone tối ưu chung bằng mục tiêu mô hình hóa ngôn ngữ nhân quả. Đây là khác biệt quan trọng so với pipeline “vision encoder đóng băng → projector → LLM văn bản” theo kiểu hợp nhất muộn.
 
-## 2. Một nhóm layer hybrid
+## 2. Một nhóm tầng lai
 
-Qwen3.5 xen kẽ nhiều Gated DeltaNet layer với một Gated Full-Attention layer định kỳ:
+Qwen3.5 xen kẽ nhiều tầng Gated DeltaNet với một tầng Gated Full-Attention định kỳ:
 
 ```text
-Input hidden states
+Các trạng thái ẩn đầu vào
         │
         v
 ┌─────────────────────────────────────┐
@@ -52,15 +52,15 @@ Input hidden states
 └─────────────────────────────────────┘
         │
         v
-Next group
+Nhóm kế tiếp
 ```
 
-Ví dụ được công bố cho **Qwen3.5-9B**: 32 layers, hidden size 4096, bố cục `8 × [3 × (Gated DeltaNet → FFN) + 1 × (Gated Attention → FFN)]`. Đây là ví dụ checkpoint, không nên áp dụng nguyên xi cho mọi model.
+Ví dụ được công bố cho **Qwen3.5-9B**: 32 tầng, kích thước ẩn 4096, bố cục `8 × [3 × (Gated DeltaNet → FFN) + 1 × (Gated Attention → FFN)]`. Đây là ví dụ của một checkpoint, không nên áp dụng nguyên xi cho mọi mô hình.
 
 ## 3. Khối Gated DeltaNet
 
 ```text
-Input x
+Đầu vào x
   │
   ├──> RMSNorm ──> Q/K/V projections ──> gated recurrent update ──> DeltaNet output ──┐
   │                                                                                   │
@@ -73,15 +73,15 @@ Input x
                               Residual 1 ───────────────── (+)
                                                             │
                                                             v
-                                                         Output y
+                                                         Đầu ra y
 ```
 
-Trực giác: DeltaNet duy trì một **state/bộ nhớ nén** thay vì lưu và so sánh trực tiếp toàn bộ key-value của chuỗi. Query đọc state; key xác định thông tin; value là nội dung; gate điều khiển ghi, giữ, quên và mức đóng góp vào output. Cơ chế này hướng tới chi phí gần tuyến tính theo độ dài chuỗi ở phần mixing chính, nhưng có thể yếu hơn full attention khi cần truy xuất chính xác giữa các token xa.
+Trực giác: DeltaNet duy trì một **trạng thái/bộ nhớ nén** thay vì lưu và so sánh trực tiếp toàn bộ key-value của chuỗi. Query đọc trạng thái; key xác định thông tin; value là nội dung; gate điều khiển việc ghi, giữ, quên và mức đóng góp vào đầu ra. Cơ chế này hướng tới chi phí gần tuyến tính theo độ dài chuỗi ở phần trộn token chính, nhưng có thể yếu hơn full attention khi cần truy xuất chính xác giữa các token xa.
 
 ## 4. Khối chú ý đầy đủ có cổng
 
 ```text
-Input x
+Đầu vào x
   │
   ├──> RMSNorm ──> Q/K/V ──> RoPE ──> Gated GQA ──┐
   │                                                │
@@ -93,85 +93,85 @@ Input x
                           Residual 1 ───────────────── (+)  Residual 2
                                                         │
                                                         v
-                                                     Output y
+                                                     Đầu ra y
 ```
 
-GQA dùng nhiều query heads hơn KV heads, vì vậy giảm kích thước KV cache và memory bandwidth. RoPE mã hóa thông tin vị trí. Full attention được đặt định kỳ để thực hiện global information mixing mà DeltaNet có thể bỏ sót.
+GQA dùng nhiều query head hơn KV head, vì vậy giảm kích thước KV cache và băng thông bộ nhớ. RoPE mã hóa thông tin vị trí. Full attention được đặt định kỳ để trộn thông tin toàn cục mà DeltaNet có thể bỏ sót.
 
-## 5. Dense FFN và sparse MoE
+## 5. FFN dày đặc và MoE thưa
 
 Biến thể dày đặc:
 
 ```text
-Hidden state ──> shared FFN ──> output
+Trạng thái ẩn ──> FFN dùng chung ──> đầu ra
 ```
 
 Biến thể MoE:
 
 ```text
-Hidden state ──┬──> Router ──> top-k routed experts ──┐
-               └──> Shared expert ───────────────────┤
+Trạng thái ẩn ──┬──> Router ──> top-k expert được định tuyến ──┐
+               └──> Expert dùng chung ────────────────────────┤
                                                      v
-                                           weighted combine → output
+                                           kết hợp có trọng số → đầu ra
 ```
 
-Tên `35B-A3B` có nghĩa gần đúng là khoảng 35B tổng parameters nhưng khoảng 3B parameters được activate cho mỗi token. MoE tăng capacity với compute/token thấp hơn dense cùng tổng số weights, đổi lại routing, cân bằng tải, communication và serving phức tạp hơn.
+Tên `35B-A3B` có nghĩa gần đúng là khoảng 35B tổng tham số nhưng khoảng 3B tham số được kích hoạt cho mỗi token. MoE tăng dung lượng mô hình với chi phí tính toán trên mỗi token thấp hơn mô hình dày đặc có cùng tổng số trọng số, đổi lại việc định tuyến, cân bằng tải, giao tiếp và phục vụ trở nên phức tạp hơn.
 
-## 6. Vision Encoder và context
+## 6. Vision encoder và ngữ cảnh
 
 ```text
-Image/video → preprocessing → vision layers → projection/alignment
-            → visual tokens → interleave với text tokens → LM backbone
+Ảnh/video → tiền xử lý → các tầng thị giác → chiếu/căn chỉnh
+          → token thị giác → xen kẽ với token văn bản → backbone LM
 ```
 
-Patch size, số vision layers, temporal patching và các kích thước vision khác phải lấy từ `vision_config` của checkpoint cụ thể; không nên suy ra từ model card tổng quát.
+Kích thước patch, số tầng thị giác, cách chia patch theo thời gian và các kích thước thị giác khác phải lấy từ `vision_config` của checkpoint cụ thể; không nên suy ra từ model card tổng quát.
 
-Qwen3.6-35B-A3B (đại diện cùng họ kiến trúc) công bố 262,144 native tokens và khả năng mở rộng khoảng 1,010,000 tokens. “Support 1M” chỉ nói về độ dài input/serving; không đảm bảo reasoning và retrieval không suy giảm ở độ dài đó.
+Qwen3.6-35B-A3B (đại diện cùng họ kiến trúc) công bố ngữ cảnh gốc 262.144 token và khả năng mở rộng tới khoảng 1.010.000 token. “Hỗ trợ 1M” chỉ nói về độ dài đầu vào/phục vụ; không đảm bảo khả năng suy luận và truy xuất không suy giảm ở độ dài đó.
 
 ## 7. Qwen3.6-35B-A3B — ví dụ so sánh
 
 | Thuộc tính                 | Giá trị công bố                                     |
 | ---------------------------- | ------------------------------------------------------- |
-| Tổng / activated parameters | 35B / 3B                                                |
+| Tổng / tham số được kích hoạt | 35B / 3B                                                |
 | Lớp, kích thước ẩn | 40, 2048 |
 | Bố cục | `10 × [3 DeltaNet + 1 Gated Attention]` |
-| Bộ GD | 256 chuyên gia được định tuyến; top-8 định tuyến + 1 chia sẻ |
-| DeltaNet | 32 đầu giá trị; 16 đầu truy vấn/khóa; đầu mờ 128 |
-| Kiểm soát attention | 16 đầu truy vấn; đầu 2 KV; đầu mờ 256; quay mờ 64 |
-| Context                      | 262K native; khoảng 1.01M extended                     |
-| Khác                        | Multi-step MTP; preserve-thinking                       |
+| MoE | 256 expert được định tuyến; top-8 định tuyến + 1 dùng chung |
+| DeltaNet | 32 value head; 16 query/key head; kích thước head 128 |
+| Attention có gate | 16 query head; 2 KV head; kích thước head 256; kích thước rotary 64 |
+| Ngữ cảnh                     | 262K gốc; mở rộng tới khoảng 1,01M                    |
+| Khác                         | MTP nhiều bước; duy trì suy luận                       |
 
-MTP (Multi-Token Prediction) tạo training signal cho nhiều token tương lai và có thể hỗ trợ speculative decoding. `preserve_thinking` cho phép các lượt sau tiếp tục dùng historical thinking context; đây là tính năng behavior/API, không phải một backbone mới.
+MTP (Multi-Token Prediction) tạo tín hiệu huấn luyện cho nhiều token tương lai và có thể hỗ trợ giải mã suy đoán. `preserve_thinking` cho phép các lượt sau tiếp tục dùng ngữ cảnh suy luận lịch sử; đây là tính năng hành vi/API, không phải một backbone mới.
 
 ## 8. Thông số chính thức của Qwen3.5-35B-A3B
 
 | Thuộc tính                      |                                                      Giá trị |
 | --------------------------------- | -------------------------------------------------------------: |
-| Loại model                       |                      Causal Language Model with Vision Encoder |
-| Tổng / activated parameters      |                                                       35B / 3B |
+| Loại mô hình                     |          Mô hình ngôn ngữ nhân quả có Vision encoder |
+| Tổng / tham số được kích hoạt    |                                                       35B / 3B |
 | Kích thước ẩn |                                                           2048 |
 | Token embedding và LM output     |                                               248,320 (padded) |
 | Lớp |                                                             40 |
-| Layer layout                      | `10 × [3 DeltaNet + 1 Gated Attention]`, mỗi layer có MoE |
+| Bố cục tầng                       | `10 × [3 DeltaNet + 1 Gated Attention]`, mỗi tầng có MoE |
 | Đầu / kích thước DeltaNet |                                              32V; 16 QK / 128 |
 | Gated Đầu chú ý / kích thước |                                               16Q; 2KV/256 |
 | Kích thước vị trí quay |                                                             64 |
-| Bộ GD |                     256 chuyên gia; 8 định tuyến + 1 chia sẻ được kích hoạt |
-| Chuyên gia trung cấp |                                                            512 |
+| MoE |                     256 expert; kích hoạt 8 expert định tuyến + 1 dùng chung |
+| Kích thước trung gian expert |                                                   512 |
 | MTP |                                    Được huấn luyện với nhiều bước |
-| Context                           |                   262,144 native; khoảng 1,010,000 extensible |
+| Ngữ cảnh                          |                   262.144 gốc; mở rộng tới khoảng 1.010.000 |
 
-Model card ghi Qwen3.5 mặc định sinh **thinking content** trong `<think>...</think>` trước final response. Qwen3.5-Flash là hosted/API version tương ứng với 35B-A3B nhưng có thêm production features như 1M context mặc định và built-in tools; không nên coi đó là cùng một serving configuration với open-weight checkpoint.
+Model card ghi Qwen3.5 mặc định sinh **nội dung suy luận** trong `<think>...</think>` trước phản hồi cuối. Qwen3.5-Flash là phiên bản hosted/API tương ứng với 35B-A3B nhưng có thêm các tính năng production như ngữ cảnh 1M mặc định và công cụ tích hợp; không nên coi đó là cùng một cấu hình phục vụ với checkpoint mở trọng số.
 
 ## 9. Giải thích ngắn gọn
 
 - **Vision Encoder:** biến ảnh/video thành biểu diễn mà LM có thể đọc.
-- **Early fusion:** visual và text token cùng tham gia vào chuỗi thống nhất.
-- **DeltaNet:** xử lý phần lớn chuỗi bằng state tuần tự, tiết kiệm memory/compute.
+- **Hợp nhất sớm:** token thị giác và văn bản cùng tham gia vào chuỗi thống nhất.
+- **DeltaNet:** xử lý phần lớn chuỗi bằng trạng thái tuần tự, tiết kiệm bộ nhớ/tính toán.
 - **Gated Attention:** thỉnh thoảng truy cập toàn cục chính xác hơn.
 - **FFN/MoE:** biến đổi từng token; MoE chọn một số expert thay vì chạy tất cả.
 - **Residual + RMSNorm:** giữ dòng gradient/ổn định hóa việc huấn luyện.
-- **Causal head:** dự đoán token tiếp theo, sinh answer, reasoning hoặc tool call.
+- **Head nhân quả:** dự đoán token tiếp theo, sinh câu trả lời, suy luận hoặc lệnh gọi công cụ.
 
 ![TODO: tổng quan early-fusion multimodal](Image/qwen35_early_fusion_overview.png)
 
@@ -198,10 +198,10 @@ flowchart LR
 
 ```mermaid
 flowchart TB
-  I[Hình ảnh / Video] --> P[Thay đổi kích thước, vá lỗi, lấy mẫu khung <br/>]
-  P --> V[Bộ mã hóa tầm nhìn]
-  V --> A[Căn chỉnh phép chiếu/token]
-  A --> T[Token trực quan trong không gian LM]
-  T --> U[Xen kẽ bằng token văn bản]
+  I[Hình ảnh / Video] --> P[Đổi kích thước, chia patch, lấy mẫu khung <br/>]
+  P --> V[Vision encoder]
+  V --> A[Phép chiếu/căn chỉnh token]
+  A --> T[Token thị giác trong không gian LM]
+  T --> U[Xen kẽ với token văn bản]
   U --> L[LM lai Qwen3.5]
 ```

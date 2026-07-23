@@ -3,7 +3,7 @@
 ## Phạm vi
 
 Báo cáo này bao gồm **Qwen-RobotManip**, chuyên gia thao tác trong bộ Qwen-Robot.
-Nó tập trung vào kiến trúc, liên kết nhiều phương án, tập dữ liệu huấn luyện, luân phiên nhiệm vụ,
+Nó tập trung vào kiến trúc, liên kết nhiều hiện thân, tập dữ liệu huấn luyện, luân phiên nhiệm vụ,
 mục tiêu, sau huấn luyện và đánh giá. Đối với chuyên gia điều hướng, hãy xem
 [Qwen-RobotNav](../Qwen-RobotNav/qwen_robotnav_details.md). Đối với mô hình chung, xem
 [Qwen-VLA](../Qwen-VLA/qwen_vla_details.md).
@@ -16,9 +16,9 @@ mục tiêu, sau huấn luyện và đánh giá. Đối với chuyên gia điề
 ## Ý tưởng cốt lõi
 
 Qwen-RobotManip coi các biểu diễn robot không đồng nhất là nút thắt quy mô trung tâm.
-Nó ánh xạ nhiều phương án vào một không gian trạng thái/hành động 80 chiều được che kín, sắp xếp chuyển động theo
+Nó ánh xạ nhiều hiện thân vào một không gian trạng thái/hành động 80 chiều được che kín, sắp xếp chuyển động theo
 tọa độ agent cuối liên quan đến máy ảnh và các điều kiện về hành vi gần đây cho trong ngữ cảnh
-sự thích nghi. DiT khớp luồng sẽ tạo ra các khối hành động trong khi tách biệt các thao tác và
+sự thích nghi. DiT flow matching sẽ tạo ra các khối hành động trong khi tách biệt các thao tác và
 các lô thị giác-ngôn ngữ bảo tồn cả khả năng kiểm soát và lý luận đa phương thức.
 
 ## 1. Tổng quan về mô hình
@@ -48,7 +48,7 @@ Không giống như Qwen-VLA, nó không cần một bộ giải mã hành độ
 ```mermaid
 flowchart LR
     I[Hình ảnh nhiều chế độ xem] --> VLM[Xương sống Qwen3.5-4B]
-    P[Prompt hướng dẫn và phương án có cấu trúc] --> VLM
+    P[Prompt hướng dẫn và hiện thân có cấu trúc] --> VLM
     H[Hình ảnh lịch sử] --> VLM
     VLM --> VH[Trạng thái ngôn ngữ và hình ảnh lớp cuối cùng]
 
@@ -67,7 +67,7 @@ Các trạng thái ẩn của đường trục Qwen VLM có chiều rộng 2.560
 
 Action expert bao gồm:
 
-- **10 khối máy biến áp**
+- **10 khối Transformer**
 - Chiều rộng ẩn **768**
 - **12 đầu chú ý**
 - Tự chú ý đến trạng thái và token action nhiễu
@@ -89,9 +89,9 @@ Một quyết định của RobotManip đòi hỏi nhiều thứ hơn là hình 
 
 | Nhóm đầu vào | Nội dung | Nơi nó đi vào mô hình |
 | --------------------------- | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------- |
-| Tầm nhìn hiện tại | Một hoặc nhiều chế độ xem camera RGB được đồng bộ hóa | Backbone thị giác-ngôn ngữ Qwen3.5 |
-| Văn bản nhiệm vụ và phương án | Prompt có cấu trúc với phương án, hướng dẫn, tốc độ, FPS và hướng xem camera | Luồng văn bản Qwen3.5 |
-| Quyền sở hữu hiện tại | Trạng thái 80-D chuẩn được che dấu; chỉ các vị trí được điền của phương án mới có ý nghĩa | MLP trạng thái hai lớp, sau đó được thêm vào trước các token action nhiễu trong DiT |
+| Thị giác hiện tại | Một hoặc nhiều chế độ xem camera RGB được đồng bộ hóa | Backbone thị giác-ngôn ngữ Qwen3.5 |
+| Văn bản nhiệm vụ và hiện thân | Prompt có cấu trúc với hiện thân, hướng dẫn, tốc độ, FPS và hướng xem camera | Luồng văn bản Qwen3.5 |
+| Quyền sở hữu hiện tại | Trạng thái 80-D chuẩn được che dấu; chỉ các vị trí được điền của hiện thân mới có ý nghĩa | MLP trạng thái hai lớp, sau đó được thêm vào trước các token action nhiễu trong DiT |
 | Hình học máy ảnh | Nội tại và bên ngoài cho mọi chế độ xem được hiệu chỉnh; camera tham chiếu hành động được chọn trên mỗi bộ hiệu ứng cuối | Mã hóa vị trí camera trong attention chéo của DiT |
 | Điều hòa bên hành động | Loại bộ end-effector, cờ khả dụng hiệu chuẩn máy ảnh và dấu thời gian của luồng | Chuẩn hóa/điều hòa thích ứng trong DiT |
 | Lịch sử hành vi tùy chọn | Các quan sát RGB trước đó, trạng thái 80-D và các đoạn hành động được thực hiện từ cùng một tập | Hình ảnh lịch sử tham gia vào dòng hình ảnh; lịch sử trạng thái/hành động trở thành token bối cảnh |
@@ -108,7 +108,7 @@ không tiết lộ số lượng hoặc khởi tạo của họ. [RobotManip pap
 #### Chế độ xem camera và “góc”
 
 RobotManip **không** quy định số lượng camera cố định hoặc danh sách chung các góc lệch. Nó tiêu thụ
-bất kỳ chế độ xem được đồng bộ hóa nào mà phương án nguồn cung cấp. Bài báo và Hình 3 sử dụng các ngữ nghĩa này
+bất kỳ chế độ xem được đồng bộ hóa nào mà hiện thân nguồn cung cấp. Bài báo và Hình 3 sử dụng các ngữ nghĩa này
 các kiểu xem:
 
 | Loại xem | Ví dụ trong bài báo | Nó được sử dụng như thế nào |
@@ -143,7 +143,7 @@ ví dụ chỉ nhận được hình ảnh nhiều góc nhìn hiện tại và h
 như mục tiêu của nó. Chúng không nên được thêm vào hợp đồng đầu vào chính sách thời gian chạy.
 [Giấy RobotManip v2, §2.5](https://arxiv.org/abs/2606.17846v2)
 
-#### Prompt phương án có cấu trúc chính xác
+#### Prompt hiện thân có cấu trúc chính xác
 
 Bài báo công bố ví dụ chính xác này:
 
@@ -229,7 +229,7 @@ tuần tự hóa tensor chính xác hoặc API suy luận.
 
 ### 2.2 Không gian hành động và trạng thái 80 chiều chuẩn mực
 
-RobotManip ánh xạ nhiều phương án thành một mẫu 80 chiều cố định:
+RobotManip ánh xạ nhiều hiện thân thành một mẫu 80 chiều cố định:
 
 ```text
 Left arm block:  29 dimensions
@@ -251,7 +251,7 @@ Các kích thước dành riêng có thể thể hiện mức độ tự do bổ
 
 Các robot khác nhau kích hoạt các tập hợp con khác nhau của không gian này. Mặt nạ nhị phân đảm bảo rằng chỉ những kích thước hợp lệ mới góp phần huấn luyện.
 
-### 2.3 Ba hình thức liên kết theo phương án chéo
+### 2.3 Ba hình thức liên kết theo hiện thân chéo
 
 Sự đổi mới chính của RobotManip không chỉ đơn giản là một tập dữ liệu thao tác lớn hơn. Nó làm cho dữ liệu từ các robot khác nhau tương thích về mặt số lượng và hành vi.
 
@@ -270,11 +270,11 @@ Mặt nạ theo kích thước ngăn chặn:
 
 - Thiếu khớp do tạo mục tiêu 0 giả
 - Robot một cánh tay giám sát cánh tay không sử dụng
-- Robot có bàn tay khéo léo chiếm ưu thế trong các phương án kẹp đơn giản hơn
+- Robot có bàn tay khéo léo chiếm ưu thế trong các hiện thân kẹp đơn giản hơn
 
 #### B. Căn chỉnh chuyển động
 
-Các hành động của bộ end-effector được thể hiện dưới dạng **đồng bằng tương đối của khung máy ảnh** thay vì chỉ tọa độ khung cơ sở robot.
+Các hành động của bộ end-effector được thể hiện dưới dạng **delta tương đối của khung máy ảnh** thay vì chỉ tọa độ khung cơ sở robot.
 
 Điều này làm cho các chuyển động tương tự về mặt trực quan gần hơn về mặt số lượng:
 
@@ -283,7 +283,7 @@ Robot A: move toward the cup in camera coordinates
 Robot B: move toward the cup in camera coordinates
 ```
 
-Mặc dù hai robot có thể có khung cơ sở và động học khác nhau nhưng chuyển động của mục tiêu sẽ được điều chỉnh phù hợp với những gì mô hình tầm nhìn nhìn thấy.
+Mặc dù hai robot có thể có khung cơ sở và động học khác nhau nhưng chuyển động của mục tiêu sẽ được điều chỉnh phù hợp với những gì mô hình thị giác nhìn thấy.
 
 Mã hóa vị trí camera và phần nhúng camera đã học cung cấp thông tin về góc nhìn và hình dạng camera.
 
@@ -318,7 +318,7 @@ RobotManip tập trung vào dữ liệu hơn Qwen-VLA.
 ```mermaid
 flowchart TD
     R[Trình diễn robot nguồn mở] --> C[Giám tuyển thống nhất]
-    E[Video về con người ích kỷ] --> C
+    E[Video về con người góc nhìn thứ nhất] --> C
     E --> H2R[Tổng hợp từ người sang robot]
     H2R --> C
     C --> A[Sự liên kết giữa đại diện, chuyển động và hành vi]
@@ -336,9 +336,9 @@ ví dụ**. [RobotManip paper v2, §2 và Bảng 1](https://arxiv.org/abs/2606.1
 | Nhóm dữ liệu hành động | Số tiền báo cáo | Nguồn và phạm vi |
 | ------------------------- | --------------: | -------------------------------------------------------------------------------------------------------------- |
 | Robot một tay |         3,808 giờ | Một phần của OXE, RoboMIND, DROID, RH20T, AgiBotWorld-Beta, RoboCOIN, RDT-1B, InternData-A1 và Galaxea Open-World |
-| Robot hai tay |         6.744 giờ | Kho ngữ liệu chín nguồn tương tự, được nhóm lại theo phương án thay vì tập dữ liệu |
+| Robot hai tay |         6.744 giờ | Kho ngữ liệu chín nguồn tương tự, được nhóm lại theo hiện thân thay vì tập dữ liệu |
 | Robot di động và hình người |           868 giờ | Thao tác trên bàn và trong nhà |
-| Bàn tay con người ích kỷ |         1.933 giờ | EgoDex 732 h đã qua sử dụng, VITRA 247 h, EgoVerse 954 h |
+| Bàn tay con người góc nhìn thứ nhất |         1.933 giờ | EgoDex 732 h đã qua sử dụng, VITRA 247 h, EgoVerse 954 h |
 | Tổng hợp từ người sang robot |        24.808 giờ | Bắt nguồn từ video của con người và được hiển thị trên 15 nền tảng cánh tay kép |
 
 #### Trình diễn robot trực tiếp
@@ -351,17 +351,17 @@ ví dụ**. [RobotManip paper v2, §2 và Bảng 1](https://arxiv.org/abs/2606.1
 | AgiBotWorld-Beta |                 khoảng 2.400 giờ | Trình diễn G1 hai tay dựa trên bộ kẹp trên khoảng 200 loại nhiệm vụ |
 | RoboMIND và RoboMIND 2.0 |                 khoảng 1.400 giờ | Dữ liệu một cánh tay, hai cánh tay, ALOHA và hình người trên nhiều nền tảng |
 | Thế giới mở Galaxea |                   khoảng 500 giờ | Thao tác di động hai tay trong công việc gia đình |
-| RoboCOIN |                   khoảng 430 giờ | Trình diễn thế giới thực đa phương án |
+| RoboCOIN |                   khoảng 430 giờ | Trình diễn thế giới thực đa hiện thân |
 | DROID | Quỹ đạo 95K, khoảng 500 giờ | Dữ liệu Franka từ 86 môi trường trong thế giới thực |
-| RH20T |                 khoảng 1.100 giờ | Dữ liệu giàu liên hệ qua bốn phương án và hơn 140 nhiệm vụ |
+| RH20T |                 khoảng 1.100 giờ | Dữ liệu giàu liên hệ qua bốn hiện thân và hơn 140 nhiệm vụ |
 | RDT-1B |                          29 giờ | Trình diễn hai tay trên phần cứng giống ALOHA |
-| Thực tậpData-A1 |             hơn 3.600 giờ | Mô phỏng có độ chính xác cao trải rộng trên mặt bàn, thao tác trên thiết bị di động và các tác vụ có tầm nhìn dài |
+| Thực tậpData-A1 |             hơn 3.600 giờ | Mô phỏng có độ chính xác cao trải rộng trên mặt bàn, thao tác trên thiết bị di động và các tác vụ có thị giác dài |
 
-Các số liệu nguồn được làm tròn riêng lẻ này không khớp chính xác với tổng số nhóm phương án,
+Các số liệu nguồn được làm tròn riêng lẻ này không khớp chính xác với tổng số nhóm hiện thân,
 và bài báo không xuất bản bản kê khai các tập sau tuyển chọn. Do đó, chúng là bằng chứng tổng hợp,
 không phải là sổ cái kế toán chính xác. [Giấy RobotManip v2, §§2.1-2.2](https://arxiv.org/abs/2606.17846v2)
 
-#### Video về con người ích kỷ
+#### Video về con người góc nhìn thứ nhất
 
 **1.933 giờ làm việc** là các tập hợp con được lọc thay vì bản phát hành đầy đủ của từng nguồn:
 
@@ -490,7 +490,7 @@ Sự phân biệt pha rất quan trọng:
 | ------------------------------------ | ----------------------------------- | ----------------------------------------------------------------------------------------------------------- |
 | Tổng hợp dữ liệu | Tạo giám sát văn bản | Giáo viên nhìn thấy các quan điểm hiện tại cộng với các tín hiệu đặc quyền về quá khứ, tương lai và tiến bộ và viết mục tiêu gồm ba phần |
 | Huấn luyện nền tảng đợt VL | Huấn luyện các đại diện thể hiện | Học sinh chỉ nhìn thấy các chế độ xem và hướng dẫn hiện tại, đồng thời dự đoán văn bản ECoT có mất token tiếp theo |
-| Huấn luyện nền tảng, đợt hành động | Chuyển biểu diễn sang điều khiển | VLM và DiT dự đoán các hành động liên tục bằng cách khớp luồng; không có mục tiêu văn bản ECoT nào được ghi lại trong đợt này |
+| Huấn luyện nền tảng, đợt hành động | Chuyển biểu diễn sang điều khiển | VLM và DiT dự đoán các hành động liên tục bằng cách flow matching; không có mục tiêu văn bản ECoT nào được ghi lại trong đợt này |
 | Tên miền mặc định SFT | Không có mục tiêu ECoT rõ ràng | Chỉ mất hành động phù hợp với dòng chảy |
 | Triển khai mặc định | Không có tài liệu giải mã ECoT | Các trạng thái ẩn VLM điều chỉnh DiT, tạo ra đoạn hành động liên tục 16 bước |
 
@@ -539,17 +539,17 @@ annotation_only:
 ```
 
 Không có `annotation_only` nào thuộc về API triển khai mặc định hoặc đầu vào của sinh viên. Trong quá trình điều khiển robot,
-Thay vào đó, chính sách sử dụng quan sát trực tiếp, trạng thái cảm nhận bản thân, prompt phương án có cấu trúc và
+Thay vào đó, chính sách sử dụng quan sát trực tiếp, trạng thái cảm nhận bản thân, prompt hiện thân có cấu trúc và
 lịch sử hành vi tùy chọn; DiT sau đó sẽ phát ra đoạn hành động số. Văn bản `Next Action` ở trên
 dạy lựa chọn hành động ngữ nghĩa nhưng bản thân nó không phải là lệnh vận động.
 
 #### Giới hạn bằng chứng
 
-- Bài báo không tiết lộ kích thước tập con ECoT, dấu nhắc tổng hợp chính xác, tốc độ lọc chú thích,
+- Bài báo không tiết lộ kích thước tập con ECoT, prompt tổng hợp chính xác, tốc độ lọc chú thích,
   hoặc bản kê khai tập dữ liệu ECoT đã được phát hành.
 - Nó báo cáo sự cắt bỏ để loại bỏ **toàn bộ hỗn hợp VL**, không chỉ riêng ECoT. Hiệu suất được báo cáo
   do đó, sự sụt giảm không thể được quy cụ thể cho ECoT.
-- Một so sánh kiến trúc loại trừ prompt phương án, ECoT và ngữ cảnh cùng nhau, do đó, nó cũng
+- Một so sánh kiến trúc loại trừ prompt hiện thân, ECoT và ngữ cảnh cùng nhau, do đó, nó cũng
   không cô lập tác động nhân quả của ECoT.
 - “Qwen3.6-Plus với chế độ tư duy” đặt tên cho cấu hình chú thích của giáo viên. Suy nghĩ nội tại của nó
   không phải là thành phần giống với mục tiêu ECoT có cấu trúc được sử dụng để huấn luyện RobotManip.
@@ -628,7 +628,7 @@ Những gì được biết và chưa được biết:
 Do đó, “Nhiệm vụ luân phiên” có nghĩa là **lấy mẫu các lô nhiệm vụ riêng biệt theo tỷ lệ hỗn hợp**, không phải
 trình tự cố định được ghi lại. [RobotManip paper v2, Hình 3 và §4.1.1](https://arxiv.org/abs/2606.17846v2)
 
-#### Mục tiêu khớp luồng
+#### Mục tiêu flow matching
 
 Đối với đoạn hành động thực tế \(a\), nhiễu Gaussian \(\epsilon\) và
 \(t\sim\operatorname{Beta}(1,1.5)\):
@@ -659,7 +659,7 @@ trong đó \(s\) là trạng thái robot và \(o\) là quan sát bằng ngôn ng
 
 RobotManip áp dụng ba mặt nạ:
 
-1. **Mặt nạ khe** — kích thước hoạt động cho phương án
+1. **Mặt nạ khe** — kích thước hoạt động cho hiện thân
 2. **Mặt nạ hợp lệ theo bước** — các bước quỹ đạo hợp lệ, không dị thường
 3. **Mặt nạ xác thực của bàn tay con người** — xóa tính năng giám sát sau khi một bàn tay rời khỏi chế độ xem camera
 
@@ -711,7 +711,7 @@ RobotManip sử dụng **SFT tổng quát** dành riêng cho từng miền:
 
 - Tất cả các bản trình diễn cho benchmark mục tiêu hoặc miền triển khai được kết hợp
 - Một chính sách tinh chỉnh xử lý tất cả các tác vụ trong miền đó
-- Mục tiêu SFT mặc định chỉ là khớp luồng
+- Mục tiêu SFT mặc định chỉ là flow matching
 - Áp dụng jitter màu hình ảnh
 - Quá trình huấn luyện sau hỗn hợp tùy chọn có thể giữ lại dữ liệu VL và dữ liệu VLA tiền huấn luyện phụ trợ để giảm tình trạng trang bị quá mức miền
 
@@ -735,7 +735,7 @@ khái quát hóa. Tất cả các giá trị bên dưới là tỷ lệ thành c
 | LIBERO-Plus | Bảy trục nhiễu loạn OOD; tổng thể SR |                 89,0; Bối cảnh 91.4 | Bao gồm máy ảnh, trạng thái robot, ngôn ngữ, ánh sáng, nền, nhiễu và các thay đổi bố cục |
 | RoboTwin-Clean2Rand | Tinh chỉnh Clean, kiểm tra ngẫu nhiên; SR cứng |                 62,6; Bối cảnh 69,4 | Bối cảnh giúp ích nhiều nhất trong ca kết hợp |
 | RoboCasa365 | Nguyên tử, tổng hợp-nhìn thấy, tổng hợp-không nhìn thấy; tổng SR |                               35,9 | Tổng hợp không nhìn thấy là 14,9 so với 5,4 của RLDX-1 |
-| EBench | 26 loại nhiệm vụ; SR và điểm tổng hợp |                 45,6 SR / 60 điểm | Bao gồm các nhiệm vụ trên bàn, chọn và đặt trên thiết bị di động và tầm nhìn dài |
+| EBench | 26 loại nhiệm vụ; SR và điểm tổng hợp |                 45,6 SR / 60 điểm | Bao gồm các nhiệm vụ trên bàn, chọn và đặt trên thiết bị di động và thị giác dài |
 | RoboTwin-IF | Các mẫu hướng dẫn được giữ lại; SR trung bình |                               72,2 | Kiểm tra lựa chọn hành động có điều kiện ngôn ngữ trong các cảnh tương tự |
 | RoboTwin-XE | Huấn luyện trên AgileX ALOHA, không bắn tới ARX/UR5/Franka; SR | trung bình 23,9 với EEF khung máy ảnh | Chuyển giao không gian chung vẫn còn kém; result hỗ trợ căn chỉnh khung máy ảnh |
 
@@ -767,7 +767,7 @@ Sự cắt bỏ phù hợp nhất để giải thích công thức huấn luyệ
   mạnh mẽ hơn là chỉ bảo tồn việc tạo văn bản.
 - Thêm VL trong quá trình huấn luyện sẽ cải thiện LIBERO-Plus từ 90,1 lên 91,4 nhưng để lại mức Hard
   Kết quả Clean2Rand về cơ bản bằng phẳng, 62,6 đến 62,5.
-- Với tỷ lệ dữ liệu giữa rô-bốt và phụ trợ cố định là 7:3, điểm số biến thể chỉ dành cho rô-bốt, +ego và +H2R
+- Với tỷ lệ dữ liệu giữa robot và phụ trợ cố định là 7:3, điểm số biến thể chỉ dành cho robot, +ego và +H2R
   54,7, 55,0 và 58,7 trên Clean2Rand Hard; H2R hữu ích hơn video bản ngã thô trong thử nghiệm đó.
 - Bối cảnh yêu cầu đủ các bước tích hợp luồng: 10 bước đạt điểm trung bình 70,9 trong báo cáo
   cắt bỏ bối cảnh, trong khi bốn bước đạt 63,3 và có thể bị rung; không có lịch sử khi bắt đầu tập phim
@@ -782,7 +782,7 @@ Sự cắt bỏ phù hợp nhất để giải thích công thức huấn luyệ
   - nó cải thiện LIBERO-Plus và RoboTwin-Clean2Rand;
   - nó thấp hơn trên EBench và RoboCasa365;
   - nó đòi hỏi ngân sách khử nhiễu lớn hơn để tránh hiện tượng jitter.
-- Dữ liệu từ người đến robot có thể chứa các tạo phẩm nhắm mục tiêu lại, hiển thị hoặc inpainting.
+- Dữ liệu từ người đến robot có thể chứa các artifact nhắm mục tiêu lại, hiển thị hoặc inpainting.
 - Hầu hết các thử nghiệm OOD được kiểm soát vẫn dựa trên mô phỏng.
 - Các khối hành động cố định và suy luận lặp lại hạn chế hành vi có tính phản ứng cao.
 - Xác thực trong thế giới thực vẫn bao gồm một tập hợp hữu hạn các nền tảng và nhiệm vụ.
@@ -796,7 +796,7 @@ Sự cắt bỏ phù hợp nhất để giải thích công thức huấn luyệ
 | Phạm vi | Thao tác, điều hướng, quỹ đạo của con người và agent | Chỉ thao tác |
 | Cấu trúc DiT | DiT luồng đơn lớn 16 khối | DiT 10 khối nhỏ hơn với attention chéo xen kẽ |
 | Đại diện hành động | Không gian hành động/quỹ đạo có đệm phụ thuộc vào nhiệm vụ chung | Mẫu thao tác kinh điển 80-D rõ ràng |
-| Cơ chế chéo robot chính | Dấu nhắc và tính hợp lệ của phương án thực hiện văn bản | Sự biểu diễn, chuyển động của khung máy ảnh và căn chỉnh hành vi |
+| Cơ chế chéo robot chính | Dấu nhắc và tính hợp lệ của hiện thân thực hiện văn bản | Sự biểu diễn, chuyển động của khung máy ảnh và căn chỉnh hành vi |
 | Lịch sử | Lịch sử quan sát chung có thể được sử dụng | Bối cảnh hành động-trạng thái quan sát rõ ràng để thích ứng trong ngữ cảnh |
 | Chiến lược dữ liệu | Hỗn hợp thể hiện không đồng nhất rộng | Hỗn hợp chỉ dành cho thao tác được quản lý sâu sắc |
 | Tỉ lệ tổng hợp | Dữ liệu mô phỏng và con người trong phạm vi rộng | Chuyển đổi chuyên dụng từ người sang robot trên 15 nền tảng |
@@ -819,7 +819,7 @@ RobotManip coi việc biểu diễn robot không nhất quán là nút thắt c�
    [arXiv](https://arxiv.org/abs/2606.17846v2) ·
    [PDF cục bộ](../../../../papers/01-gwen/vla-specific/qwen_robotmanip_2606.17846.pdf) ·
    [kho lưu trữ chính thức](https://github.com/QwenLM/Qwen-RobotManip)
-2. Wang và cộng sự. *Qwen-VLA: Mô hình Hành động-Ngôn ngữ-Tầm nhìn cho Trí tuệ Thể hiện Chung*.
+2. Wang và cộng sự. *Qwen-VLA: Mô hình Hành động-Ngôn ngữ-Thị giác cho Trí tuệ Thể hiện Chung*.
    [arXiv](https://arxiv.org/abs/2605.30280v2) ·
    [PDF cục bộ](../../../../papers/01-gwen/vla-specific/qwen_vla_2605.30280.pdf)
 3. Zawalski và cộng sự. *Điều khiển bằng robot thông qua suy luận chuỗi suy nghĩ được thể hiện*, 2024.

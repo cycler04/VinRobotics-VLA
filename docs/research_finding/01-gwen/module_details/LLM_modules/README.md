@@ -1,13 +1,13 @@
-# Modern LLM Modules and Their Place in Qwen
+# Các mô-đun LLM hiện đại và vị trí của chúng ở Qwen
 
-**Research date:** 2026-07-20  
-**Scope:** decoder-side modules that materially change a modern LLM's attention,
-FFN, normalization, long-context behavior, training objective, or inference cost.
+**Ngày nghiên cứu:** 2026-07-20
+**Phạm vi:** các mô-đun phía bộ giải mã làm thay đổi đáng kể sự chú ý của LLM hiện đại,
+FFN, chuẩn hóa, hành vi ngữ cảnh dài, mục tiêu đào tạo hoặc chi phí suy luận.
 
-## The architectural picture
+## Bức tranh kiến ​​trúc
 
-A modern Qwen block is not a completely new replacement for the Transformer. It is
-mostly a sequence of targeted substitutions around the original residual block:
+Khối Qwen hiện đại không phải là sự thay thế hoàn toàn mới cho Transformer. Đó là
+chủ yếu là một chuỗi các thay thế được nhắm mục tiêu xung quanh khối dư ban đầu:
 
 ```mermaid
 flowchart TD
@@ -16,7 +16,7 @@ flowchart TD
     QKV --> QKN[QK-Norm in Qwen3]
     QKN --> POS[RoPE position rotation]
     POS --> ATT[GQA attention]
-    ATT --> FAST[FlashAttention may execute the same attention exactly]
+    ATT --> FAST[FlashAttention có thể thực thi chính xác cùng phép attention]
     FAST --> R1[Residual add]
     R1 --> N2[RMSNorm / pre-norm]
     N2 --> F{Dense or sparse FFN?}
@@ -26,50 +26,50 @@ flowchart TD
     MOE --> R2
 ```
 
-Later Qwen models introduce a bigger change to the token-mixing path. Qwen3-Next
-repeats three Gated DeltaNet layers followed by one full gated-attention layer,
-while every layer still has an MoE sublayer. It also adds multi-token prediction
-for training and speculative decoding. The official model card specifies the
-layout as `12 × (3 × (Gated DeltaNet → MoE) → 1 × (Gated Attention → MoE))`.
-([Qwen3-Next model card](https://huggingface.co/Qwen/Qwen3-Next-80B-A3B-Instruct))
+Các mô hình Qwen sau này giới thiệu một sự thay đổi lớn hơn đối với đường dẫn trộn mã thông báo. Qwen3-Next
+lặp lại ba lớp DeltaNet có cổng, theo sau là một lớp chú ý có cổng đầy đủ,
+trong khi mỗi lớp vẫn có một lớp con MoE. Nó cũng thêm dự đoán nhiều mã thông báo
+để huấn luyện và giải mã suy đoán. Thẻ mẫu chính thức chỉ định
+bố cục như `12 × (3 × (Gated DeltaNet → MoE) → 1 × (Gated Attention → MoE))`.
+([Thẻ mẫu Qwen3-Next](https://huggingface.co/Qwen/Qwen3-Next-80B-A3B-Instruct))
 
-## What improves what
+## Cái gì cải thiện cái gì
 
-| New module | Main predecessor | Main improvement | What it does **not** solve |
+| Mô-đun mới | Người tiền nhiệm chính | Cải tiến chính | Nó **không** giải quyết được gì |
 |---|---|---|---|
-| [BBPE tokenizer](BBPE_Tokenizer.md) | Word, character, or character-level subword tokenization | Uses a universal byte base plus learned merges for open coverage and compact multilingual/code encoding | It does not guarantee equal token efficiency, semantic boundaries, or preservation before normalization |
-| [RoPE](RoPE.md) | Additive absolute position embedding | Makes attention scores depend naturally on relative displacement | Long-context extrapolation beyond training is not guaranteed |
-| [GQA](GQA.md) | Multi-head attention (MHA) | Shrinks the KV cache and decoder memory bandwidth | It does not remove quadratic prefill attention |
-| [FlashAttention](FlashAttention.md) | Materialized attention implementation | Computes exact attention with much less HBM traffic and temporary memory | It does not change attention's mathematical output or quadratic FLOPs |
-| [SwiGLU](SwiGLU.md) | ReLU/GELU two-matrix FFN | Adds an input-dependent multiplicative gate | It adds a third projection and is not automatically cheaper |
-| [RMSNorm](RMSNorm.md) | LayerNorm | Removes mean-centering and simplifies normalization | It preserves scale invariance, not shift invariance |
-| [QK-Norm](QK_Norm.md) | Only scaling logits by `sqrt(d_head)` | Controls Q/K magnitude and attention-logit growth | It does not replace residual-stream normalization |
-| [Sparse MoE](MoE.md) | One dense FFN for every token | Increases parameter capacity without activating all parameters per token | Communication, routing balance, and total weight memory remain expensive |
-| [YaRN](YaRN.md) | Plain RoPE outside its trained length | Rescales the RoPE frequency spectrum and attention temperature | It does not change full attention's quadratic cost |
-| [DCA](DCA.md) | Raw RoPE distances across very long sequences | Re-indexes intra-, inter-, and successive-chunk query-key regions | Far-distance position detail is deliberately coarsened |
-| [Gated DeltaNet](Gated_DeltaNet.md) | Full softmax attention or simpler linear recurrence | Uses a fixed-size recurrent memory with targeted update and global forgetting | Fixed-size state can still collide and lose exact detail |
-| [Multi-token prediction](Multi_Token_Prediction.md) | Next-token-only training | Supervises several future positions and provides draft tokens for speculation | Speedup requires verification and an inference engine that supports it |
+| [Mã thông báo BBPE](BBPE_Tokenizer.md) | Mã thông báo từ phụ, ký tự hoặc cấp ký tự | Sử dụng cơ sở byte phổ quát cộng với các kết hợp đã học để bao phủ mở và mã hóa đa ngôn ngữ/mã nhỏ gọn | Nó không đảm bảo hiệu quả mã thông báo như nhau, ranh giới ngữ nghĩa hoặc bảo toàn trước khi chuẩn hóa |
+| [RoPE](RoPE.md) | Nhúng vị trí tuyệt đối phụ gia | Làm cho điểm chú ý phụ thuộc một cách tự nhiên vào sự dịch chuyển tương đối | Ngoại suy ngữ cảnh dài ngoài đào tạo không được đảm bảo |
+| [GQA](GQA.md) | Chú ý nhiều đầu (MHA) | Thu hẹp băng thông bộ nhớ đệm và bộ giải mã KV | Nó không loại bỏ sự chú ý điền trước bậc hai |
+| [FlashChú ý](FlashAttention.md) | Thực hiện chú ý cụ thể hóa | Tính toán sự chú ý chính xác với lưu lượng HBM và bộ nhớ tạm thời ít hơn nhiều | Nó không thay đổi kết quả toán học của sự chú ý hoặc phương trình bậc hai FLOPs |
+| [SwiGLU](SwiGLU.md) | ReLU/GELU hai ma trận FFN | Thêm một cổng nhân phụ thuộc vào đầu vào | Nó bổ sung thêm phép chiếu thứ ba và không tự động rẻ hơn |
+| [RMSNorm](RMSNorm.md) | LớpNorm | Loại bỏ việc tập trung vào giá trị trung bình và đơn giản hóa việc chuẩn hóa | Nó bảo toàn tính bất biến của thang đo, không phải tính bất biến của dịch chuyển |
+| [QK-Norm](QK_Norm.md) | Chỉ chia tỷ lệ nhật ký theo `sqrt(d_head)` | Kiểm soát cường độ Q/K và tăng trưởng logit chú ý | Nó không thay thế chuẩn hóa dòng dư |
+| [MoE thưa thớt](MoE.md) | Một FFN dày đặc cho mỗi mã thông báo | Tăng dung lượng tham số mà không cần kích hoạt tất cả tham số trên mỗi mã thông báo | Giao tiếp, cân bằng định tuyến và tổng trọng lượng bộ nhớ vẫn còn đắt |
+| [Sợi](YaRN.md) | RoPE trơn nằm ngoài chiều dài đã được huấn luyện của nó | Thay đổi tỷ lệ phổ tần RoPE và nhiệt độ chú ý | Nó không thay đổi toàn bộ chi phí bậc hai của sự chú ý |
+| [DCA](DCA.md) | Khoảng cách RoPE thô trên các chuỗi rất dài | Lập chỉ mục lại các vùng khóa truy vấn trong, giữa và liên tiếp | Chi tiết vị trí ở khoảng cách xa được cố tình làm thô |
+| [Gated DeltaNet](Gated_DeltaNet.md) | Chú ý softmax đầy đủ hoặc tái phát tuyến tính đơn giản hơn | Sử dụng bộ nhớ định kỳ có kích thước cố định với mục tiêu cập nhật và tính năng quên toàn cục | Trạng thái kích thước cố định vẫn có thể va chạm và mất chi tiết chính xác |
+| [Dự đoán nhiều mã thông báo](Multi_Token_Prediction.md) | Đào tạo chỉ dành cho mã thông báo tiếp theo | Giám sát một số vị trí trong tương lai và cung cấp mã thông báo dự thảo để đầu cơ | Tăng tốc yêu cầu xác minh và công cụ suy luận hỗ trợ nó |
 
-## Qwen lineage, without overclaiming
+## Dòng dõi Qwen, không hề quá đáng
 
-- **Verified:** Qwen2 documents GQA, SwiGLU, RoPE, RMSNorm/pre-norm, DCA and
-  YaRN; its MoE substitutes a routed expert bank for the dense FFN.
-  ([Qwen2 Technical Report, §2.2](https://arxiv.org/abs/2407.10671))
-- **Verified:** Qwen3 retains GQA, SwiGLU, RoPE and RMSNorm/pre-norm, adds
-  QK-Norm, and changes its MoE to 128 fine-grained experts with eight selected
-  per token and no shared expert.
-  ([Qwen3 Technical Report, §2](https://arxiv.org/abs/2505.09388))
-- **Verified:** Qwen3-Next replaces an all-full-attention stack with a 3:1 hybrid
-  of Gated DeltaNet and gated full attention, uses a much sparser MoE, and adds
-  MTP. ([official Qwen3-Next architecture post](https://qwen.ai/blog?id=e34c4305036ce60d55a0791b170337c2b70ae51d))
-- **Important distinction:** FlashAttention is a kernel/algorithm choice, not a
-  learned checkpoint architecture. A Qwen checkpoint can run with or without it
-  if the serving stack supports both exact implementations. Qwen's official
-  Qwen3-VL instructions expose it as the optional
-  `attn_implementation="flash_attention_2"` setting.
+- **Đã xác minh:** Qwen2 ghi lại GQA, SwiGLU, RoPE, RMSNorm/pre-norm, DCA và
+  YaRN; MoE của nó thay thế một ngân hàng chuyên gia được định tuyến cho FFN dày đặc.
+  ([Báo cáo kỹ thuật Qwen2, §2.2](https://arxiv.org/abs/2407.10671))
+- **Đã xác minh:** Qwen3 giữ lại GQA, SwiGLU, RoPE và RMSNorm/pre-norm, bổ sung thêm
+  QK-Norm và thay đổi MoE của mình thành 128 chuyên gia chi tiết với tám chuyên gia được chọn
+  mỗi mã thông báo và không có chuyên gia chia sẻ.
+  ([Báo cáo kỹ thuật Qwen3, §2](https://arxiv.org/abs/2505.09388))
+- **Đã xác minh:** Qwen3-Next thay thế ngăn xếp toàn diện bằng tổ hợp 3:1
+  của Gated DeltaNet và thu hút sự chú ý hoàn toàn, sử dụng MoE thưa thớt hơn nhiều và bổ sung thêm
+  MTP. ([bài đăng kiến ​​trúc Qwen3-Next chính thức](https://qwen.ai/blog?id=e34c4305036ce60d55a0791b170337c2b70ae51d))
+- **Sự khác biệt quan trọng:** FlashAttention là sự lựa chọn hạt nhân/thuật toán, không phải là
+  kiến trúc điểm kiểm tra đã học. Điểm kiểm tra Qwen có thể chạy có hoặc không có nó
+  nếu ngăn xếp phân phát hỗ trợ cả hai cách triển khai chính xác. Qwen chính thức
+  Hướng dẫn Qwen3-VL hiển thị nó dưới dạng tùy chọn
+  Cài đặt `attn_implementation="flash_attention_2"`.
   ([Qwen3-VL README](https://github.com/QwenLM/Qwen3-VL/blob/main/README.md#flash-attention-2-to-speed-up-generation))
 
-The files in this directory focus on module mechanics. Pretraining data,
-post-training, reasoning mode, tool use, and multimodal fusion can dominate
-observable behavior, but they are separate from the block-level substitutions
-analyzed here.
+Các tập tin trong thư mục này tập trung vào cơ chế mô-đun. Dữ liệu đào tạo trước,
+đào tạo sau, chế độ lý luận, sử dụng công cụ và kết hợp đa phương thức có thể chiếm ưu thế
+hành vi có thể quan sát được, nhưng chúng tách biệt với các thay thế cấp khối
+đã phân tích ở đây

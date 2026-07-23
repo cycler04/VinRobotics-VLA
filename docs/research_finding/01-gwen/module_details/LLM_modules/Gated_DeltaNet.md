@@ -1,21 +1,21 @@
-# Gated DeltaNet and Hybrid Attention
+# Gated DeltaNet và attention lai
 
-**Improves:** quadratic full attention for long sequences, and simpler linear
-recurrent alternatives such as Mamba2 or DeltaNet.
-**Primary goal:** maintain a fixed-size recurrent key-value memory that can both
-forget globally and update a specific association, then combine it with periodic
-full attention to recover exact-retrieval capacity.
+**Cải thiện:** chú ý đầy đủ bậc hai cho các chuỗi dài và tuyến tính đơn giản hơn
+các lựa chọn thay thế định kỳ như Mamba2 hoặc DeltaNet.
+**Mục tiêu chính:** duy trì bộ nhớ khóa-giá trị định kỳ có kích thước cố định có thể vừa
+quên trên toàn cầu và cập nhật một liên kết cụ thể, sau đó kết hợp nó với định kỳ
+toàn tâm toàn ý phục hồi khả năng truy xuất chính xác.
 
-**Simple Explanation:** A linear-attention mechanism that reduces attention complexity to **O(n)** by replacing token-to-token attention with a **shared recurrent memory**. Each token uses its **Q, K, and V** to read from and update this memory via the **delta rule** , while a **learned gate**(Mamba2) controls  **how much of the update is written** , allowing the model to preserve important information and ignore less relevant updates.
+**Giải thích đơn giản:** Cơ chế chú ý tuyến tính giúp giảm độ phức tạp của sự chú ý xuống **O(n)** bằng cách thay thế sự chú ý từ mã thông báo này sang mã thông báo khác bằng **bộ nhớ lặp lại được chia sẻ**. Mỗi mã thông báo sử dụng **Q, K và V** để đọc và cập nhật bộ nhớ này thông qua **quy tắc delta** , trong khi **cổng đã học**(Mamba2) kiểm soát **lượng nội dung cập nhật được viết** , cho phép mô hình lưu giữ thông tin quan trọng và bỏ qua các cập nhật ít liên quan hơn.
 
-## From full attention to recurrent state
+## Từ sự chú ý hoàn toàn đến trạng thái tái diễn
 
-At decode step `t`, full causal attention stores every prior K/V pair and
-compares the current query against all keys. This gives content-addressable
-access but the KV cache grows linearly with sequence length, and full prefill
-attention is quadratic.
+Ở bước giải mã `t`, sự chú ý nguyên nhân đầy đủ sẽ lưu trữ mọi cặp K/V trước đó và
+so sánh truy vấn hiện tại với tất cả các khóa. Điều này mang lại cho nội dung địa chỉ
+truy cập nhưng bộ đệm KV phát triển tuyến tính theo độ dài chuỗi và điền trước đầy đủ
+sự chú ý là bậc hai.
 
-Basic linear attention can instead summarize history in a matrix state:
+Thay vào đó, sự chú ý tuyến tính cơ bản có thể tóm tắt lịch sử ở trạng thái ma trận:
 
 $$
 \begin{aligned}
@@ -24,24 +24,24 @@ o_t &= S_tq_t
 \end{aligned}
 $$
 
-The state shape depends on head dimensions, not sequence length. Associativity
-replaces an explicit scan over all prior tokens with a recurrent update. The
-cost is compression: many K/V associations share one fixed-size matrix and can
-collide.
+Hình dạng trạng thái phụ thuộc vào kích thước đầu chứ không phải độ dài chuỗi. tính kết hợp
+thay thế việc quét rõ ràng trên tất cả các mã thông báo trước đó bằng một bản cập nhật định kỳ. các
+chi phí là nén: nhiều liên kết K/V chia sẻ một ma trận có kích thước cố định và có thể
+va chạm.
 
-## Why both a gate and a delta rule are needed
+## Tại sao cần cả quy tắc cổng và quy tắc delta
 
-Mamba2-like scalar decay adds global forgetting:
+Phân rã vô hướng Mamba2-like làm tăng thêm sự lãng quên toàn cầu:
 
 $$
 S_t = \alpha_t S_{t-1} + v_tk_t^{\top},
 \qquad 0 < \alpha_t < 1
 $$
 
-Small `alpha_t` rapidly clears stale state, but it decays every association
-together. It cannot selectively overwrite only the memory addressed by `k_t`.
+`alpha_t` nhỏ nhanh chóng xóa trạng thái cũ, nhưng nó làm hỏng mọi liên kết
+cùng nhau. Nó không thể ghi đè có chọn lọc chỉ vào bộ nhớ được đánh địa chỉ bởi `k_t`.
 
-DeltaNet performs a targeted correction:
+DeltaNet thực hiện điều chỉnh có mục tiêu:
 
 $$
 S_t
@@ -49,11 +49,11 @@ S_t
 + \beta_tv_tk_t^{\top}
 $$
 
-Equivalently, it subtracts the current prediction error at key `k_t` and writes
-the new value. This selectively changes one association, but lacks a fast global
-reset when context changes.
+Tương tự, nó trừ đi lỗi dự đoán hiện tại tại khóa `k_t` và ghi
+giá trị mới. Điều này thay đổi có chọn lọc một liên kết, nhưng thiếu một liên kết toàn cầu nhanh chóng.
+đặt lại khi bối cảnh thay đổi.
 
-Gated DeltaNet combines them:
+Gated DeltaNet kết hợp chúng:
 
 $$
 \begin{aligned}
@@ -64,15 +64,15 @@ o_t &= S_tq_t
 \end{aligned}
 $$
 
-- `alpha_t -> 0`: forget most old state quickly;
-- `alpha_t -> 1`: behave like the targeted delta update;
-- `beta_t`: controls how strongly the new K/V association replaces the old
-  value at that key.
+- `alpha_t -> 0`: nhanh chóng quên hầu hết trạng thái cũ;
+- `alpha_t -> 1`: hoạt động giống như bản cập nhật delta được nhắm mục tiêu;
+- `beta_t`: kiểm soát mức độ liên kết K/V mới thay thế liên kết cũ
+  giá trị tại khóa đó.
 
-This equation and interpretation come from the original Gated DeltaNet paper.
-([Yang, Kautz, and Hatamizadeh, 2024/ICLR 2025, §3](https://arxiv.org/abs/2412.06464))
+Phương trình và cách giải thích này đến từ bài báo Gated DeltaNet ban đầu.
+([Yang, Kautz và Hatamizadeh, 2024/ICLR 2025, §3](https://arxiv.org/abs/2412.06464))
 
-## Token dataflow
+## Luồng dữ liệu mã thông báo
 
 ```mermaid
 flowchart LR
@@ -85,71 +85,71 @@ flowchart LR
     S[Previous fixed-size state S_t-1] --> UPDATE
     UPDATE --> NS[New state S_t]
     NS --> READ
-    READ --> OG[Output norm + gate + projection]
+    READ --> OG[Chuẩn hóa đầu ra + cổng + phép chiếu]
 ```
 
-During sequential decoding, only the state is carried forward. During training,
-the recurrence would underutilize GPUs if evaluated token by token. The paper
-derives a chunkwise-parallel algorithm using compact WY/UT matrix forms so each
-chunk becomes tensor-core-friendly matrix multiplications while overall sequence
-complexity remains linear.
+Trong quá trình giải mã tuần tự, chỉ có trạng thái được chuyển tiếp. Trong quá trình đào tạo,
+sự tái diễn sẽ sử dụng không đúng mức GPUs nếu được đánh giá từng mã thông báo. Giấy
+rút ra một thuật toán song song từng đoạn bằng cách sử dụng các dạng ma trận WY/UT nhỏ gọn sao cho mỗi
+chunk trở thành phép nhân ma trận thân thiện với lõi tensor trong khi chuỗi tổng thể
+độ phức tạp vẫn tuyến tính.
 
-## Memory example
+## Ví dụ về bộ nhớ
 
-Suppose the state has learned associations for keys resembling `user_name`,
-`current_city`, and `task`:
+Giả sử trạng thái đã học được các liên kết cho các khóa giống như `user_name`,
+`current_city` và `task`:
 
-1. A new `current_city` value arrives. The delta term corrects the state mainly
-   along that key direction instead of erasing unrelated `user_name` memory.
-2. The conversation changes to a completely new document. A small `alpha_t`
-   decays the whole old state quickly.
-3. The current query reads a weighted combination through `S_t q_t`.
+1. Một giá trị `current_city` mới xuất hiện. Thuật ngữ delta điều chỉnh trạng thái chủ yếu
+   dọc theo hướng phím đó thay vì xóa bộ nhớ `user_name` không liên quan.
+2. Cuộc trò chuyện chuyển sang một tài liệu hoàn toàn mới. Một chiếc `alpha_t` nhỏ
+   phân rã toàn bộ trạng thái cũ một cách nhanh chóng.
+3. Truy vấn hiện tại đọc kết hợp có trọng số thông qua `S_t q_t`.
 
-This is an analogy for the matrix update, not evidence that a real trained head
-stores human-readable fields.
+Đây là một sự tương tự với việc cập nhật ma trận, không phải bằng chứng cho thấy một cái đầu được đào tạo thực sự
+lưu trữ các trường con người có thể đọc được.
 
-## Why Qwen uses a hybrid rather than pure linear stack
+## Tại sao Qwen sử dụng ngăn xếp tuyến tính kết hợp thay vì tuyến tính thuần túy
 
-Fixed-size recurrent memory still loses detail when many associations collide.
-The Gated DeltaNet paper finds pure recurrent models behind full attention on
-some real-world retrieval tasks, while hybrids with attention perform better.
-([paper §§4 and limitations](https://arxiv.org/abs/2412.06464))
+Bộ nhớ lặp lại có kích thước cố định vẫn mất chi tiết khi nhiều liên kết xung đột.
+Bài báo Gated DeltaNet tìm thấy các mô hình lặp lại thuần túy đằng sau sự chú ý đầy đủ về
+một số nhiệm vụ truy xuất trong thế giới thực, trong khi các kết hợp có sự chú ý thực hiện tốt hơn.
+([giấy §§4 và những hạn chế](https://arxiv.org/abs/2412.06464))
 
-Qwen3-Next therefore uses a 3:1 pattern:
+Do đó, Qwen3-Next sử dụng mẫu 3:1:
 
 ```text
-Gated DeltaNet -> MoE
-Gated DeltaNet -> MoE
-Gated DeltaNet -> MoE
-Gated full attention -> MoE
-repeat 12 times
+DeltaNet có kiểm soát -> MoE
+DeltaNet có kiểm soát -> MoE
+DeltaNet có kiểm soát -> MoE
+Kiểm soát hoàn toàn sự chú ý -> MoE
+lặp lại 12 lần
 ```
 
-The recurrent layers cheaply propagate compressed long-range state. Each fourth
-layer provides explicit token-to-token attention for precise retrieval and
-mixing. Qwen also adds an output gate to the full-attention layers and uses GQA
-there (16 Q heads, 2 KV heads in 80B-A3B).
-([official Qwen3-Next post](https://qwen.ai/blog?id=e34c4305036ce60d55a0791b170337c2b70ae51d),
-[model card](https://huggingface.co/Qwen/Qwen3-Next-80B-A3B-Instruct))
+Các lớp hồi quy truyền bá trạng thái nén tầm xa với giá rẻ. Mỗi phần tư
+lớp cung cấp sự chú ý rõ ràng từ mã thông báo đến mã thông báo để truy xuất chính xác và
+trộn. Qwen cũng thêm cổng đầu ra vào các lớp chú ý đầy đủ và sử dụng GQA
+ở đó (16 đầu Q, 2 đầu KV trong 80B-A3B).
+([bài đăng chính thức của Qwen3-Next](https://qwen.ai/blog?id=e34c4305036ce60d55a0791b170337c2b70ae51d),
+[thẻ mẫu](https://huggingface.co/Qwen/Qwen3-Next-80B-A3B-Instruct))
 
-## Complexity and trade-offs
+## Sự phức tạp và sự đánh đổi
 
-| Property                     | Full attention                  | Gated DeltaNet                                     |
+| Bất động sản | Toàn tâm chú ý | DeltaNet có cổng |
 | ---------------------------- | ------------------------------- | -------------------------------------------------- |
-| Prefill token mixing         | Quadratic in sequence length    | Linear in sequence length with chunkwise algorithm |
-| Decode history               | Growing KV cache                | Fixed-size recurrent matrix state                  |
-| Exact access to an old token | Strong content-addressable path | Compressed; collisions are possible                |
-| Parallel training            | Natural large matmuls           | Requires specialized chunkwise kernels             |
-| Serving support              | Mature                          | Architecture- and kernel-specific                  |
+| Trộn mã thông báo điền trước | Bậc hai theo độ dài dãy | Tuyến tính theo độ dài chuỗi với thuật toán chunkwise |
+| Giải mã lịch sử | Phát triển bộ đệm KV | Trạng thái ma trận hồi quy có kích thước cố định |
+| Quyền truy cập chính xác vào mã thông báo cũ | Đường dẫn có thể định địa chỉ nội dung mạnh mẽ | nén; có thể xảy ra va chạm |
+| Đào tạo song song | Matmul lớn tự nhiên | Yêu cầu hạt nhân chunkwise chuyên dụng |
+| Phục vụ hỗ trợ | Trưởng thành | Dành riêng cho kiến ​​trúc và kernel |
 
-The official Qwen3-Next card claims 10× inference throughput over 32K context
-relative to Qwen3-32B for its tested model/system, but that result combines Gated
-DeltaNet, sparse MoE, model dimensions, kernels, and serving setup. It should not
-be attributed to the recurrence equation alone.
+Thẻ Qwen3-Next chính thức tuyên bố thông lượng suy luận 10× trên bối cảnh 32K
+so với Qwen3-32B cho mô hình/hệ thống được thử nghiệm của nó, nhưng kết quả đó kết hợp Gated
+DeltaNet, MoE thưa thớt, kích thước mô hình, hạt nhân và thiết lập phân phối. Nó không nên
+chỉ được quy cho phương trình truy hồi.
 
-**Verified lineage:** Qwen3 itself is still an all-attention dense/MoE family.
-Gated DeltaNet first enters this line through Qwen3-Next; official later Qwen
-materials describe it as continuing into Qwen3.5/3.6.
+**Dòng dõi đã được xác minh:** Bản thân Qwen3 vẫn là một dòng sản phẩm dày đặc/MoE được mọi người chú ý.
+DeltaNet có cổng đầu tiên vào dòng này thông qua Qwen3-Next; chính thức sau Qwen
+các tài liệu mô tả nó tiếp tục đi vào Qwen3.5/3.6.
 
-**Disclaimer:** Gated DeltaNet is **not yet a universal replacement** for Transformer attention. While it reduces attention complexity from **O(n²)** to  **O(n)** , it compresses past information into a recurrent memory, which can trade off some retrieval fidelity compared to full attention. Its efficiency advantages become most noticeable for  **very long contexts (100K–1M+ tokens)** , whereas for more common context lengths (e.g.,  **8K–32K tokens** ), optimized Transformer attention is often already efficient enough that the practical benefits are smaller.
-([Qwen FlashQLA post](https://qwen.ai/blog?id=flashqla))
+**Tuyên bố từ chối trách nhiệm:** Gated DeltaNet **chưa phải là sự thay thế phổ biến** để thu hút sự chú ý của Transformer. Mặc dù nó làm giảm độ phức tạp của sự chú ý từ **O(n²)** xuống **O(n)** , nhưng nó nén thông tin trong quá khứ vào bộ nhớ lặp lại, điều này có thể đánh đổi một số độ trung thực khi truy xuất so với sự chú ý hoàn toàn. Lợi thế về hiệu quả của nó trở nên đáng chú ý nhất đối với **ngữ cảnh rất dài (100K–1M+ mã thông báo)** , trong khi đối với độ dài ngữ cảnh phổ biến hơn (ví dụ: **8K–32K mã thông báo** ), sự chú ý của Máy biến áp được tối ưu hóa thường đã đủ hiệu quả nên lợi ích thực tế sẽ nhỏ hơn.
+([Bài đăng Qwen FlashQLA](https://qwen.ai/blog?id=flashqla))

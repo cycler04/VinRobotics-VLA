@@ -1,24 +1,24 @@
-# Patch Merger in Qwen VLMs
+# Sáp nhập patch trong Qwen VLMs
 
-> **Question:** How does Qwen turn a long grid of ViT features into fewer tokens that fit the language model?
+> **Câu hỏi:** Làm cách nào Qwen biến một mạng lưới dài các đặc trưng ViT thành ít token phù hợp với mô hình ngôn ngữ hơn?
 >
-> **Scope:** the Qwen 2 x 2 spatial merger from Qwen2-VL through Qwen3.5,
-> including its role as both token compressor and vision-language projector.
-> Research date: 2026-07-21.
+> **Phạm vi:** sáp nhập không gian Qwen 2 x 2 từ Qwen2-VL đến Qwen3.5,
+> bao gồm cả vai trò của nó vừa là máy nén token vừa là máy chiếu ngôn ngữ thị giác.
+> Ngày nghiên cứu: 21-07-2026.
 
-## Short answer
+## Câu trả lời ngắn
 
-Qwen's patch merger takes each spatially adjacent `2 x 2` group of **already
-contextualized ViT features**, concatenates the four vectors, and applies an MLP
-that produces one vector at the language model's hidden width. It therefore does
-two jobs at once:
+Việc hợp nhất patch của Qwen đã đưa từng nhóm `2 x 2` liền kề về mặt không gian vào **
+các đặc trưng ViT theo ngữ cảnh**, nối bốn vectơ và áp dụng MLP
+tạo ra một vectơ ở độ rộng ẩn của mô hình ngôn ngữ. Do đó nó làm
+hai công việc cùng một lúc:
 
-1. reduces the visual-token count by a factor of four; and
-2. projects from vision width to language-model width.
+1. giảm số lượng token trực quan xuống bốn lần; Và
+2. các dự án từ chiều rộng thị giác đến chiều rộng mô hình ngôn ngữ.
 
-It is not average pooling, a learned-query resampler, or a separate “merger then
-projector” pair. Those are useful generic VLM alternatives, but they are not the
-Qwen module described here. [Qwen2.5-VL, §2.1][qwen25]
+Nó không phải là sự tổng hợp trung bình, một bộ lấy mẫu lại truy vấn đã học hoặc một “sự hợp nhất sau đó” riêng biệt.
+máy chiếu". Đó là những lựa chọn thay thế VLM chung hữu ích, nhưng chúng không phải là
+Mô-đun Qwen được mô tả ở đây. [Qwen2.5-VL, §2.1][qwen25]
 
 ```mermaid
 flowchart LR
@@ -30,15 +30,15 @@ flowchart LR
     F --> G[One visual token]
 ```
 
-## Tensor operation
+## Hoạt động của tensor
 
-For a feature grid
+Đối với lưới đặc trưng
 
 $$
 X\in\mathbb{R}^{T\times H\times W\times d_v}
 $$
 
-and spatial merge size `s=2`, rearrange each local group into
+và kích thước hợp nhất không gian `s=2`, sắp xếp lại từng nhóm cục bộ thành
 
 $$
 g_{t,i,j}=\operatorname{concat}(
@@ -49,213 +49,213 @@ x_{t,2i+1,2j+1})
 \in\mathbb{R}^{4d_v}.
 $$
 
-The two-layer MLP computes
+MLP hai lớp tính toán
 
 $$
 y_{t,i,j}=W_2\,\operatorname{GELU}(W_1g_{t,i,j}+b_1)+b_2,
 \qquad y_{t,i,j}\in\mathbb{R}^{d_{\text{LLM}}}.
 $$
 
-Hence
+Kể từ đây
 
 $$
 N_{\text{out}}=\frac{T H W}{s^2}=\frac{T H W}{4}.
 $$
 
-`T`, `H`, and `W` here are the grid dimensions **after** patch/tubelet
-embedding. Qwen's preprocessing makes `H` and `W` divisible by the merge size.
-The merger does not reduce time; temporal compression happens earlier through
-the two-frame tubelet embedding.
+`T`, `H` và `W` đây là kích thước lưới **sau** patch/ống nhỏ
+nhúng. Quá trình xử lý trước của Qwen làm cho `H` và `W` chia hết cho kích thước hợp nhất.
+Việc sáp nhập không làm giảm thời gian; nén thời gian xảy ra sớm hơn thông qua
+nhúng ống nghiệm hai khung.
 
-## Example dataflow: one 2 x 2 group
+## Luồng dữ liệu ví dụ: một nhóm 2 x 2
 
-Continue the `224 x 224` **Qwen2.5-VL-7B** example. The ViT emits a
-`16 x 16 x 1280` feature grid. Follow the group at merged row 1, column 1—the
-same group used in the positional-encoding example:
+Tiếp tục ví dụ `224 x 224` **Qwen2.5-VL-7B**. ViT phát ra một
+Lưới đặc trưng `16 x 16 x 1280`. Theo dõi nhóm ở hàng 1, cột 1 đã hợp nhất—
+cùng một nhóm được sử dụng trong ví dụ mã hóa vị trí:
 
 ```text
-Pre-merge coordinates                Feature shape
+Tọa độ trước khi hợp nhất Hình dạng đặc trưng
 
-x[2,2]  x[2,3]                      each vector: 1280
-x[3,2]  x[3,3]
+x[2,2] x[2,3] mỗi vectơ: 1280
+x[3,2] x[3,3]
         |
-        | RMSNorm each feature
+        | RMSNorm mỗi đặc trưng
         v
-n[2,2]  n[2,3]                      4 x 1280
-n[3,2]  n[3,3]
+n[2,2] n[2,3] 4 x 1280
+n[3,2] n[3,3]
         |
-        | concatenate in the model's arranged raster order
+        | nối theo thứ tự raster được sắp xếp của mô hình
         v
-g[1,1]                               4*1280 = 5120
+g[1,1] 4*1280 = 5120
         |
-        | Linear 5120 -> 5120
+        | Tuyến tính 5120 -> 5120
         | GELU
-        | Linear 5120 -> 3584
+        | Tuyến tính 5120 -> 3584
         v
-y[1,1]                               one LLM-width visual token
+y[1,1] một token trực quan LLM-width
 ```
 
-Repeating the operation over the whole grid gives
+Việc lặp lại thao tác trên toàn bộ lưới sẽ mang lại
 
 ```text
-ViT output:       1 x 16 x 16 x 1280 = 256 feature vectors
-grouping:         1 x  8 x  8 groups =  64 groups
-merger output:                         64 x 3584
+Đầu ra ViT: 1 x 16 x 16 x 1280 = 256 vectơ đặc trưng
+phân nhóm: 1 x 8 x 8 nhóm = 64 nhóm
+sản lượng sáp nhập: 64 x 3584
 ```
 
-This example exposes the two transformations that the name “patch merger” can
-hide: sequence length changes from 256 to 64, while feature width changes from
-1,280 to 3,584. The output cell `(1,1)` receives the
-[decoder MRoPE coordinate](pos_encode.md) `(t=0,h=1,w=1)` before attention in
-the language model. [Qwen2.5-VL, Table 1 and §2.1][qwen25]
-[Pinned Qwen2.5-VL implementation][qwen25-code]
+Ví dụ này cho thấy hai phép biến đổi mà tên “sáp nhập patch” có thể
+ẩn: độ dài chuỗi thay đổi từ 256 thành 64, trong khi chiều rộng của đối tượng thay đổi từ
+1.280 đến 3.584. Ô đầu ra `(1,1)` nhận được
+[bộ giải mã tọa độ MRoPE](pos_encode.md) `(t=0,h=1,w=1)` trước khi chú ý đến
+mô hình ngôn ngữ [Qwen2.5-VL, Bảng 1 và §2.1][qwen25]
+[Đã ghim triển khai Qwen2.5-VL] [qwen25-code]
 
-## Why merge after the ViT
+## Tại sao hợp nhất sau ViT
 
-If four raw patches were compressed before visual attention, fine detail could
-be discarded before it interacted with surrounding context. Qwen instead runs
-the [ViT](ViT.md) first. A token entering the merger still occupies one grid
-location, but its vector has already mixed information through local/global
-visual attention.
+Nếu bốn patch thô được nén trước khi được chú ý bằng mắt, chi tiết đẹp có thể
+bị loại bỏ trước khi nó tương tác với bối cảnh xung quanh. Thay vào đó Qwen chạy
+[ViT](ViT.md) đầu tiên. Token tham gia sáp nhập vẫn chiếm một lưới
+vị trí, nhưng vectơ của nó đã có thông tin hỗn hợp thông qua địa phương/toàn cầu
+sự chú ý trực quan.
 
-The trade-off is deliberate:
+Sự đánh đổi là có chủ ý:
 
-- the ViT pays for the full pre-merge grid, preserving fine-grained visual
-  processing;
-- the much larger language model receives only one quarter as many visual
-  tokens;
-- each output token keeps a fixed raster location corresponding to one 2 x 2
-  group, which works naturally with decoder-side
-  [height/width positions](pos_encode.md).
+- ViT trả tiền cho toàn bộ lưới trước khi hợp nhất, duy trì hình ảnh chi tiết
+  xử lý;
+- mô hình ngôn ngữ lớn hơn nhiều chỉ nhận được một phần tư số lượng hình ảnh
+  token;
+- mỗi token đầu ra giữ một vị trí raster cố định tương ứng với một 2 x 2
+  nhóm, hoạt động tự nhiên với phía bộ giải mã
+  [vị trí chiều cao/chiều rộng](pos_encode.md).
 
-For full attention over only the visual subsequence, reducing its length by four
-reduces the visual-to-visual attention matrix area by up to sixteen. This is a
-theoretical component-level ratio, not a 16x end-to-end speedup: text tokens,
-ViT compute, projections, kernels, and the rest of the decoder still contribute.
+Để tập trung hoàn toàn vào chuỗi hình ảnh phụ, giảm độ dài của nó đi bốn
+giảm diện tích ma trận chú ý từ thị giác đến thị giác tới 16. Đây là một
+tỷ lệ cấp độ thành phần theo lý thuyết, không phải là tốc độ tăng tốc từ đầu đến cuối 16 lần: token văn bản,
+Tính toán ViT, phép chiếu, hạt nhân và phần còn lại của bộ giải mã vẫn đóng góp.
 
-## Concrete token-count examples
+## Ví dụ về số lượng token cụ thể
 
-### Qwen2/2.5 with 14-pixel patches
+### Qwen2/2.5 với các patch 14 pixel
 
-A processed `224 x 224` image gives a `16 x 16` patch grid:
+Hình ảnh `224 x 224` đã được xử lý sẽ tạo ra lưới patch `16 x 16`:
 
 ```text
 224 / 14 = 16
-16 x 16 = 256 ViT features
-2 x 2 merge -> 8 x 8 = 64 visual tokens
+Tính năng 16 x 16 = 256 ViT
+Hợp nhất 2 x 2 -> 8 x 8 = 64 token trực quan
 ```
 
-Qwen2-VL reports 66 tokens entering the LLM because it counts the 64 merged
-tokens plus `<|vision_start|>` and `<|vision_end|>`. The boundary markers are not
-outputs of the merger. [Qwen2-VL, §2.1][qwen2]
+Qwen2-VL báo cáo 66 token vào LLM vì nó tính 64 token được hợp nhất
+token cộng với `<|vision_start|>` và `<|vision_end|>`. Các điểm đánh dấu ranh giới không
+kết quả của việc sáp nhập. [Qwen2-VL, §2.1][qwen2]
 
-Each merged token has a nominal `28 x 28`-pixel geometric footprint before
-considering resize and ViT context. It should not be called a raw `28 x 28`
-patch: its four inputs are contextual feature vectors.
+Mỗi token được hợp nhất có dấu chân hình học `28 x 28`-pixel danh nghĩa trước
+xem xét thay đổi kích thước và bối cảnh ViT. Nó không nên được gọi là `28 x 28` thô
+patch: bốn đầu vào của nó là các vectơ đặc trưng theo ngữ cảnh.
 
-### Qwen3-VL/Qwen3.5 with 16-pixel patches
+### Qwen3-VL/Qwen3.5 với các patch 16 pixel
 
-The pinned Qwen3-VL-8B and Qwen3.5-27B configs use `patch_size=16` and
-`spatial_merge_size=2`. One decoder visual token therefore corresponds to a
-nominal `32 x 32` region in the processed image, again with a much larger learned
-receptive field after the ViT. [Pinned Qwen3-VL-8B config][qwen3-config]
-[Pinned Qwen3.5-27B config][qwen35-config]
+Cấu hình Qwen3-VL-8B và Qwen3.5-27B được ghim sử dụng `patch_size=16` và
+`spatial_merge_size=2`. Do đó, một token trực quan của bộ giải mã tương ứng với một
+vùng `32 x 32` danh nghĩa trong ảnh đã xử lý, một lần nữa với giá trị đã học lớn hơn nhiều
+trường tiếp nhận sau ViT. [Đã ghim cấu hình Qwen3-VL-8B] [qwen3-config]
+[Đã ghim cấu hình Qwen3.5-27B] [qwen35-config]
 
-## Implementation details by generation
+## Chi tiết triển khai theo thế hệ
 
-| Model      | Merger behavior                                                                                                      | Important distinction                                                                                            |
+| Người mẫu | Hành vi sáp nhập | Sự khác biệt quan trọng |
 | ---------- | -------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| Qwen2-VL   | Simple MLP after the ViT compresses adjacent 2 x 2 tokens                                                            | Paper establishes compression and the 224-pixel/66-token example, but gives less internal detail than later code |
-| Qwen2.5-VL | RMSNorm each width-1280 feature, reshape four neighbors to width 5120, then two linear layers with GELU to LLM width | The output width changes with the 3B/7B/72B language backbone                                                    |
-| Qwen3-VL   | LayerNorm + two-layer GELU MLP; one final merger plus dedicated mergers for three DeepStack feature levels           | Intermediate ViT features are also projected and injected into the first three LLM layers                        |
-| Qwen3.5    | Inherits the main Qwen3-VL merger but deletes the DeepStack merger list                                              | Only final merged features are inserted once at decoder input                                                    |
+| Qwen2-VL | MLP đơn giản sau khi ViT nén 2 x 2 token liền kề | Paper thiết lập đặc trưng nén và ví dụ 224 pixel/66 token, nhưng cung cấp ít chi tiết bên trong hơn mã sau này |
+| Qwen2.5-VL | RMSNorm mỗi đặc trưng có chiều rộng 1280, định hình lại bốn lân cận thành chiều rộng 5120, sau đó là hai lớp tuyến tính có chiều rộng GELU đến LLM | Độ rộng đầu ra thay đổi theo khung ngôn ngữ 3B/7B/72B |
+| Qwen3-VL | LayerNorm + GELU MLP hai lớp; một sự hợp nhất cuối cùng cộng với các sự hợp nhất chuyên dụng cho ba cấp đặc trưng DeepStack | Các đặc trưng ViT trung gian cũng được chiếu và đưa vào ba lớp LLM đầu tiên |
+| Qwen3.5 | Kế thừa sáp nhập Qwen3-VL chính nhưng xóa danh sách sáp nhập DeepStack | Chỉ các đặc trưng được hợp nhất cuối cùng mới được chèn một lần ở đầu vào bộ giải mã |
 
-### Qwen2.5-VL normalization and projection
+### Chuẩn hóa và chiếu Qwen2.5-VL
 
-The pinned reference implementation performs RMSNorm at visual width before
-reshaping each group to `4*d_v`. Its first linear layer preserves that
-concatenated width; its second maps to `d_LLM`. This confirms that the module is
-simultaneously a spatial merger and a modality-width projector.
-[Pinned Qwen2.5-VL implementation][qwen25-code]
+Việc triển khai tham chiếu được ghim thực hiện RMSNorm ở độ rộng trực quan trước
+định hình lại từng nhóm thành `4*d_v`. Lớp tuyến tính đầu tiên của nó bảo toàn rằng
+chiều rộng nối; bản đồ thứ hai của nó tới `d_LLM`. Điều này xác nhận rằng mô-đun là
+đồng thời là sự hợp nhất không gian và máy chiếu có chiều rộng phương thức.
+[Đã ghim triển khai Qwen2.5-VL] [qwen25-code]
 
-The Qwen2.5 paper reports merger input width 1,280 and outputs of 2,048, 3,584,
-and 8,192 for its 3B, 7B, and 72B variants respectively. The token compression
-ratio is unchanged even though projection width follows the LLM.
-[Qwen2.5-VL, Table 1][qwen25]
+Bài báo Qwen2.5 báo cáo chiều rộng đầu vào sáp nhập 1.280 và đầu ra là 2.048, 3.584,
+và 8.192 cho các biến thể 3B, 7B và 72B tương ứng. Việc nén token
+tỷ lệ không thay đổi mặc dù chiều rộng chiếu tuân theo LLM.
+[Qwen2.5-VL, Bảng 1][qwen25]
 
-### Qwen3-VL main and DeepStack mergers
+### Sự hợp nhất chính của Qwen3-VL và DeepStack
 
-Qwen3-VL keeps the final merger and adds one dedicated merger for each selected
-intermediate ViT level. The main path normalizes each `d_v` feature before
-grouping; the reference DeepStack path groups first and then normalizes the
-`4*d_v` vector (`use_postshuffle_norm=true`). Both paths project to LLM width.
-[Pinned Qwen3-VL implementation][qwen3-code]
+Qwen3-VL giữ lại sự hợp nhất cuối cùng và thêm một sự hợp nhất chuyên dụng cho mỗi sự hợp nhất được chọn
+mức độ ViT trung bình. Đường dẫn chính chuẩn hóa từng đặc trưng `d_v` trước đó
+phân nhóm; trước tiên hãy nhóm đường dẫn DeepStack tham chiếu, sau đó chuẩn hóa
+Vectơ `4*d_v` (`use_postshuffle_norm=true`). Cả hai đường dẫn đều có chiều rộng LLM.
+[Đã ghim triển khai Qwen3-VL] [qwen3-code]
 
-The three intermediate merged feature sequences are added to the corresponding
-visual positions in the first three LLM layers. In the paper's controlled
-pretraining ablation, DeepStack raises the reported 12-task average from 74.7 to
-76.0. That supports this exact training setup; it does not prove that extra
-mergers always improve every task. [Qwen3-VL, §2.2 and §5.12.2][qwen3]
+Ba chuỗi đặc trưng được hợp nhất trung gian được thêm vào chuỗi tương ứng
+vị trí trực quan trong ba lớp LLM đầu tiên. Trong giấy được kiểm soát
+cắt bỏ trước khi tập luyện, DeepStack tăng mức trung bình 12 tác vụ được báo cáo từ 74,7 lên
+76,0. Điều đó hỗ trợ thiết lập huấn luyện chính xác này; nó không chứng minh thêm điều đó
+sáp nhập luôn hoàn thiện mọi công việc. [Qwen3-VL, §2.2 và §5.12.2][qwen3]
 
-### Qwen3.5 removes DeepStack
+### Qwen3.5 loại bỏ DeepStack
 
-The pinned Qwen3.5 forward path explicitly deletes `deepstack_visual_indexes`
-and `deepstack_merger_list`, loops through the vision blocks, and calls only the
-final merger. Its 27B config contains an empty DeepStack index list. Therefore
-Qwen3.5 should not be diagrammed with Qwen3-VL's three extra injection paths.
-[Pinned Qwen3.5 implementation][qwen35-code]
-[Pinned Qwen3.5-27B config][qwen35-config]
+Đường chuyển tiếp Qwen3.5 được ghim sẽ xóa rõ ràng `deepstack_visual_indexes`
+và `deepstack_merger_list`, lặp qua các khối thị giác và chỉ gọi
+sự sáp nhập cuối cùng. Cấu hình 27B của nó chứa danh sách chỉ mục DeepStack trống. Vì thế
+Qwen3.5 không nên được lập sơ đồ với ba đường dẫn chèn bổ sung của Qwen3-VL.
+[Đã ghim triển khai Qwen3.5] [qwen35-code]
+[Đã ghim cấu hình Qwen3.5-27B] [qwen35-config]
 
-## Layout is part of the contract
+## Bố cục là một phần của hợp đồng
 
-The merger implementation can use a simple reshape only because preprocessing
-and the vision model arrange tokens so the four consecutive feature vectors are
-the intended spatial neighbors. Qwen2.5 additionally reorders features for
-window attention and applies inverse indices after merging to restore raster
-order. Copying the MLP without the same grid ordering can silently merge
-unrelated locations. [Pinned Qwen2.5-VL implementation][qwen25-code]
+Việc triển khai sáp nhập chỉ có thể sử dụng một định hình lại đơn giản vì quá trình tiền xử lý
+và mô hình thị giác sắp xếp các token sao cho bốn vectơ đặc trưng liên tiếp là
+các lân cận không gian dự định. Qwen2.5 sắp xếp lại thêm các đặc trưng cho
+chú ý đến cửa sổ và áp dụng các chỉ số nghịch đảo sau khi hợp nhất để khôi phục raster
+đặt hàng. Sao chép MLP mà không có cùng thứ tự lưới có thể hợp nhất một cách âm thầm
+những vị trí không liên quan. [Đã ghim triển khai Qwen2.5-VL] [qwen25-code]
 
-The auditable shape contract is:
+Hợp đồng hình dạng có thể kiểm toán là:
 
 ```text
-input count  = T * H * W
-input width  = d_v
-group width  = 4 * d_v
-output count = T * H * W / 4
-output width = d_LLM
+số lượng đầu vào = T * H * W
+chiều rộng đầu vào = d_v
+chiều rộng nhóm = 4 * d_v
+số lượng đầu ra = T * H * W / 4
+chiều rộng đầu ra = d_LLM
 ```
 
-Any implementation or converted checkpoint should verify all four quantities,
-plus the neighbor ordering, rather than only checking that the final tensor has
-the right rank.
+Bất kỳ checkpoint triển khai hoặc chuyển đổi nào đều phải xác minh tất cả bốn đại lượng,
+cộng với thứ tự lân cận, thay vì chỉ kiểm tra xem tensor cuối cùng có
+đúng cấp bậc.
 
-## Limitations and common mistakes
+## Hạn chế và sai lầm thường gặp
 
-- Merging is lossy. Four token vectors become one fixed-width vector; the MLP
-  can learn what to retain, but cannot guarantee preservation of every detail.
-- It reduces LLM-side token count, not ViT-side patch count. High-resolution
-  inputs still make the vision tower expensive.
-- “One merged token equals 28 x 28 or 32 x 32 pixels” describes nominal grid
-  coverage, not its contextual receptive field or exact source pixels after
-  resizing.
-- The patch merger does not perform cross-modal attention. It only emits vectors
-  in the correct width; cross-modal interaction happens in the language model.
-- Qwen's merger should not be conflated with Perceiver resamplers or Q-Former
-  learned queries. Those can produce a fixed token count; Qwen's output remains
-  proportional to input area.
-- The Qwen-VLA paper confirms spatial merging in its Qwen3.5 VLM backbone but
-  does not disclose the 4B checkpoint's exact dimensions. Values from the public
-  Qwen3.5-27B config are not automatically valid for Qwen-VLA.
+- Hợp nhất là mất mát. Bốn vectơ token trở thành một vectơ có chiều rộng cố định; MLP
+  có thể học được những gì cần giữ lại, nhưng không thể đảm bảo bảo toàn được mọi chi tiết.
+- Nó làm giảm số lượng token LLM-side chứ không phải số lượng patch phía ViT. Độ phân giải cao
+  đầu vào vẫn khiến tháp thị giác trở nên đắt đỏ.
+- “Một token được hợp nhất bằng 28 x 28 hoặc 32 x 32 pixel” mô tả lưới danh nghĩa
+  phạm vi bao phủ, không phải trường tiếp nhận theo ngữ cảnh hoặc các pixel nguồn chính xác sau
+  thay đổi kích thước.
+- Việc sáp nhập patch không thực hiện sự chú ý đa phương thức. Nó chỉ phát ra vectơ
+  với chiều rộng chính xác; tương tác đa phương thức xảy ra trong mô hình ngôn ngữ.
+- Việc sáp nhập Qwen không nên được kết hợp với bộ lấy mẫu lại Perceiver hoặc Q-Former
+  các truy vấn đã học. Những thứ đó có thể tạo ra số lượng token cố định; Đầu ra của Qwen vẫn còn
+  tỷ lệ thuận với diện tích đầu vào.
+- Bài báo Qwen-VLA xác nhận việc hợp nhất không gian trong xương sống Qwen3.5 VLM của nó nhưng
+  không tiết lộ kích thước chính xác của trạm kiểm soát 4B. Giá trị từ công chúng
+  Cấu hình Qwen3.5-27B không tự động hợp lệ cho Qwen-VLA.
 
-## Sources
+## Nguồn
 
-All online sources were accessed on 2026-07-21.
+Tất cả các nguồn trực tuyến đã được truy cập vào ngày 21-07-2026.
 
-- Wang et al. *Qwen2-VL*. [Local PDF][qwen2-local] · [arXiv][qwen2]
-- Bai et al. *Qwen2.5-VL Technical Report*.
-  [Local PDF][qwen25-local] · [arXiv][qwen25]
-- Bai et al. *Qwen3-VL Technical Report*. [arXiv][qwen3]
-- Qwen and Hugging Face. Pinned implementations and checkpoint configs below.
+- Vương và cộng sự. *Qwen2-VL*. [PDF cục bộ][qwen2-local] · [arXiv][qwen2]
+- Bài và cộng sự. *Báo cáo kỹ thuật Qwen2.5-VL*.
+  [PDF cục bộ][qwen25-local] · [arXiv][qwen25]
+- Bài và cộng sự. *Báo cáo kỹ thuật Qwen3-VL*. [arXiv][qwen3]
+- Qwen và ôm mặt. Đã ghim các triển khai và cấu hình checkpoint bên dưới.
 
 [qwen2]: https://arxiv.org/abs/2409.12191
 [qwen25]: https://arxiv.org/abs/2502.13923

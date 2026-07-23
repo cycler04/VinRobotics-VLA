@@ -1,13 +1,13 @@
-# The Core Pipeline of Modern Vision-Language-Action Models
+# Đường dẫn cốt lõi của các mô hình hành động-ngôn ngữ-thị giác hiện đại
 
-## 1. The short version
+## 1. Phiên bản ngắn
 
-A modern VLA with an action expert usually has two connected parts:
+Một chiếc VLA hiện đại với chuyên gia hành động thường có hai phần được kết nối:
 
-1. A pretrained **vision-language model (VLM)** processes camera images and the language instruction.
-2. A robot-specific **action expert** combines the VLM's hidden features with proprioception, noisy candidate actions, and the flow timestep to generate a continuous action chunk.
+1. **Mô hình ngôn ngữ thị giác (VLM)** đã được huấn luyện trước xử lý hình ảnh camera và hướng dẫn ngôn ngữ.
+2. **Chuyên gia hành động** dành riêng cho robot kết hợp các đặc trưng ẩn của VLM với proprioception, các hành động ứng cử viên ồn ào và dấu thời gian của luồng để tạo ra một đoạn hành động liên tục.
 
-The VLM usually does **not** output a sentence before the robot acts. Its useful output is normally a sequence of continuous hidden vectors:
+VLM thường **không** phát ra câu nào trước khi robot hành động. Đầu ra hữu ích của nó thường là một chuỗi các vectơ ẩn liên tục:
 
 $$
 H = [h_1, h_2, \ldots, h_N],
@@ -15,9 +15,9 @@ H = [h_1, h_2, \ldots, h_N],
 H \in \mathbb{R}^{N \times d_{\text{VLM}}}
 $$
 
-Each row is the contextual hidden state of one visual or text position. These are not vocabulary token IDs and are not motor commands.
+Mỗi hàng là trạng thái ẩn theo ngữ cảnh của một vị trí hình ảnh hoặc văn bản. Đây không phải là token từ vựng IDs và không phải là lệnh vận động.
 
-Robot state is also not always inserted directly into the VLM. In many modern flow-based architectures, image and language go through the VLM first, while proprioception is projected separately and fused later inside the action expert.
+Trạng thái robot cũng không phải lúc nào cũng được chèn trực tiếp vào VLM. Trong nhiều kiến ​​trúc dựa trên dòng chảy hiện đại, hình ảnh và ngôn ngữ đi qua VLM trước tiên, trong khi proprioception được chiếu riêng biệt và hợp nhất sau đó bên trong chuyên gia hành động.
 
 ```mermaid
 flowchart TD
@@ -54,301 +54,301 @@ flowchart TD
     CTRL -->|"new robot state"| STATE
 ```
 
-**Important:** this is a logical dataflow diagram. Some implementations compute the VLM context first and then run a separate action Transformer, while others couple the VLM and action-expert Transformer layers more tightly.
+**Quan trọng:** đây là sơ đồ luồng dữ liệu logic. Một số triển khai tính toán bối cảnh VLM trước rồi chạy một Biến áp hành động riêng biệt, trong khi một số triển khai khác kết hợp các lớp Biến áp VLM và Chuyên gia hành động chặt chẽ hơn.
 
-Read the diagram as two loops:
+Đọc sơ đồ dưới dạng hai vòng:
 
-- The **inner flow-sampling loop** repeatedly converts a noisy action tensor into a coherent trajectory.
-- The **outer control loop** executes part of that trajectory, observes the robot again, and replaces the remaining plan with a corrected chunk.
+- **Vòng lấy mẫu dòng bên trong** liên tục chuyển đổi một tensor tác động nhiễu thành một quỹ đạo mạch lạc.
+- **Vòng điều khiển bên ngoài** thực hiện một phần quỹ đạo đó, quan sát lại robot và thay thế kế hoạch còn lại bằng một đoạn đã sửa.
 
-An explicit planner is useful for long tasks, but it is not required in every VLA. Planning can remain implicit in hidden features, appear as a textual subtask, or be handled by a separate module.
+Trình lập kế hoạch rõ ràng rất hữu ích cho các tác vụ dài nhưng không bắt buộc trong mọi VLA. Việc lập kế hoạch có thể vẫn ẩn trong các đặc trưng ẩn, xuất hiện dưới dạng nhiệm vụ con bằng văn bản hoặc được xử lý bởi một mô-đun riêng biệt.
 
 ---
 
-## 2. Main modules
+## 2. Các module chính
 
-| Module                           | Input                                              | Main function                                                           | Output                        |
+| Mô-đun | Đầu vào | Chức năng chính | Đầu ra |
 | -------------------------------- | -------------------------------------------------- | ----------------------------------------------------------------------- | ----------------------------- |
-| **Vision encoder**         | Camera images                                      | Converts image patches into visual embeddings                           | Visual token vectors          |
-| **Text embedding path**    | Instruction text                                   | Converts token IDs into text embeddings                                 | Text token vectors            |
-| **VLM backbone**           | Visual and text embeddings                         | Contextualizes vision according to the instruction                      | Hidden sequence\(H\)          |
-| **State adapter**          | Joint, gripper, end-effector, base, or force state | Normalizes and projects robot-specific numbers                          | State feature\(S\)            |
-| **Planner** *(optional)* | VLM context and task history                       | Selects the next semantic subtask                                       | Textual or hidden subtask     |
-| **Action expert**          | \(H\), \(S\), noisy actions, flow time             | Predicts how the noisy trajectory should move toward a valid trajectory | Action velocity field         |
-| **Action decoder**         | Normalized action chunk                            | Converts shared output format to the robot's command format             | Joint or end-effector targets |
-| **Low-level controller**   | Robot targets                                      | Executes commands under hardware control and safety limits              | Physical movement             |
+| **Bộ mã hóa thị giác** | Hình ảnh camera | Chuyển đổi các patch hình ảnh thành các phần nhúng trực quan | Vectơ token trực quan |
+| **Đường dẫn nhúng văn bản** | Văn bản hướng dẫn | Chuyển đổi token IDs thành phần nhúng văn bản | Vectơ token văn bản |
+| **Xương sống VLM** | Nhúng hình ảnh và văn bản | Bối cảnh hóa thị giác theo hướng dẫn | Ẩn sequence\(H\) |
+| **Bộ chuyển đổi trạng thái** | Trạng thái khớp, bộ kẹp, bộ phận tác động cuối, cơ sở hoặc lực | Chuẩn hóa và chiếu các số dành riêng cho robot | Trạng thái feature\(S\) |
+| **Công cụ lập kế hoạch** *(tùy chọn)* | Lịch sử nhiệm vụ và bối cảnh VLM | Chọn nhiệm vụ con ngữ nghĩa tiếp theo | Nhiệm vụ phụ văn bản hoặc ẩn |
+| **Chuyên gia hành động** | \(H\), \(S\), hành động ồn ào, thời gian chảy | Dự đoán quỹ đạo nhiễu sẽ di chuyển theo quỹ đạo hợp lệ như thế nào | Trường vận tốc hành động |
+| **Bộ giải mã hành động** | Đoạn hành động được chuẩn hóa | Chuyển đổi định dạng đầu ra được chia sẻ sang định dạng lệnh của robot | Mục tiêu chung hoặc tác động cuối cùng |
+| **Bộ điều khiển cấp thấp** | Mục tiêu robot | Thực thi các lệnh dưới sự kiểm soát phần cứng và giới hạn an toàn | Chuyển động vật lý |
 
-The exact boundary between these modules varies. In particular, **state fusion** and **VLM fine-tuning** are design choices rather than one universal rule.
+Ranh giới chính xác giữa các mô-đun này khác nhau. Cụ thể, **kết hợp trạng thái** và **tinh chỉnh VLM** là những lựa chọn thiết kế chứ không phải là một quy tắc chung.
 
 ---
 
-## 3. From image and language to VLM hidden space
+## 3. Từ hình ảnh, ngôn ngữ đến không gian ẩn giấu của VLM
 
-### 3.1 Images become visual embeddings
+### 3.1 Hình ảnh trở thành hình ảnh nhúng trực quan
 
-Each camera image is divided into patches and processed by a vision encoder such as a Vision Transformer.
+Mỗi hình ảnh camera được chia thành các phần và được xử lý bằng bộ mã hóa thị giác, chẳng hạn như Vision Transformer.
 
 ```text
-image
-  → patches
-  → vision encoder
+hình ảnh
+  → patch lỗi
+  → bộ mã hóa thị giác
   → [v1, v2, ..., vm]
 ```
 
-Multiple cameras produce multiple groups of visual embeddings. A front camera may describe the global scene, while a wrist camera provides a close view of the gripper and contact region.
+Nhiều camera tạo ra nhiều nhóm nhúng hình ảnh. Máy ảnh phía trước có thể mô tả khung cảnh chung, trong khi máy ảnh đeo tay cung cấp cái nhìn cận cảnh về vùng tiếp xúc và vùng tiếp xúc.
 
-The vision encoder does not normally emit explicit symbols such as:
+Bộ mã hóa thị giác thường không phát ra các ký hiệu rõ ràng như:
 
 ```text
-object = mug
-grasp point = handle
+vật = cái cốc
+điểm nắm = tay cầm
 ```
 
-Instead, it emits continuous vectors from which later Transformer layers can recover semantic and spatial information.
+Thay vào đó, nó phát ra các vectơ liên tục mà từ đó các lớp Transformer sau này có thể khôi phục thông tin ngữ nghĩa và không gian.
 
-### 3.2 Language becomes text embeddings
+### 3.2 Ngôn ngữ trở thành phần nhúng văn bản
 
-The instruction is tokenized normally:
+Hướng dẫn được mã hóa bình thường:
 
 ```text
-"put the red mug on the tray"
+"đặt chiếc cốc màu đỏ lên khay"
     → token IDs
     → [l1, l2, ..., ln]
 ```
 
-Language determines which parts of the scene are relevant. The same image should lead to different actions for:
+Ngôn ngữ xác định phần nào của cảnh có liên quan. Cùng một hình ảnh sẽ dẫn đến các hành động khác nhau cho:
 
 ```text
-"pick up the mug"
-"move around the mug"
-"point at the mug"
+"nhấc cốc lên"
+"di chuyển xung quanh cốc"
+"chỉ vào cốc"
 ```
 
-### 3.3 The VLM contextualizes all visual-language positions
+### 3.3 VLM bối cảnh hóa tất cả các vị trí ngôn ngữ hình ảnh
 
-The visual and text embeddings enter the VLM Transformer:
+Phần nhúng hình ảnh và văn bản vào Transformer VLM:
 
 $$
 X_0 = [V;L]
 $$
 
-After \(L\) Transformer layers:
+Sau \(L\) Các lớp biến áp:
 
 $$
 H = \operatorname{VLM}(X_0)
   = [h_1,h_2,\ldots,h_N]
 $$
 
-where:
+Ở đâu:
 
-- \(N\) is the number of retained visual and text positions;
-- \(d_{\text{VLM}}\) is the VLM hidden width;
-- each \(h_i \in \mathbb{R}^{d_{\text{VLM}}}\) is a contextual hidden vector.
+- \(N\) là số vị trí văn bản và hình ảnh được giữ lại;
+- \(d_{\text{VLM}}\) là chiều rộng ẩn VLM;
+- mỗi \(h_i \in \mathbb{R}^{d_{\text{VLM}}}\) là một vectơ ẩn theo ngữ cảnh.
 
-Through attention, a visual position corresponding to the mug can become related to the text position for “mug,” while the text representation for “put” can attend to the mug and tray regions.
+Thông qua sự chú ý, vị trí trực quan tương ứng với chiếc cốc có thể liên quan đến vị trí văn bản cho “cốc”, trong khi phần trình bày văn bản cho “đặt” có thể liên quan đến vùng cốc và khay.
 
-Conceptually, the hidden sequence can encode information corresponding to:
+Về mặt khái niệm, chuỗi ẩn có thể mã hóa thông tin tương ứng với:
 
-- which object matches “red mug”;
-- which region corresponds to the tray;
-- which object is the task target;
-- which visual regions are obstacles;
-- what interaction the instruction requests.
+- đồ vật nào phù hợp với “cốc đỏ”;
+- vùng nào tương ứng với khay;
+- đối tượng nào là mục tiêu nhiệm vụ;
+- vùng thị giác nào là chướng ngại vật;
+- hướng dẫn yêu cầu tương tác gì.
 
-These facts are generally **distributed across vectors and dimensions**. The model does not necessarily store them as a readable object list or scene graph.
+Những dữ kiện này thường **được phân bổ theo các vectơ và thứ nguyên**. Mô hình không nhất thiết phải lưu trữ chúng dưới dạng danh sách đối tượng hoặc biểu đồ cảnh có thể đọc được.
 
-### 3.4 “VLM then action expert” is sometimes only a conceptual boundary
+### 3.4 “VLM thì chuyên gia hành động” đôi khi chỉ là ranh giới khái niệm
 
-The simple diagram suggests:
+Sơ đồ đơn giản gợi ý:
 
 ```text
 VLM
-  → final hidden sequence H
-  → action expert
+  → dãy ẩn cuối cùng H
+  → chuyên gia hành động
 ```
 
-That is accurate for architectures such as GR00T N1, where the VLM output tokens are passed to a downstream DiT.
+Điều đó chính xác đối với các kiến ​​trúc như GR00T N1, trong đó token đầu ra VLM được chuyển đến DiT xuôi dòng.
 
-However, tightly integrated models can couple the two streams more directly. In a π0-style architecture:
+Tuy nhiên, các mô hình tích hợp chặt chẽ có thể kết hợp hai luồng trực tiếp hơn. Trong kiến ​​trúc kiểu π0:
 
 ```text
-image and language prefix
-        ↕ attention across Transformer layers
-state, noised-action, and time suffix
+tiền tố hình ảnh và ngôn ngữ
+        ↕ sự chú ý trên các lớp Transformer
+trạng thái, hành động ồn ào và hậu tố thời gian
 ```
 
-The VLM prefix and action-expert suffix are processed with coordinated Transformer layers. The policy-specific suffix can use prefix information throughout the network rather than waiting for one final VLM tensor to be exported.
+Tiền tố VLM và hậu tố chuyên gia hành động được xử lý bằng các lớp Transformer phối hợp. Hậu tố dành riêng cho chính sách có thể sử dụng thông tin tiền tố trên toàn mạng thay vì chờ xuất một tensor VLM cuối cùng.
 
-Therefore, `H` should be understood as a useful abstraction:
+Vì vậy, `H` nên được hiểu là một sự trừu tượng hóa hữu ích:
 
-> all contextual vision-language features made available to the action policy.
+> tất cả các đặc trưng ngôn ngữ thị giác theo ngữ cảnh được cung cấp cho chính sách hành động.
 
-Depending on the implementation, this can mean:
+Tùy thuộc vào việc triển khai, điều này có thể có nghĩa là:
 
-- the final VLM hidden sequence;
-- projected VLM output tokens;
-- cached per-layer key/value features;
-- prefix representations jointly attended by action-expert layers.
+- chuỗi ẩn VLM cuối cùng;
+- token đầu ra VLM dự kiến;
+- các đặc trưng khóa/giá trị được lưu trong bộ nhớ đệm trên mỗi lớp;
+- các biểu diễn tiền tố có sự tham gia chung của các lớp chuyên gia hành động.
 
 ---
 
-## 4. What exactly is a hidden state?
+## 4. Chính xác thì trạng thái ẩn là gì?
 
-### 4.1 It is the output vector at a token position
+### 4.1 Đây là vectơ đầu ra ở vị trí token
 
-Suppose the VLM input sequence contains:
-
-```text
-[visual 1] [visual 2] ... [visual m] [put] [the] [mug]
-```
-
-At the input, every position is represented by an embedding. After self-attention and feed-forward layers, every position has an updated contextual vector:
+Giả sử chuỗi đầu vào VLM chứa:
 
 ```text
-visual position 17 → h17
-text position "mug" → hm+3
+[hình ảnh 1] [hình ảnh 2] ... [hình ảnh m] [đặt] [cái] [cốc]
 ```
 
-A hidden state is therefore a vector such as:
+Ở đầu vào, mọi vị trí được thể hiện bằng một phần nhúng. Sau các lớp tự chú ý và chuyển tiếp nguồn cấp dữ liệu, mọi vị trí đều có một vectơ ngữ cảnh được cập nhật:
 
 ```text
-h17 = [0.31, -0.82, 1.14, ..., 0.07]
+vị trí trực quan 17 → h17
+vị trí văn bản "cốc" → hm+3
 ```
 
-The values themselves are not human-readable. Their meaning is learned and distributed.
+Do đó, trạng thái ẩn là một vectơ như:
 
-### 4.2 Hidden vectors are not generated output tokens
+```text
+h17 = [0,31, -0,82, 1,14, ..., 0,07]
+```
 
-A language model normally converts a hidden state into vocabulary logits:
+Bản thân các giá trị không thể đọc được bằng con người. Ý nghĩa của chúng được học và phân phối.
+
+### 4.2 Các vectơ ẩn không được tạo token đầu ra
+
+Một mô hình ngôn ngữ thường chuyển đổi trạng thái ẩn thành nhật ký từ vựng:
 
 $$
 \text{logits} = W_{\text{LM}}h_i
 $$
 
-and then selects a word token.
+và sau đó chọn một token từ.
 
 ```text
-hidden vector
-    → LM head
-    → vocabulary probabilities
-    → generated word
+vectơ ẩn
+    → Đầu LM
+    → xác suất từ ​​vựng
+    → từ được tạo
 ```
 
-A flow-based VLA usually bypasses this language-generation step for low-level control:
+VLA dựa trên luồng thường bỏ qua bước tạo ngôn ngữ này để kiểm soát cấp độ thấp:
 
 ```text
-VLM hidden sequence H
-    → action expert
-    → continuous action trajectory
+Chuỗi ẩn VLM H
+    → chuyên gia hành động
+    → quỹ đạo hành động liên tục
 ```
 
-Therefore, saying that the action expert uses the VLM's “output tokens” can be ambiguous. A clearer statement is:
+Do đó, việc nói rằng chuyên gia hành động sử dụng “token đầu ra” của VLM có thể không rõ ràng. Một tuyên bố rõ ràng hơn là:
 
-> The action expert consumes the VLM's **output hidden vectors at the visual and text token positions**.
+> Chuyên gia hành động sử dụng **vectơ ẩn đầu ra của VLM ở vị trí token hình ảnh và văn bản**.
 
-### 4.3 The hidden space is usually a sequence, not one scene vector
+### 4.3 Không gian ẩn thường là một chuỗi chứ không phải một vectơ cảnh
 
-The context usually has shape:
+Bối cảnh thường có hình dạng:
 
 $$
 H \in \mathbb{R}^{B \times N \times d_{\text{VLM}}}
 $$
 
-where \(B\) is batch size.
+trong đó \(B\) là kích thước lô.
 
-Keeping a sequence preserves location-specific information. A visual position covering the mug can remain distinct from a visual position covering the tray, even though attention allows them to exchange information.
+Giữ một trình tự bảo tồn thông tin vị trí cụ thể. Vị trí trực quan che chiếc cốc có thể vẫn khác biệt với vị trí trực quan che khay, mặc dù sự chú ý cho phép chúng trao đổi thông tin.
 
-Some architectures pool or compress \(H\), but it should not be assumed that every VLA reduces the scene to a single vector.
+Một số kiến ​​trúc gộp hoặc nén \(H\), nhưng không nên giả định rằng mọi VLA đều giảm cảnh thành một vectơ duy nhất.
 
 ---
 
-## 5. How robot state is fused
+## 5. Trạng thái robot được hợp nhất như thế nào
 
-Images show the outside world, but they do not reliably specify the robot's exact internal configuration. A policy may additionally receive:
+Hình ảnh hiển thị thế giới bên ngoài nhưng chúng không chỉ rõ cấu hình bên trong chính xác của robot một cách đáng tin cậy. Một chính sách có thể nhận thêm:
 
 ```text
-joint angles
-joint velocities
-end-effector position and orientation
-gripper opening
-mobile-base velocity
-force or torque readings
+góc khớp
+vận tốc chung
+vị trí và sự định hướng của cơ quan tác động cuối cùng
+mở kẹp
+vận tốc cơ sở di động
+chỉ số lực hoặc mô-men xoắn
 ```
 
-Let the normalized robot state be:
+Đặt trạng thái robot chuẩn hóa là:
 
 $$
 s_t \in \mathbb{R}^{d_s}
 $$
 
-A learned projector converts it to one or more embeddings:
+Một máy chiếu đã học sẽ chuyển đổi nó thành một hoặc nhiều phần nhúng:
 
 $$
 S = f_{\text{state}}(s_t)
 $$
 
-The important distinction is **where \(S\) is inserted**.
+Sự khác biệt quan trọng là **nơi \(S\) được chèn**.
 
-### 5.1 Late fusion inside the action expert
+### 5.1 Sự kết hợp muộn màng bên trong chuyên gia hành động
 
-This is common in modern flow-matching VLAs.
+Điều này phổ biến trong VLAs điều chỉnh dòng chảy hiện đại.
 
 ```text
-images + instruction
+hình ảnh + hướng dẫn
     → VLM
-    → hidden context H
+    → bối cảnh ẩn H
 
-robot state
-    → state projector
+trạng thái robot
+    → máy chiếu trạng thái
     → S
 
-H + S + noisy actions + flow time
-    → action expert
+H + S + hành động ồn ào + thời gian chảy
+    → chuyên gia hành động
 ```
 
-In this design, the VLM itself may process only vision and language. Robot state first interacts with the VLM context inside the action expert.
+Trong thiết kế này, bản thân VLM chỉ có thể xử lý hình ảnh và ngôn ngữ. Trạng thái robot trước tiên tương tác với bối cảnh VLM bên trong chuyên gia hành động.
 
-Two representative patterns are:
+Hai mẫu đại diện là:
 
-- **π0-style prefix/suffix processing:** image and language form a VLM prefix. The projected state, noised action chunk, and flow-time information form policy-specific suffix inputs. The action expert uses attention to combine the suffix with the prefix context.
-- **GR00T-style cross-attention:** the VLM outputs a sequence of vision-language vectors. A DiT processes robot-state and noised-action encodings while cross-attending to the VLM output sequence.
+- **Xử lý tiền tố/hậu tố kiểu π0:** hình ảnh và ngôn ngữ tạo thành tiền tố VLM. Trạng thái dự kiến, đoạn hành động bị nhiễu và thông tin về thời gian tạo thành các đầu vào hậu tố dành riêng cho chính sách. Chuyên gia hành động sử dụng sự chú ý để kết hợp hậu tố với ngữ cảnh tiền tố.
+- **GR00T-style chú ý chéo:** VLM xuất ra một chuỗi vectơ ngôn ngữ hình ảnh. DiT xử lý mã hóa trạng thái robot và hành động gây nhiễu trong khi tham gia chéo vào chuỗi đầu ra VLM.
 
-This is more accurate than saying that every modern VLA simply appends a state token to the original VLM input.
+Điều này chính xác hơn việc nói rằng mọi VLA hiện đại chỉ cần thêm token trạng thái vào đầu vào VLM ban đầu.
 
-### 5.2 Early fusion inside the VLM
+### 5.2 Sự kết hợp sớm bên trong VLM
 
-Another possible design inserts state embeddings before or during the VLM:
+Một thiết kế khả thi khác có thể chèn các phần nhúng trạng thái trước hoặc trong VLM:
 
 ```text
-[visual tokens] [text tokens] [state tokens]
+[token trực quan] [token văn bản] [token trạng thái]
                 → VLM
-                → state-aware hidden sequence
+                → chuỗi ẩn nhận biết trạng thái
 ```
 
-Now proprioception can influence visual-language reasoning throughout the VLM layers.
+Giờ đây, proprioception có thể ảnh hưởng đến khả năng suy luận bằng ngôn ngữ hình ảnh trong suốt các lớp VLM.
 
-This approach can be useful, but it is not universal. Many action-expert architectures use late fusion because it keeps the pretrained VLM interface cleaner and isolates robot-specific dimensions inside the policy module.
+Cách tiếp cận này có thể hữu ích, nhưng nó không phổ biến. Nhiều kiến ​​trúc chuyên gia hành động sử dụng phản ứng tổng hợp muộn vì nó giữ cho giao diện VLM được huấn luyện trước sạch hơn và tách biệt các kích thước dành riêng cho robot bên trong mô-đun chính sách.
 
-### 5.3 Multiple state tokens and embodiment adapters
+### 5.3 Nhiều token trạng thái và bộ điều hợp phương án
 
-A state vector can be represented as:
+Một vectơ trạng thái có thể được biểu diễn dưới dạng:
 
-- one embedding for the entire state;
-- separate joint, gripper, force, or base embeddings;
-- a fixed-width padded representation;
-- an embodiment-specific encoder.
+- một nhúng cho toàn bộ tiểu bang;
+- các phần gắn vào khớp, kẹp, lực hoặc đế riêng biệt;
+- một biểu diễn đệm có chiều rộng cố định;
+- một bộ mã hóa theo phương án cụ thể.
 
-Cross-embodiment policies often use separate state encoders and action decoders because robots have different numbers of joints and different control conventions.
+Các chính sách đa phương án thường sử dụng bộ mã hóa trạng thái và bộ giải mã hành động riêng biệt vì robot có số lượng khớp khác nhau và quy ước điều khiển khác nhau.
 
-The shared action expert can then learn general behavior patterns while adapters handle robot-specific input and output formats.
+Sau đó, chuyên gia hành động được chia sẻ có thể tìm hiểu các mẫu hành vi chung trong khi bộ điều hợp xử lý các định dạng đầu vào và đầu ra dành riêng cho robot.
 
 ---
 
-## 6. Flow matching inside the action expert
+## 6. Kết hợp dòng chảy bên trong chuyên gia hành động
 
-### 6.1 Action chunk
+### 6.1 Đoạn hành động
 
-Instead of predicting only the next command, the policy commonly predicts a horizon of \(T\) future actions:
+Thay vì chỉ dự đoán lệnh tiếp theo, chính sách này thường dự đoán một loạt các hành động trong tương lai \(T\):
 
 $$
 A =
@@ -356,7 +356,7 @@ A =
 \in \mathbb{R}^{T \times d_a}
 $$
 
-For a 7D end-effector controller:
+Đối với bộ điều khiển tác động cuối 7D:
 
 $$
 a_t =
@@ -365,38 +365,38 @@ a_t =
  gripper]
 $$
 
-Other robots may use joint targets, joint deltas, base velocity, bimanual commands, or full-body targets.
+Các robot khác có thể sử dụng các mục tiêu chung, đồng bằng khớp, vận tốc cơ bản, lệnh bằng tay hoặc mục tiêu toàn thân.
 
-### 6.2 Training interpolation
+### 6.2 Nội suy huấn luyện
 
-A simplified flow-matching formulation begins with:
+Một công thức so khớp dòng chảy đơn giản bắt đầu bằng:
 
-- demonstration action chunk \(A_1\);
-- Gaussian noise \(A_0 \sim \mathcal{N}(0,I)\);
-- sampled flow time \(\tau \in [0,1]\).
+- đoạn hành động trình diễn \(A_1\);
+- Nhiễu Gauss \(A_0 \sim \mathcal{N}(0,I)\);
+- thời gian lấy mẫu \(\tau \in [0,1]\).
 
-Construct an intermediate noisy chunk:
+Xây dựng một đoạn ồn ào trung gian:
 
 $$
 A_\tau = (1-\tau)A_0 + \tau A_1
 $$
 
-For this straight interpolation, the target velocity is:
+Đối với phép nội suy thẳng này, vận tốc mục tiêu là:
 
 $$
 u_\tau = A_1 - A_0
 $$
 
-The action expert predicts:
+Chuyên gia hành động dự đoán:
 
 $$
 v_\theta =
 v_\theta(A_\tau,\tau,H,S,z)
 $$
 
-where \(z\) is an optional semantic subtask.
+trong đó \(z\) là một nhiệm vụ phụ ngữ nghĩa tùy chọn.
 
-A typical objective is:
+Mục tiêu điển hình là:
 
 $$
 \mathcal{L}_{\text{flow}}
@@ -409,17 +409,17 @@ v_\theta(A_\tau,\tau,H,S,z)-u_\tau
 \right]
 $$
 
-The precise path, weighting, and parameterization can differ across papers, but the central idea is the same: learn a vector field that moves noisy trajectories toward demonstrated robot trajectories.
+Đường dẫn, trọng số và tham số hóa chính xác có thể khác nhau giữa các bài viết, nhưng ý tưởng trung tâm là giống nhau: tìm hiểu trường vectơ di chuyển các quỹ đạo nhiễu về phía quỹ đạo đã được chứng minh của robot.
 
-### 6.3 Inference
+### 6.3 Suy luận
 
-At inference, begin with noise:
+Khi suy luận, hãy bắt đầu bằng tiếng ồn:
 
 $$
 A_0 \sim \mathcal{N}(0,I)
 $$
 
-Then integrate:
+Sau đó tích hợp:
 
 $$
 \frac{dA_\tau}{d\tau}
@@ -427,357 +427,357 @@ $$
 v_\theta(A_\tau,\tau,H,S,z)
 $$
 
-using several numerical update steps until \(\tau=1\).
+sử dụng một số bước cập nhật số cho đến \(\tau=1\).
 
 ```text
-random action chunk
-    → action-expert velocity
-    → update
-    → action-expert velocity
-    → update
-    → final continuous action chunk
+đoạn hành động ngẫu nhiên
+    → tốc độ chuyên gia hành động
+    → cập nhật
+    → tốc độ chuyên gia hành động
+    → cập nhật
+    → đoạn hành động liên tục cuối cùng
 ```
 
-The model is not denoising words. It is refining a tensor whose rows are future robot commands.
+Mô hình không phải là từ ngữ khử nhiễu. Nó đang tinh chỉnh một tensor có các hàng là các lệnh của robot trong tương lai.
 
 ---
 
-## 7. Does the VLM need to be retrained for VLA control?
+## 7. VLM có cần được huấn luyện lại để điều khiển VLA không?
 
-### 7.1 Usually initialized from a pretrained VLM
+### 7.1 Thường được khởi tạo từ VLM đã được huấn luyện trước
 
-A modern VLA normally does not train its visual-language knowledge from scratch.
+VLA hiện đại thường không huấn luyện kiến ​​thức ngôn ngữ hình ảnh từ đầu.
 
 ```text
-web-scale image-text pretraining
-    → pretrained VLM
-    → add state adapter and action expert
-    → train on robot demonstrations
+huấn luyện trước hình ảnh-văn bản ở quy mô web
+    → VLM đã được huấn luyện trước
+    → thêm bộ điều hợp trạng thái và chuyên gia hành động
+    → huấn luyện trình diễn robot
 ```
 
-The pretrained VLM supplies object, language, and visual-semantic knowledge. The action expert supplies the continuous control mechanism.
+VLM được huấn luyện trước cung cấp kiến ​​thức về đối tượng, ngôn ngữ và ngữ nghĩa hình ảnh. Chuyên gia hành động cung cấp cơ chế kiểm soát liên tục.
 
-At minimum, the newly added action module must be trained on robot data. Whether the VLM weights also change depends on the training recipe.
+Tối thiểu, mô-đun hành động mới được thêm vào phải được huấn luyện về dữ liệu robot. Trọng lượng VLM có thay đổi hay không tùy thuộc vào công thức luyện tập.
 
-### 7.2 Full or joint end-to-end training
+### 7.2 Đào tạo toàn diện hoặc chung từ đầu đến cuối
 
-If the VLM is unfrozen, gradients from the action loss can propagate through:
+Nếu VLM không bị đóng băng, độ dốc do mất tác động có thể truyền qua:
 
 ```text
-flow loss
+mất dòng chảy
    ↑
-action expert
+chuyên gia hành động
    ↑
-VLM backbone
+Xương sống VLM
    ↑
-vision encoder
+bộ mã hóa thị giác
 ```
 
-This can make the VLM hidden sequence more useful for control. For example, features can become more sensitive to contact regions, object affordances, reachability, and task-relevant geometry.
+Điều này có thể làm cho chuỗi ẩn VLM trở nên hữu ích hơn cho việc điều khiển. Ví dụ: các đặc trưng có thể trở nên nhạy cảm hơn với các vùng tiếp xúc, khả năng chi trả của đối tượng, khả năng tiếp cận và hình học liên quan đến nhiệm vụ.
 
-GR00T N1 explicitly describes its VLM and DiT as tightly coupled and jointly optimized end-to-end. π0 is built on pretrained PaliGemma and then trained as a robot policy with its action expert.
+GR00T N1 mô tả rõ ràng VLM và DiT của nó được liên kết chặt chẽ và được tối ưu hóa chung từ đầu đến cuối. π0 được xây dựng trên PaliGemma đã được huấn luyện trước và sau đó được huấn luyện thành chính sách robot với chuyên gia hành động của nó.
 
-Joint training does **not** mean that the VLM is trained from random initialization. It means pretrained weights continue to receive robot-training gradients.
+Huấn luyện chung **không** có nghĩa là VLM được huấn luyện từ quá trình khởi tạo ngẫu nhiên. Điều đó có nghĩa là các trọng lượng đã được huấn luyện trước tiếp tục nhận được độ dốc huấn luyện của robot.
 
-### 7.3 Partial fine-tuning
+### 7.3 Tinh chỉnh một phần
 
-A cheaper option updates only:
+Tùy chọn rẻ hơn chỉ cập nhật:
 
-- LoRA weights;
-- adapters;
-- selected upper Transformer layers;
-- the state projector and action expert.
+- trọng lượng LoRA;
+- bộ điều hợp;
+- các lớp Transformer phía trên được chọn;
+- chuyên gia hành động và máy chiếu nhà nước.
 
 ```text
-mostly frozen pretrained VLM
-    + trainable LoRA/adapters
-    + trainable action expert
+chủ yếu là VLM đã được đông lạnh trước
+    + LoRA/bộ điều hợp có thể huấn luyện được
+    + chuyên gia hành động có thể huấn luyện
 ```
 
-This reduces memory and can preserve more of the original VLM knowledge.
+Điều này làm giảm bộ nhớ và có thể lưu giữ nhiều kiến ​​thức VLM ban đầu hơn.
 
-OpenVLA-OFT, for example, uses LoRA-based VLA fine-tuning rather than requiring full-parameter training.
+Ví dụ: OpenVLA-OFT sử dụng tinh chỉnh VLA dựa trên LoRA thay vì yêu cầu huấn luyện đầy đủ thông số.
 
-### 7.4 Frozen VLM
+### 7.4 VLM đông lạnh
 
-The VLM can also remain fixed:
+VLM cũng có thể được cố định:
 
 ```text
-frozen VLM → fixed hidden context H
-trainable action expert → learns how to use H
+VLM bị đóng băng → bối cảnh ẩn cố định H
+chuyên gia hành động có thể huấn luyện → học cách sử dụng H
 ```
 
-This is cheaper and protects the pretrained representation, but the VLM cannot reshape its hidden space in response to the action loss.
+Điều này rẻ hơn và bảo vệ biểu diễn được huấn luyện trước, nhưng VLM không thể định hình lại không gian ẩn của nó để đối phó với tình trạng mất hành động.
 
-A frozen backbone can still work when its existing features are sufficiently informative and the action module is expressive. GR00T N1.5 is an example in which the VLM is frozen while the downstream policy learns to use its embeddings.
+Một xương sống cố định vẫn có thể hoạt động khi các đặc trưng hiện có của nó có đủ thông tin và mô-đun hành động có tính biểu cảm. GR00T N1.5 là một ví dụ trong đó VLM bị đóng băng trong khi chính sách hạ nguồn học cách sử dụng các phần nhúng của nó.
 
-### 7.5 Correct conclusion
+### 7.5 Kết luận đúng
 
-The correct statement is not:
+Phát biểu đúng không phải là:
 
-> Every VLM must be fully retrained when converted into a VLA.
+> Mọi VLM đều phải được huấn luyện lại đầy đủ khi chuyển đổi thành VLA.
 
-It is:
+Đó là:
 
-> A pretrained VLM is normally reused. The robot-specific adapters and action expert must be trained, while the VLM may be fully fine-tuned, partially adapted, or frozen depending on the architecture, data, compute budget, and need to preserve pretrained knowledge.
+> VLM đã được huấn luyện trước thường được sử dụng lại. Chuyên gia hành động và bộ điều hợp dành riêng cho robot phải được huấn luyện, trong khi VLM có thể được tinh chỉnh hoàn toàn, điều chỉnh một phần hoặc cố định tùy thuộc vào kiến ​​trúc, dữ liệu, ngân sách điện toán và nhu cầu lưu giữ kiến ​​thức đã được huấn luyện trước.
 
 ---
 
-## 8. Planning and reasoning
+## 8. Lập kế hoạch và lý luận
 
-### 8.1 Implicit planning
+### 8.1 Lập kế hoạch ngầm
 
-For short tasks, the VLM context can directly condition the action expert:
+Đối với các tác vụ ngắn, bối cảnh VLM có thể trực tiếp điều kiện cho chuyên gia hành động:
 
 ```text
-image + "pick up the cup"
-    → hidden context H
-    → action chunk
+image + "nhấc cốc lên"
+    → bối cảnh ẩn H
+    → đoạn hành động
 ```
 
-There is no visible list of steps. Task decomposition may remain implicit in hidden features and learned control behavior.
+Không có danh sách các bước có thể nhìn thấy. Sự phân rã nhiệm vụ có thể vẫn tiềm ẩn trong các đặc trưng ẩn và hành vi điều khiển đã học.
 
-This is fast and simple, but long tasks can require stronger memory or explicit progress tracking.
+Việc này nhanh và đơn giản nhưng các tác vụ dài có thể yêu cầu bộ nhớ mạnh hơn hoặc theo dõi tiến trình rõ ràng.
 
-### 8.2 Explicit semantic subtask
+### 8.2 Nhiệm vụ con ngữ nghĩa rõ ràng
 
-A hierarchical model may predict a short semantic subtask:
+Một mô hình phân cấp có thể dự đoán một nhiệm vụ con có ngữ nghĩa ngắn:
 
 ```text
-overall task: "clean the kitchen"
-current scene: dirty plate on counter
-next subtask: "pick up the dirty plate"
+Nhiệm vụ chung: "dọn dẹp nhà bếp"
+Cảnh hiện tại: Đĩa bẩn trên quầy
+nhiệm vụ phụ tiếp theo: "nhặt đĩa bẩn"
 ```
 
-The low-level action expert then generates movement conditioned on that subtask.
+Sau đó, chuyên gia hành động cấp thấp sẽ tạo ra chuyển động có điều kiện dựa trên nhiệm vụ phụ đó.
 
-π0.5 is a representative design that combines high-level semantic prediction with continuous low-level action generation.
+π0,5 là một thiết kế tiêu biểu kết hợp dự đoán ngữ nghĩa cấp cao với việc tạo hành động cấp thấp liên tục.
 
-### 8.3 Separate planner
+### 8.3 Lập kế hoạch riêng
 
-Earlier modular systems used clearer boundaries:
+Các hệ thống mô-đun trước đây sử dụng ranh giới rõ ràng hơn:
 
 ```text
-LLM/VLM planner
-    → symbolic skill or spatial target
-    → motion planner or skill controller
+Trình lập kế hoạch LLM/VLM
+    → kỹ năng biểu tượng hoặc mục tiêu không gian
+    → người lập kế hoạch chuyển động hoặc người điều khiển kỹ năng
     → robot
 ```
 
-This can improve interpretability and reuse conventional control modules, but errors can accumulate across interfaces.
+Điều này có thể cải thiện khả năng diễn giải và tái sử dụng các mô-đun điều khiển thông thường, nhưng lỗi có thể tích tụ trên các giao diện.
 
-Reasoning does not necessarily mean visible chain-of-thought text. It may refer to implicit semantic computation, a predicted subtask, or an external planning module.
+Lý luận không nhất thiết có nghĩa là văn bản có chuỗi suy nghĩ rõ ràng. Nó có thể đề cập đến tính toán ngữ nghĩa tiềm ẩn, một nhiệm vụ phụ được dự đoán hoặc một mô-đun lập kế hoạch bên ngoài.
 
 ---
 
-## 9. Other action-generation approaches
+## 9. Các phương pháp tạo hành động khác
 
-### 9.1 Parallel continuous regression
+### 9.1 Hồi quy liên tục song song
 
-An action head can predict the full chunk in one pass:
+Người đứng đầu hành động có thể dự đoán toàn bộ đoạn trong một lần:
 
 $$
 \hat{A} = f_\theta(H,S)
 $$
 
 ```text
-context
-    → [action t, action t+1, ..., action t+T-1]
+bối cảnh
+    → [hành động t, hành động t+1, ..., hành động t+T-1]
 ```
 
-OpenVLA-OFT shows that parallel continuous prediction with action chunking can be fast and effective without iterative flow sampling.
+OpenVLA-OFT cho thấy rằng dự đoán liên tục song song với phân đoạn hành động có thể nhanh chóng và hiệu quả mà không cần lấy mẫu luồng lặp.
 
-### 9.2 Discrete autoregressive action tokens
+### 9.2 Token hành động tự hồi quy rời rạc
 
-Earlier end-to-end VLAs often quantized motor values:
+VLAs đầu cuối trước đó thường lượng tử hóa các giá trị động cơ:
 
 ```text
-continuous actions
-    → numeric bins
-    → vocabulary token IDs
-    → next-token prediction
+hành động liên tục
+    → thùng số
+    → token từ vựng IDs
+    → dự đoán token tiếp theo
 ```
 
-The predicted IDs are then converted back into continuous numbers.
+IDs dự đoán sau đó được chuyển đổi trở lại thành số liên tục.
 
-This reuses the language-model output head and cross-entropy objective, but token-by-token decoding can be slow for high-frequency action chunks.
+Điều này sử dụng lại đầu ra mô hình ngôn ngữ và mục tiêu entropy chéo, nhưng việc giải mã từng token có thể bị chậm đối với các khối hành động tần số cao.
 
-### 9.3 FAST-style compressed tokens
+### 9.3 Token nén FAST-style
 
-FAST compresses action trajectories before autoregressive tokenization, reducing repeated information and the number of generated tokens.
+FAST nén quỹ đạo hành động trước khi token tự hồi quy, giảm thông tin lặp lại và số lượng token được tạo.
 
-Therefore, “action token” should be used carefully:
+Vì vậy, “token hành động” nên được sử dụng cẩn thận:
 
-- in a narrow implementation sense, it is a discrete vocabulary ID representing action information;
-- in some surveys, it is used more broadly for any action-related representation;
-- flow-based VLAs normally output continuous action tensors, not literal language tokens.
+- theo nghĩa triển khai hẹp, nó là một từ vựng rời rạc ID thể hiện thông tin hành động;
+- trong một số khảo sát, nó được sử dụng rộng rãi hơn cho mọi cách trình bày liên quan đến hành động;
+- VLAs dựa trên luồng thường xuất ra các tensor hành động liên tục, không phải token ngôn ngữ theo nghĩa đen.
 
 ---
 
-## 10. Decoding, execution, and feedback
+## 10. Giải mã, thực thi và phản hồi
 
-The generated action chunk is usually normalized. Before execution, the system must:
+Đoạn hành động được tạo thường được chuẩn hóa. Trước khi thực hiện, hệ thống phải:
 
-1. convert values back to physical units;
-2. select the correct embodiment-specific dimensions;
-3. enforce joint, velocity, workspace, and safety limits;
-4. send targets to the low-level controller.
+1. chuyển đổi các giá trị trở lại đơn vị vật lý;
+2. chọn đúng kích thước theo phương án cụ thể;
+3. thực thi các giới hạn chung, vận tốc, không gian làm việc và an toàn;
+4. gửi mục tiêu đến bộ điều khiển cấp thấp.
 
-The robot generally executes only part of the chunk:
+Robot thường chỉ thực hiện một phần của đoạn:
 
 ```text
-predict 16 actions
-    → execute first 2–8
-    → capture new images and state
-    → predict a replacement chunk
+dự đoán 16 hành động
+    → thực hiện 2–8 đầu tiên
+    → chụp ảnh và trạng thái mới
+    → dự đoán đoạn thay thế
 ```
 
-This is receding-horizon closed-loop control. It prevents the robot from blindly executing an old trajectory after the scene changes or a grasp deviates from expectation.
+Đây là điều khiển vòng kín theo chiều ngang rút lui. Nó ngăn chặn robot thực hiện một cách mù quáng quỹ đạo cũ sau khi cảnh thay đổi hoặc thao tác nắm bắt đi chệch khỏi mong đợi.
 
-The instruction may remain constant and can sometimes be cached. Images and proprioception must be refreshed after movement.
+Lệnh có thể không đổi và đôi khi có thể được lưu vào bộ đệm. Hình ảnh và khả năng nhận thức phải được làm mới sau khi chuyển động.
 
 ---
 
-## 11. Full example: raw input to physical motion
+## 11. Ví dụ đầy đủ: đầu vào thô cho chuyển động vật lý
 
-The numbers below are illustrative rather than copied from one model.
+Những con số dưới đây mang tính minh họa chứ không phải sao chép từ một mô hình.
 
-### Step 1: raw observation
+### Bước 1: quan sát thô
 
 ```text
-Instruction:
-"Put the red mug on the tray."
+Chỉ dẫn:
+"Đặt chiếc cốc màu đỏ lên khay."
 
-Images:
-I_front = front RGB camera
-I_wrist = wrist RGB camera
+Hình ảnh:
+I_front = camera RGB phía trước
+I_wrist = cổ tay Máy ảnh RGB
 
-Robot state:
-s_t = [joint angles, joint velocities, gripper opening]
+Trạng thái robot:
+s_t = [góc khớp, vận tốc khớp, độ mở kẹp]
 ```
 
-### Step 2: visual-language encoding
+### Bước 2: mã hóa ngôn ngữ hình ảnh
 
 ```text
-I_front, I_wrist
-    → patches
-    → visual embeddings V
+I_mặt trước, I_cổ tay
+    → patch lỗi
+    → nhúng trực quan V
 
-instruction
+chỉ dẫn
     → token IDs
-    → text embeddings L
+    → nhúng văn bản L
 
 [V ; L]
-    → VLM Transformer
+    → Transformer VLM
     → H = [h1, h2, ..., hN]
 ```
 
-`H` is a sequence of contextual vectors. It is not the sentence “the mug is on the left,” although its vectors may encode information needed to derive that relation.
+`H` là một chuỗi các vectơ ngữ cảnh. Nó không phải là câu “cái cốc ở bên trái”, mặc dù các vectơ của nó có thể mã hóa thông tin cần thiết để rút ra mối quan hệ đó.
 
-### Step 3: state encoding
+### Bước 3: mã hóa trạng thái
 
 ```text
 s_t
-    → normalize
-    → state projector
+    → bình thường hóa
+    → máy chiếu trạng thái
     → S
 ```
 
-In a late-fusion architecture, `S` has not yet changed `H`. Both are supplied to the action expert.
+Trong kiến ​​trúc kết hợp muộn, `S` vẫn chưa thay đổi `H`. Cả hai đều được cung cấp cho chuyên gia hành động.
 
-### Step 4: flow input
+### Bước 4: đầu vào luồng
 
 ```text
-A_0 ~ Gaussian noise
-tau = current flow time
+A_0 ~ nhiễu Gauss
+tau = thời gian dòng chảy hiện tại
 
-condition:
-- VLM hidden sequence H
-- state feature S
-- optional semantic subtask z
+tình trạng:
+- Chuỗi ẩn VLM H
+- đặc điểm trạng thái S
+- nhiệm vụ phụ ngữ nghĩa tùy chọn z
 ```
 
-### Step 5: action-expert refinement
+### Bước 5: sàng lọc chuyên gia hành động
 
 ```text
 (A_tau, tau, H, S, z)
-    → action expert
-    → predicted velocity v_theta
-    → numerical update of A_tau
-    → repeat
-    → final chunk A
+    → chuyên gia hành động
+    → vận tốc dự đoán v_theta
+    → cập nhật số của A_tau
+    → lặp lại
+    → đoạn cuối A
 ```
 
-Assume each action uses:
+Giả sử mỗi hành động sử dụng:
 
 ```text
-[Δx, Δy, Δz, Δroll, Δpitch, Δyaw, gripper]
+[Δx, Δy, Δz, Δroll, Δpitch, Δyaw, kẹp]
 ```
 
-An action chunk may begin as:
+Một đoạn hành động có thể bắt đầu bằng:
 
 ```text
-a_t   = [+0.012, -0.004, +0.006, 0.000, +0.010, -0.020, 1.0]
-a_t+1 = [+0.011, -0.003, +0.005, 0.000, +0.008, -0.018, 1.0]
-a_t+2 = [+0.009, -0.002, +0.003, 0.000, +0.005, -0.012, 1.0]
+a_t = [+0,012, -0,004, +0,006, 0,000, +0,010, -0,020, 1,0]
+a_t+1 = [+0,011, -0,003, +0,005, 0,000, +0,008, -0,018, 1,0]
+a_t+2 = [+0,009, -0,002, +0,003, 0,000, +0,005, -0,012, 1,0]
 ...
 ```
 
-The early actions move toward the mug while the gripper remains open. Later replanning cycles close the gripper, lift the mug, move toward the tray, and release it.
+Những hành động ban đầu sẽ di chuyển về phía cốc trong khi tay kẹp vẫn mở. Các chu kỳ lập kế hoạch lại sau đó sẽ đóng dụng cụ kẹp lại, nhấc cốc lên, di chuyển về phía khay và thả nó ra.
 
-### Step 6: execution and replanning
+### Bước 6: Thực hiện và lập kế hoạch lại
 
 ```text
-normalized action chunk
-    → de-normalize
-    → embodiment decoder
-    → safety limits
-    → execute first k actions
-    → receive new images and state
-    → rerun the model
+đoạn hành động chuẩn hóa
+    → phi chuẩn hóa
+    → bộ giải mã phương án
+    → giới hạn an toàn
+    → thực hiện k hành động đầu tiên
+    → nhận hình ảnh và trạng thái mới
+    → chạy lại mô hình
 ```
 
-The complete transformation is:
+Sự biến đổi hoàn toàn là:
 
 ```text
-pixels + instruction
-    → contextual VLM hidden vectors H
+pixel + hướng dẫn
+    → vectơ ẩn VLM theo ngữ cảnh H
 
-robot body numbers
-    → projected state features S
+số lượng cơ thể robot
+    → đặc điểm trạng thái dự kiến ​​S
 
-H + S + noisy action chunk + flow time
-    → action expert
-    → continuous action chunk
-    → robot-specific commands
-    → physical movement
-    → new pixels and body numbers
+H + S + đoạn hành động ồn ào + thời gian chảy
+    → chuyên gia hành động
+    → đoạn hành động liên tục
+    → lệnh dành riêng cho robot
+    → chuyển động vật lý
+    → pixel và số nội dung mới
 ```
 
 ---
 
-## 12. Architecture comparison
+## 12. So sánh kiến ​​trúc
 
-| Design                                  | Where image and language are fused                  | Where robot state is fused                                   | How actions are generated        | Typical VLM training                                                             |
+| Thiết kế | Nơi hình ảnh và ngôn ngữ được hợp nhất | Nơi trạng thái robot được hợp nhất | Cách tạo hành động | Đào tạo VLM điển hình |
 | --------------------------------------- | --------------------------------------------------- | ------------------------------------------------------------ | -------------------------------- | -------------------------------------------------------------------------------- |
-| **π0-style flow VLA**            | PaliGemma/VLM prefix                                | Policy suffix/action expert                                  | Flow-matched continuous chunk    | Pretrained VLM adapted with robot policy; downstream freezing/LoRA options exist |
-| **GR00T N1-style dual system**    | Eagle VLM                                           | State/action encoders inside DiT; DiT attends to VLM outputs | DiT flow matching                | N1 jointly optimized end-to-end                                                  |
-| **Frozen-backbone action expert** | Frozen pretrained VLM                               | Downstream policy module                                     | Flow, diffusion, or regression   | VLM fixed; action module trained                                                 |
-| **OpenVLA-OFT**                   | OpenVLA backbone                                    | Optional proprioception projector in fine-tuning setup       | Parallel continuous action chunk | LoRA fine-tuning                                                                 |
-| **Early state-fusion VLA**        | Vision, language, and state enter a shared backbone | Inside VLM layers                                            | Any action head                  | Usually requires at least adapters or backbone tuning                            |
+| **Dòng kiểu π0 VLA** | Tiền tố PaliGemma/VLM | Hậu tố chính sách/chuyên gia hành động | Đoạn liên tục phù hợp với dòng chảy | VLM được huấn luyện trước được điều chỉnh phù hợp với chính sách robot; tồn tại các tùy chọn đóng băng hạ lưu/LoRA |
+| **Hệ thống kép GR00T N1-style** | Đại Bàng VLM | Bộ mã hóa trạng thái/hành động bên trong DiT; DiT tham gia vào các đầu ra VLM | Kết hợp dòng chảy DiT | N1 được tối ưu hóa từ đầu đến cuối |
+| **Chuyên gia hành động xương sống đông lạnh** | VLM đã qua xử lý đông lạnh | Mô-đun chính sách hạ nguồn | Dòng chảy, khuếch tán hoặc hồi quy | VLM đã sửa; mô-đun hành động được huấn luyện |
+| **OpenVLA-OFT** | Đường trục OpenVLA | Máy chiếu cảm nhận quyền sở hữu tùy chọn trong thiết lập tinh chỉnh | Đoạn hành động liên tục song song | Tinh chỉnh LoRA |
+| **VLA hợp nhất trạng thái sớm** | Thị giác, ngôn ngữ và trạng thái đi vào xương sống chung | Bên trong các lớp VLM | Bất kỳ đầu hành động | Thường yêu cầu ít nhất bộ điều hợp hoặc điều chỉnh đường trục |
 
-The key architectural lesson is:
+Bài học kiến ​​trúc quan trọng là:
 
-> “VLM context” means contextual hidden vectors. “State fusion” describes how projected robot-state vectors interact with those hidden vectors. In many modern action-expert models, that interaction happens in the action expert rather than inside the original VLM.
+> “Bối cảnh VLM” có nghĩa là các vectơ ẩn theo ngữ cảnh. “Hợp nhất trạng thái” mô tả cách các vectơ trạng thái robot được chiếu tương tác với các vectơ ẩn đó. Trong nhiều mô hình chuyên gia hành động hiện đại, sự tương tác đó xảy ra trong chuyên gia hành động thay vì bên trong VLM ban đầu.
 
 ---
 
-## Sources
+## Nguồn
 
-- [π0: A Vision-Language-Action Flow Model for General Robot Control](https://arxiv.org/abs/2410.24164)
-- [π0.5: A Vision-Language-Action Model with Open-World Generalization](https://arxiv.org/abs/2504.16054)
-- [GR00T N1: An Open Foundation Model for Generalist Humanoid Robots](https://arxiv.org/abs/2503.14734)
-- [GR00T N1.5 architecture update](https://research.nvidia.com/labs/gear/gr00t-n1_5/)
+- [π0: Mô hình luồng hành động-ngôn ngữ-thị giác để điều khiển robot chung](https://arxiv.org/abs/2410.24164)
+- [π0,5: Mô hình Hành động-Ngôn ngữ-Thị giác với tính khái quát hóa trong thế giới mở](https://arxiv.org/abs/2504.16054)
+- [GR00T N1: Mô hình nền tảng mở cho robot hình người tổng quát](https://arxiv.org/abs/2503.14734)
+- [Cập nhật kiến ​​trúc GR00T N1.5](https://research.nvidia.com/labs/gear/gr00t-n1_5/)
 - [OpenVLA](https://arxiv.org/abs/2406.09246)
 - [OpenVLA-OFT](https://arxiv.org/abs/2502.19645)
-- [FAST: Efficient Action Tokenization for Vision-Language-Action Models](https://arxiv.org/abs/2501.09747)
+- [FAST: Mã hóa hành động hiệu quả cho các mô hình hành động-ngôn ngữ-thị giác](https://arxiv.org/abs/2501.09747)

@@ -1,89 +1,87 @@
-# Modern VLA Action-Generation Families
+# Các họ phương pháp sinh action của VLA hiện đại
 
-> **Question.** How do the main modern VLA action-generation families turn
-> visual-language context into robot commands, and where do representative
-> models actually belong?
+> **Câu hỏi.** Các họ phương pháp sinh action chính của VLA hiện đại chuyển
+> ngữ cảnh thị giác-ngôn ngữ thành lệnh robot như thế nào, và các mô hình tiêu
+> biểu thực sự thuộc nhóm nào?
 >
-> **Scope.** Low-level action generation, not the downstream denormalizer,
-> safety filter, controller, or actuator interface. Sources were checked on
-> 2026-07-21. The five requested families are treated as a useful engineering
-> taxonomy, not as mutually exclusive scientific categories.
+> **Phạm vi.** Sinh action cấp thấp, không bao gồm bộ hoàn nguyên chuẩn hóa,
+> bộ lọc an toàn, controller hoặc giao diện actuator ở downstream. Nguồn được
+> kiểm tra ngày 2026-07-21. Năm họ được yêu cầu được xem như một taxonomy kỹ
+> thuật hữu ích, không phải các phạm trù khoa học loại trừ lẫn nhau.
 
-## Short answer
+## Câu trả lời ngắn
 
-There is no single axis called “action-decoder type.” At least four design
-choices are being mixed:
+Không có một trục phân loại duy nhất gọi là “loại action decoder”. Có ít nhất
+bốn lựa chọn thiết kế đang được trộn lẫn:
 
-1. **representation:** continuous values or discrete symbols;
-2. **factorization:** one parallel pass, token-by-token generation, or iterative
-   refinement from noise;
-3. **training objective:** regression, categorical next-token prediction,
-   diffusion noise prediction, or flow matching;
-4. **architecture and scale:** a small readout, a token-routed Transformer
-   expert, or a separate decoder-centric Diffusion Transformer.
+1. **biểu diễn:** giá trị liên tục hoặc ký hiệu rời rạc;
+2. **phân rã:** một lượt song song, sinh từng token hoặc tinh chỉnh lặp từ nhiễu;
+3. **mục tiêu training:** hồi quy, dự đoán next-token phân loại, dự đoán nhiễu
+   diffusion hoặc flow matching;
+4. **kiến trúc và quy mô:** readout nhỏ, Transformer expert định tuyến theo
+   token hoặc một Diffusion Transformer riêng lấy decoder làm trung tâm.
 
-This explains the important overlaps. Qwen-VLA is a flow-matching model with a
-separate 1.15B-parameter DiT action decoder downstream of a 4B VLM. π0.5 uses
-FAST tokens during pretraining but a continuous flow expert for low-level
-deployment. Conversely, RT-1 does **not** perform continuous regression: it
-predicts one of 256 bins for each action dimension with categorical
-cross-entropy. [RT-1, §3.3](https://arxiv.org/abs/2212.06817)
+Điều này giải thích các phần chồng lấn quan trọng. Qwen-VLA là mô hình flow
+matching với action decoder DiT 1,15B tham số riêng nằm sau VLM 4B. π0.5 dùng
+token FAST trong pretraining nhưng dùng continuous flow expert khi triển khai
+điều khiển cấp thấp. Ngược lại, RT-1 **không** thực hiện hồi quy liên tục: nó
+dự đoán một trong 256 bin cho mỗi chiều action bằng categorical cross-entropy.
+[RT-1, §3.3](https://arxiv.org/abs/2212.06817)
 
-## Family map
+## Bản đồ các họ
 
-| Requested family | Defining computation | Best representative placement | Important correction or overlap |
+| Họ được yêu cầu | Phép tính định nghĩa | Mô hình tiêu biểu phù hợp nhất | Hiệu chỉnh hoặc phần chồng lấn quan trọng |
 | --- | --- | --- | --- |
-| [Continuous regression](01_continuous_regression.md) | Predict a continuous action or chunk in one forward pass with L1/MSE-style loss | OpenVLA-OFT | RT-1 is a parallel **categorical** policy, not continuous regression |
-| [Discrete autoregressive actions](02_discrete_autoregressive_actions.md) | Serialize action symbols and generate them with next-token prediction | RT-2, OpenVLA, π0-FAST | FAST changes the tokenizer, not the autoregressive decoder |
-| [Compact diffusion or flow decoder](03_compact_diffusion_flow.md) | A relatively small conditional denoiser iteratively refines an action chunk | Diffusion Policy variants and compact VLA heads | “Compact” is an architecture/scale distinction, not a different probabilistic objective |
-| [Flow-matching Transformer expert](04_flow_matching_transformer_expert.md) | Robot tokens use specialized weights inside a shared Transformer computation | π0, π0.5 | π0.5 also uses FAST-token pretraining; this is not Qwen-VLA's downstream-decoder topology |
-| [Decoder-centric DiT](05_large_diffusion_transformer.md) | A substantial Transformer is itself the iterative diffusion/flow action decoder | RDT-1B; Dita; Qwen-VLA with caveats | Dita is 334M and calls itself lightweight; Qwen-VLA uses a separate flow-matching DiT after its VLM |
+| [Hồi quy liên tục](01_continuous_regression.md) | Dự đoán action hoặc chunk liên tục trong một forward pass với loss kiểu L1/MSE | OpenVLA-OFT | RT-1 là policy **phân loại** song song, không phải hồi quy liên tục |
+| [Action tự hồi quy rời rạc](02_discrete_autoregressive_actions.md) | Tuần tự hóa các ký hiệu action và sinh chúng bằng dự đoán next-token | RT-2, OpenVLA, π0-FAST | FAST thay đổi tokenizer, không thay đổi autoregressive decoder |
+| [Diffusion hoặc flow decoder gọn](03_compact_diffusion_flow.md) | Một denoiser có điều kiện tương đối nhỏ tinh chỉnh lặp một action chunk | Các biến thể Diffusion Policy và head VLA gọn | “Gọn” là khác biệt về kiến trúc/quy mô, không phải một mục tiêu xác suất khác |
+| [Flow-matching Transformer expert](04_flow_matching_transformer_expert.md) | Token robot dùng trọng số chuyên biệt trong một phép tính Transformer dùng chung | π0, π0.5 | π0.5 cũng pretrain bằng token FAST; đây không phải topology decoder downstream của Qwen-VLA |
+| [DiT lấy decoder làm trung tâm](05_large_diffusion_transformer.md) | Một Transformer lớn tự đóng vai trò action decoder diffusion/flow lặp | RDT-1B; Dita; Qwen-VLA, kèm lưu ý | Dita có 334M tham số và tự gọi là lightweight; Qwen-VLA dùng một DiT flow-matching riêng sau VLM |
 
-## The common input/output contract
+## Contract đầu vào/đầu ra chung
 
-Despite different decoders, most systems can be compared through the same
-abstract contract:
+Dù decoder khác nhau, phần lớn hệ thống có thể được so sánh qua cùng một
+contract trừu tượng:
 
 ```text
-images + instruction + optional robot state
+hình ảnh + chỉ dẫn + trạng thái robot tùy chọn
                     |
                     v
-       multimodal context / prefix
+       ngữ cảnh đa phương thức / prefix
                     |
                     v
-       action-generation mechanism
+              cơ chế sinh action
                     |
                     v
- normalized action or action chunk
+     action hoặc action chunk đã chuẩn hóa
                     |
                     v
- denormalization + embodiment mapping + safety/controller
+ hoàn nguyên chuẩn hóa + ánh xạ embodiment + an toàn/controller
 ```
 
-The documents in this directory stop at the normalized action chunk. A model
-that outputs a correct tensor still needs dataset-specific semantics such as
-absolute versus delta commands, joint versus end-effector space, rotation
-representation, control frequency, and gripper convention.
+Các tài liệu trong thư mục này dừng ở action chunk đã chuẩn hóa. Một mô hình
+xuất ra tensor đúng vẫn cần semantics đặc thù của dataset, chẳng hạn lệnh
+absolute hay delta, không gian joint hay end-effector, biểu diễn rotation,
+tần số điều khiển và quy ước gripper.
 
-## Selection intuition
+## Trực giác lựa chọn
 
-- Choose **parallel regression** when low latency and a simple adaptation path
-  matter more than explicitly representing multiple valid trajectory modes.
-- Choose **discrete autoregression** when reusing an existing VLM vocabulary,
-  training stack, and next-token objective is the central advantage. FAST makes
-  this route much more viable for high-frequency chunks.
-- Choose **diffusion or flow** when the action distribution is multimodal or a
-  coherent high-dimensional trajectory should be generated jointly, accepting
-  iterative sampling cost.
-- Choose a **small head** when compute and modularity dominate; scale the
-  action Transformer when heterogeneous embodiment/action data appear to need
-  more capacity and tighter conditioning.
+- Chọn **hồi quy song song** khi độ trễ thấp và đường thích nghi đơn giản quan
+  trọng hơn việc biểu diễn tường minh nhiều mode trajectory hợp lệ.
+- Chọn **tự hồi quy rời rạc** khi lợi thế cốt lõi là tái sử dụng vocabulary,
+  training stack và mục tiêu next-token của VLM hiện có. FAST khiến hướng này
+  khả thi hơn nhiều với các chunk tần số cao.
+- Chọn **diffusion hoặc flow** khi phân phối action đa mode hoặc cần sinh đồng
+  thời một trajectory nhiều chiều mạch lạc, đồng thời chấp nhận chi phí lấy mẫu lặp.
+- Chọn **head nhỏ** khi compute và tính mô-đun là ưu tiên; tăng quy mô action
+  Transformer khi dữ liệu embodiment/action không đồng nhất dường như cần nhiều
+  capacity và điều kiện hóa chặt hơn.
 
-These are design hypotheses, not universal rankings. Reported success rates
-are tied to different datasets, robots, control rates, and fine-tuning recipes,
-so they do not establish a decoder family as globally superior.
+Đây là các giả thuyết thiết kế, không phải xếp hạng phổ quát. Success rate được
+báo cáo gắn với các dataset, robot, tần số điều khiển và recipe fine-tuning khác
+nhau, nên chúng không chứng minh một họ decoder vượt trội trên toàn cục.
 
-## Primary sources
+## Nguồn chính
 
 - Brohan et al. *RT-1: Robotics Transformer for Real-World Control at Scale*,
   arXiv:2212.06817v2, 2023. [Paper](https://arxiv.org/abs/2212.06817)

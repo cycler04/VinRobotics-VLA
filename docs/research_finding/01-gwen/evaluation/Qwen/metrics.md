@@ -1,56 +1,57 @@
-# Metrics Used to Evaluate Qwen Models
+# Các metric dùng để đánh giá mô hình Qwen
 
-> **Question:** What does each score in Qwen language, vision-language and
-> agent evaluation mean?
+> **Câu hỏi:** Mỗi điểm số trong đánh giá ngôn ngữ, thị giác-ngôn ngữ và tác tử
+> của Qwen có ý nghĩa gì?
 >
-> **Scope:** Score functions only. Dataset contents, scale, splits and licenses
-> are in [datasets.md](datasets.md); prompts, preprocessing, evaluator versions
-> and Qwen result tables are in [benchmarks.md](benchmarks.md); training
-> objectives are in [loss.md](loss.md). Research checked on 2026-07-22.
+> **Phạm vi:** Chỉ các hàm tính điểm. Nội dung, quy mô, cách chia và giấy phép
+> bộ dữ liệu nằm trong [datasets.md](datasets.md); prompt, tiền xử lý, phiên bản
+> bộ đánh giá và bảng kết quả Qwen nằm trong [benchmarks.md](benchmarks.md);
+> mục tiêu huấn luyện nằm trong [loss.md](loss.md). Nghiên cứu được kiểm tra
+> ngày 22-07-2026.
 
-## The boundary
+## Ranh giới khái niệm
 
-- A **dataset** is the examples, modalities, annotations, splits and license.
-- A **benchmark protocol** specifies which split, prompt, preprocessing and
-  evaluator are used.
-- A **metric** converts predictions into a score.
+- **Bộ dữ liệu** gồm các mẫu, phương thức, chú thích, cách chia và giấy phép.
+- **Giao thức benchmark** quy định cách chia, prompt, tiền xử lý và bộ đánh giá
+  được sử dụng.
+- **Metric** chuyển dự đoán thành điểm số.
 
-A score is comparable only when all three match. The same accuracy formula can
-produce a different result after changing the answer parser or sampled frames;
-that change belongs to the protocol, not to accuracy itself.
+Điểm số chỉ có thể so sánh khi cả ba yếu tố khớp nhau. Cùng một công thức
+accuracy có thể cho kết quả khác sau khi đổi bộ phân tích câu trả lời hoặc các
+frame được lấy mẫu; thay đổi đó thuộc về giao thức, không thuộc bản thân accuracy.
 
-## Core classification and sampling metrics
+## Metric phân loại và lấy mẫu cốt lõi
 
-For binary item correctness $c_i\in\{0,1\}$,
+Với tính đúng sai nhị phân của mỗi mẫu $c_i\in\{0,1\}$,
 
 $$
 \mathrm{Accuracy}=\frac{1}{N}\sum_{i=1}^{N}c_i.
 $$
 
-Higher is better. Multiple-choice suites such as MMLU-Pro, GPQA, MMMU-Pro,
-MathVista and Video-MME commonly reduce to this form after their answer parser.
-An aggregate must name its grouping axis:
+Cao hơn là tốt hơn. Các bộ trắc nghiệm như MMLU-Pro, GPQA, MMMU-Pro, MathVista
+và Video-MME thường quy về dạng này sau bước phân tích câu trả lời. Một điểm
+tổng hợp phải nêu rõ trục nhóm:
 
-- **micro/pooled accuracy** pools all items, so large groups receive more weight;
-- **macro accuracy** averages group accuracies, so each named subject, domain or
-  task receives equal weight.
+- **micro/pooled accuracy** gộp mọi mẫu nên nhóm lớn nhận trọng số cao hơn;
+- **macro accuracy** lấy trung bình accuracy của các nhóm nên mỗi môn, miền hoặc
+  tác vụ được đặt tên nhận trọng số bằng nhau.
 
-Repeated sampling has two distinct summaries. Averaging correctness across
-draws estimates expected single-draw accuracy. It is not `pass@k`. Given $n$
-samples for a problem and $c$ correct samples, HumanEval's estimator is
+Lấy mẫu lặp lại có hai cách tổng hợp khác nhau. Lấy trung bình tính đúng trên các
+lần lấy mẫu ước lượng accuracy kỳ vọng của một lần lấy mẫu. Nó không phải
+`pass@k`. Với $n$ mẫu cho một bài toán và $c$ mẫu đúng, bộ ước lượng của HumanEval là
 
 $$
 \widehat{\mathrm{pass@}k}
 =1-\frac{\binom{n-c}{k}}{\binom{n}{k}},
 $$
 
-the probability that at least one of $k$ draws succeeds. `pass@k` normally rises
-with $k$; mean sample correctness does not receive this any-success benefit.
-[HumanEval paper and estimator][humaneval]
+xác suất ít nhất một trong $k$ lần lấy mẫu thành công. `pass@k` thường tăng theo
+$k$; tính đúng trung bình của mẫu không nhận được lợi thế “chỉ cần một lần thành
+công” này. [Bài báo và bộ ước lượng HumanEval][humaneval]
 
-## Instruction-following aggregation
+## Tổng hợp khả năng tuân thủ chỉ dẫn
 
-IFEval supplies several binary constraint checks per prompt:
+IFEval cung cấp nhiều phép kiểm tra ràng buộc nhị phân cho mỗi prompt:
 
 $$
 \mathrm{InstructionAcc}
@@ -60,123 +61,126 @@ $$
 =\frac{1}{N}\sum_i\mathbf{1}[\text{all constraints for prompt }i\text{ pass}].
 $$
 
-Prompt accuracy is an AND aggregation and is therefore stricter for prompts
-with multiple constraints. Strict versus loose checking changes the evaluator
-and belongs to the benchmark protocol; the exact variants used by Qwen are
-recorded in [benchmarks.md](benchmarks.md). [IFEval implementation][ifeval-code]
+Prompt accuracy là phép tổng hợp AND nên nghiêm ngặt hơn với prompt có nhiều
+ràng buộc. Kiểm tra nghiêm ngặt hay nới lỏng làm thay đổi bộ đánh giá và thuộc về
+giao thức benchmark; các biến thể chính xác Qwen sử dụng được ghi trong
+[benchmarks.md](benchmarks.md). [Triển khai IFEval][ifeval-code]
 
-## Text, OCR and document-answer metrics
+## Metric cho văn bản, OCR và trả lời câu hỏi tài liệu
 
-Generic free-form metrics are not interchangeable:
+Các metric tự do tổng quát không thể thay thế lẫn nhau:
 
-- **Exact match (EM)** is binary equality after a declared normalization.
-- **Token F1** is the harmonic mean of token-overlap precision and recall.
-- **ANLS** averages the best normalized edit similarity against the references,
-  with low-similarity matches set to zero by a benchmark threshold.
+- **Exact match (EM)** là tính bằng nhau nhị phân sau phép chuẩn hóa đã công bố.
+- **Token F1** là trung bình điều hòa giữa precision và recall của token trùng khớp.
+- **ANLS** lấy trung bình độ tương đồng chỉnh sửa đã chuẩn hóa tốt nhất so với
+  đáp án tham chiếu; các kết quả có độ tương đồng thấp bị đặt về 0 theo ngưỡng
+  của benchmark.
 
-ANLS gives partial spelling/edit credit; EM does not. Token F1 ignores token
-order and may reward irrelevant overlap. Normalization, multiple-reference
-handling and the ANLS threshold are part of the scorer contract.
+ANLS cho điểm một phần với khác biệt chính tả/chỉnh sửa; EM thì không. Token F1
+bỏ qua thứ tự token và có thể thưởng cho phần trùng khớp không liên quan. Phép
+chuẩn hóa, cách xử lý nhiều đáp án tham chiếu và ngưỡng ANLS là một phần của hợp
+đồng bộ chấm điểm.
 [ST-VQA ANLS][st-vqa]
 
-Original **OCRBench does not use EM, token F1 or ANLS**. Each of its 1,000 items
-receives 0/1 from the official substring-based scorer, then the hits are summed:
+**OCRBench gốc không dùng EM, token F1 hay ANLS**. Mỗi mẫu trong 1.000 mẫu nhận
+điểm 0/1 từ bộ chấm chính thức dựa trên chuỗi con, sau đó cộng số mẫu đạt:
 
 $$
 \mathrm{OCRBenchRaw}=\sum_{i=1}^{1000}c_i,\qquad 0\leq score\leq1000.
 $$
 
-The five category maxima are 300 text recognition, 200 scene-text VQA, 200
-document VQA, 200 key-information extraction and 100 handwritten-expression
-recognition. Most categories use case-insensitive reference-substring matching;
-the handwritten-expression branch removes spaces and preserves case. A displayed
-0–100 value may be a normalization, but conversion is valid only when the same
-1,000 items and scorer are confirmed. [OCRBench scorer][ocrbench-code]
+Điểm tối đa của năm hạng mục lần lượt là 300 cho nhận dạng văn bản, 200 cho VQA
+văn bản trong cảnh, 200 cho VQA tài liệu, 200 cho trích xuất thông tin chính và
+100 cho nhận dạng biểu thức viết tay. Phần lớn hạng mục khớp chuỗi con tham
+chiếu không phân biệt hoa thường; nhánh biểu thức viết tay loại bỏ khoảng trắng
+và giữ nguyên kiểu chữ. Giá trị 0–100 được hiển thị có thể là kết quả chuẩn hóa,
+nhưng chỉ được phép chuyển đổi khi đã xác nhận cùng 1.000 mẫu và bộ chấm.
+[Bộ chấm OCRBench][ocrbench-code]
 
-## Grounding metrics
+## Metric grounding
 
-For predicted box $B_p$ and reference box $B_g$,
+Với hộp dự đoán $B_p$ và hộp tham chiếu $B_g$,
 
 $$
 \mathrm{IoU}(B_p,B_g)=\frac{|B_p\cap B_g|}{|B_p\cup B_g|}.
 $$
 
-RefCOCO referring-expression comprehension commonly reports
+Đánh giá hiểu biểu thức tham chiếu RefCOCO thường báo cáo
 
 $$
 \mathrm{Acc@0.5}=\frac{1}{N}\sum_i
 \mathbf{1}[\mathrm{IoU}(B_{p,i},B_{g,i})>0.5].
 $$
 
-This is thresholded grounding accuracy, not mean IoU and not detection mAP.
-It says how often the referred object was localized sufficiently well, but not
-how tight the successful boxes were. [RefCOCO paper][refcoco]
+Đây là grounding accuracy theo ngưỡng, không phải IoU trung bình hay mAP phát
+hiện. Nó cho biết tần suất đối tượng được nhắc tới được định vị đủ tốt, nhưng
+không cho biết các hộp thành công ôm sát tới mức nào. [Bài báo RefCOCO][refcoco]
 
-## Agent and tool-use metrics
+## Metric cho tác tử và sử dụng công cụ
 
-**SWE-bench resolved rate** is the fraction of attempted repository instances
-fully resolved by the harness:
+**Tỷ lệ resolved của SWE-bench** là tỷ lệ các mẫu kho mã được thử mà harness giải
+quyết hoàn toàn:
 
 $$
 \mathrm{ResolvedRate}=\frac{\text{instances marked fully resolved}}
 {\text{attempted instances}}.
 $$
 
-The current official grader requires all `FAIL_TO_PASS` and `PASS_TO_PASS` tests
-to pass for full resolution; partial test repair is not resolved. The score is a
-binary system outcome and does not expose patch quality, cost or time.
-[SWE-bench grader][swebench-grader]
+Bộ chấm chính thức hiện tại yêu cầu mọi kiểm thử `FAIL_TO_PASS` và `PASS_TO_PASS`
+đều đạt mới tính là giải quyết hoàn toàn; sửa được một phần kiểm thử không được
+tính là resolved. Điểm số là kết quả hệ thống nhị phân và không thể hiện chất
+lượng bản vá, chi phí hay thời gian. [Bộ chấm SWE-bench][swebench-grader]
 
-**BFCL accuracy** is versioned evaluator pass rate over function-calling cases.
-The pass predicate can include function name, arguments, type/value, execution,
-irrelevance and multi-turn state checks. Composite aggregation changed across
-BFCL releases; therefore `BFCL v3` and `BFCL-V4` are different metric contracts,
-not two measurements on a stable axis. [BFCL evaluation][bfcl-v1]
+**BFCL accuracy** là tỷ lệ đạt của bộ đánh giá có phiên bản trên các trường hợp
+gọi hàm. Điều kiện đạt có thể gồm kiểm tra tên hàm, đối số, kiểu/giá trị, thực
+thi, tính không liên quan và trạng thái nhiều lượt. Cách tổng hợp thay đổi giữa
+các bản BFCL; do đó `BFCL v3` và `BFCL-V4` là hai hợp đồng metric khác nhau,
+không phải hai phép đo trên một trục ổn định. [Đánh giá BFCL][bfcl-v1]
 [BFCL V4][bfcl-v4]
 
-**Elo** summarizes relative pairwise preference against a particular opponent
-pool. **LLM-judge scores** summarize decisions from a particular judge, prompt
-and rubric. Neither is an absolute probability of factual correctness.
+**Elo** tổng hợp ưu tiên tương đối theo cặp so với một tập đối thủ cụ thể. **Điểm
+LLM-judge** tổng hợp quyết định từ một bộ chấm, prompt và rubric cụ thể. Cả hai
+đều không phải xác suất tuyệt đối của tính đúng sự thật.
 
-## Efficiency and uncertainty
+## Hiệu quả và độ bất định
 
-Latency, generated-token count, peak memory, throughput and monetary cost are
-separate efficiency metrics. Report distributions such as median and p95
-latency, plus timeout/error rate; do not average them into task accuracy without
-an explicit utility function.
+Độ trễ, số token được sinh, bộ nhớ đỉnh, thông lượng và chi phí tiền tệ là các
+metric hiệu quả riêng biệt. Cần báo cáo phân bố như độ trễ trung vị và p95, cùng
+tỷ lệ hết thời gian/lỗi; không lấy trung bình chúng vào task accuracy nếu không
+có hàm tiện ích rõ ràng.
 
-For $N$ binary items, always report $N$ and preferably a binomial confidence
-interval. Repeated generations from the same prompt and subject-grouped items
-are not fully independent; per-seed results or bootstrap intervals over the
-appropriate item/group unit are more honest than extra decimal places.
+Với $N$ mẫu nhị phân, luôn báo cáo $N$ và tốt nhất là cả khoảng tin cậy nhị thức.
+Các lần sinh lặp từ cùng một prompt và các mẫu được nhóm theo chủ đề không hoàn
+toàn độc lập; kết quả theo từng seed hoặc khoảng bootstrap trên đơn vị mẫu/nhóm
+phù hợp trung thực hơn việc thêm chữ số thập phân.
 
-## Metric reporting checklist
+## Danh sách kiểm tra khi báo cáo metric
 
-For every number, record:
+Với mỗi con số, cần ghi:
 
 ```text
-metric name and direction (higher/lower is better)
-formula or exact evaluator revision
-range/display scale and aggregation axis
-dataset version and evaluated split
-prompt, preprocessing, answer parser and decoding
-sample count, seeds, denominator and confidence interval
+tên metric và chiều tốt hơn (cao hơn/thấp hơn)
+công thức hoặc phiên bản chính xác của bộ đánh giá
+miền/thang hiển thị và trục tổng hợp
+phiên bản bộ dữ liệu và phần chia được đánh giá
+prompt, tiền xử lý, bộ phân tích câu trả lời và giải mã
+số mẫu, seed, mẫu số và khoảng tin cậy
 ```
 
-The first three lines define the metric; the remaining lines bind it to a
-reproducible benchmark protocol.
+Ba dòng đầu định nghĩa metric; các dòng còn lại gắn metric vào một giao thức
+benchmark có thể tái lập.
 
-## Sources
+## Nguồn
 
-- Chen et al. *Evaluating Large Language Models Trained on Code*.
-  [Paper and estimator][humaneval]
-- Zhou et al. *IFEval*. [Official implementation][ifeval-code]
-- Biten et al. *Scene Text Visual Question Answering*. [Paper][st-vqa]
-- Liu et al. *OCRBench*. [Official scorer][ocrbench-code]
-- Yu et al. *Modeling Context in Referring Expressions*. [Paper][refcoco]
-- SWE-bench Team. [Official grading code][swebench-grader]
-- Berkeley Function Calling Leaderboard. [V1 metrics][bfcl-v1] ·
-  [V4 composition][bfcl-v4]
+- Chen và cộng sự. *Evaluating Large Language Models Trained on Code*.
+  [Bài báo và bộ ước lượng][humaneval]
+- Zhou và cộng sự. *IFEval*. [Triển khai chính thức][ifeval-code]
+- Biten và cộng sự. *Scene Text Visual Question Answering*. [Bài báo][st-vqa]
+- Liu và cộng sự. *OCRBench*. [Bộ chấm chính thức][ocrbench-code]
+- Yu và cộng sự. *Modeling Context in Referring Expressions*. [Bài báo][refcoco]
+- Nhóm SWE-bench. [Mã chấm điểm chính thức][swebench-grader]
+- Berkeley Function Calling Leaderboard. [Metric V1][bfcl-v1] ·
+  [Cách tổng hợp V4][bfcl-v4]
 
 [humaneval]: https://arxiv.org/abs/2107.03374
 [ifeval-code]: https://github.com/google-research/google-research/blob/master/instruction_following_eval/evaluation_lib.py

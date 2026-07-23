@@ -2,31 +2,31 @@
 
 ## 1. Kết luận về mức độ công khai
 
-Qwen3.6 là open-weight nhưng chưa phải open-training. Model card không đưa danh sách đầy đủ tên dataset, số mẫu, số token, tỷ lệ trộn, filtering hay deduplication.
+Qwen3.6 là mô hình mở trọng số nhưng chưa công khai quy trình huấn luyện. Model card không cung cấp danh sách đầy đủ tên bộ dữ liệu, số mẫu, số token, tỷ lệ trộn, phương pháp lọc hay loại bỏ dữ liệu trùng lặp.
 
-## 2. Các nhóm dữ liệu có thể xác nhận ở mức domain
+## 2. Các nhóm dữ liệu có thể xác nhận ở cấp miền
 
 | Nhóm | Nội dung | Mức độ |
 |---|---|---|
-| Foundation | Text, code, math, multilingual | Nền tảng kế thừa |
-| Multimodal | Image-text, video-text, documents | Công bố qua model type/capability |
-| Coding | Repository, bug, patch, diff, frontend | Suy ra từ agentic coding focus |
+| Nền tảng | Văn bản, mã nguồn, toán học, đa ngôn ngữ | Nền tảng kế thừa |
+| Đa phương thức | Cặp ảnh–văn bản, video–văn bản, tài liệu | Được công bố qua loại mô hình/năng lực |
+| Lập trình | Kho mã, lỗi, bản vá, diff, frontend | Suy ra từ trọng tâm lập trình có tính tác tử |
 | Sử dụng công cụ | Thiết bị đầu cuối, trình duyệt, hệ thống tập tin, lệnh gọi MCP/công cụ | Miền năng lực/sau huấn luyện |
-| RL environments | Code execution, browser, agent tasks | Mô tả ở mức environment |
-| Thinking traces | Historical reasoning và multi-turn trajectories | Gắn với Thinking Preservation |
-| Synthetic/verifier data | Teacher outputs, tests, tool feedback | Có thể có, nhưng recipe chưa public |
+| Môi trường RL | Thực thi mã, trình duyệt, tác vụ tác tử | Được mô tả ở cấp môi trường |
+| Dấu vết suy luận | Suy luận lịch sử và quỹ đạo nhiều lượt | Gắn với Thinking Preservation |
+| Dữ liệu tổng hợp/bộ xác minh | Đầu ra của mô hình giáo viên, kiểm thử, phản hồi từ công cụ | Có thể có, nhưng công thức xây dựng chưa được công khai |
 
-Không nên ghi tên dataset cụ thể nếu nguồn không xác nhận. Cách diễn đạt an toàn là Qwen3.6 mở rộng hoặc tái trọng số post-training data cho coding và agentic tasks trên nền multimodal Qwen3.5.
+Không nên ghi tên bộ dữ liệu cụ thể nếu nguồn không xác nhận. Cách diễn đạt an toàn là Qwen3.6 mở rộng hoặc tái trọng số dữ liệu hậu huấn luyện cho các tác vụ lập trình và tác tử trên nền tảng đa phương thức Qwen3.5.
 
-## 3. Dataset và evaluation không đồng nhất
+## 3. Bộ dữ liệu và đánh giá không đồng nhất
 
-Repository/patch/tool trajectory là dạng dữ liệu hợp lý cho post-training, nhưng benchmark như SWE-bench, Terminal-Bench, MCPMark hoặc QwenWebBench không chứng minh chúng được dùng làm training set.
+Quỹ đạo kho mã/bản vá/công cụ là dạng dữ liệu hợp lý cho hậu huấn luyện, nhưng các benchmark như SWE-bench, Terminal-Bench, MCPMark hoặc QwenWebBench không chứng minh rằng chúng được dùng làm tập huấn luyện.
 
 ## 4. So với Qwen3.5
 
 | Khía cạnh | Qwen3.5 | Qwen3.6 |
 |---|---|---|
-| Foundation modalities | Text, code, math, image/video, documents | Kế thừa |
-| Nhấn mạnh dữ liệu | Tổng hợp đa phương thức + đại lý | Agent mã hóa, giao diện người dùng, kho lưu trữ, quy trình làm việc của công cụ |
-| Thinking history | Chưa có công bố tương đương | Historical thinking trajectories/behavior |
-| Dataset names/ratios | Chưa public đầy đủ | Chưa public đầy đủ |
+| Phương thức nền tảng | Văn bản, mã nguồn, toán học, ảnh/video, tài liệu | Kế thừa |
+| Trọng tâm dữ liệu | Tổng hợp đa phương thức + tác tử | Tác tử lập trình, giao diện người dùng, kho mã, quy trình sử dụng công cụ |
+| Lịch sử suy luận | Chưa có công bố tương đương | Quỹ đạo/hành vi suy luận lịch sử |
+| Tên/tỷ lệ bộ dữ liệu | Chưa công khai đầy đủ | Chưa công khai đầy đủ |

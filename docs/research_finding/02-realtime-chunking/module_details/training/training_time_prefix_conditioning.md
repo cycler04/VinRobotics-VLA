@@ -1,80 +1,80 @@
-# Training-time action-prefix conditioning
+# Điều kiện hóa action prefix tại training
 
-## Purpose
+## Mục đích
 
-Training-time RTC replaces pseudoinverse guidance with a learned conditional distribution:
+RTC tại training thay pseudoinverse guidance bằng một phân phối có điều kiện được học:
 
 $$
 p(A_{t+d:H}\mid o_t,A_{t:t+d}).
 $$
 
-The first `d` positions are clean actions from a demonstrated chunk. They represent the actions that
-will execute while inference is running. The model learns to generate only the compatible postfix.
+`d` vị trí đầu tiên là các action sạch từ một chunk trình diễn. Chúng đại diện cho các action sẽ
+được thực thi trong khi inference chạy. Mô hình học cách chỉ sinh phần postfix tương thích.
 
-## Three modifications
+## Ba thay đổi
 
-1. Allow one flow timestep per action position rather than one scalar timestep for the whole chunk.
-2. Keep prefix actions clean and set their flow timestep to `1`; noise the postfix normally.
-3. Mask the objective so that only postfix positions contribute to the loss.
+1. Cho phép mỗi vị trí action có một flow timestep, thay vì dùng một timestep vô hướng cho toàn chunk.
+2. Giữ các action prefix sạch và đặt flow timestep của chúng thành `1`; thêm nhiễu vào postfix như bình thường.
+3. Mask objective để chỉ các vị trí postfix đóng góp vào loss.
 
-No new learnable parameters are required for a DiT-like model whose timestep conditioning already
-produces per-token AdaLN scale, shift, and gate values. The released Kinetix MLP-Mixer likewise
-broadcasts or accepts per-position time values
+Không cần tham số học mới đối với mô hình kiểu DiT mà cơ chế điều kiện hóa timestep đã tạo ra
+các giá trị scale, shift và gate AdaLN theo từng token. Kinetix MLP-Mixer được phát hành cũng
+broadcast hoặc chấp nhận giá trị thời gian theo từng vị trí
 ([`model.py`, lines 140–158](https://github.com/Physical-Intelligence/real-time-chunking-kinetix/blob/9296f31d62d5bfeb5779dcb2f9bcf71ca37f448b/src/model.py#L140-L158)).
 
-## Training path
+## Luồng training
 
 ```mermaid
 flowchart TD
-    A[Ground-truth action chunk] --> D[Sample delay d]
-    D --> M[Prefix mask i less than d]
-    A --> X[Mix postfix with Gaussian noise]
+    A[Action chunk ground truth] --> D[Lấy mẫu độ trễ d]
+    D --> M[Prefix mask với i nhỏ hơn d]
+    A --> X[Trộn postfix với nhiễu Gaussian]
     M --> X
-    X --> P[Flow policy with per-position time]
+    X --> P[Flow policy với thời gian theo từng vị trí]
     P --> L[Velocity loss]
-    M --> L2[Mask prefix loss]
+    M --> L2[Mask loss của prefix]
     L --> L2
 ```
 
-The public code samples `d` with exponentially decreasing probability in simulation, sets prefix
-time values to `1`, and excludes prefix positions from the MSE
+Mã công khai lấy mẫu `d` với xác suất giảm theo hàm mũ trong mô phỏng, đặt giá trị thời gian
+của prefix thành `1` và loại các vị trí prefix khỏi MSE
 ([`model.py`, lines 267–289](https://github.com/Physical-Intelligence/real-time-chunking-kinetix/blob/9296f31d62d5bfeb5779dcb2f9bcf71ca37f448b/src/model.py#L267-L289)).
-The paper's real-world fine-tuning instead samples `d` uniformly from 0 through 10 to cover up to
-200 ms at 50 Hz.
+Ngược lại, fine-tuning trong thế giới thực của paper lấy mẫu `d` đều từ 0 đến 10 để bao phủ
+tối đa 200 ms ở tần số 50 Hz.
 
-At inference, each integration step overwrites the prefix with committed actions, marks prefix flow
-times as `1`, and computes an ordinary forward pass. The released `realtime_action` switches to
-this path when `simulated_delay` is configured
+Tại inference, mỗi bước tích phân ghi đè prefix bằng các action đã cam kết, đánh dấu flow time
+của prefix là `1` và tính một forward pass thông thường. Hàm `realtime_action` được phát hành
+chuyển sang luồng này khi `simulated_delay` được cấu hình
 ([`model.py`, lines 253–260](https://github.com/Physical-Intelligence/real-time-chunking-kinetix/blob/9296f31d62d5bfeb5779dcb2f9bcf71ca37f448b/src/model.py#L253-L260)).
 
-## Paper/code discrepancy
+## Khác biệt giữa paper và code
 
-**Verified discrepancy:** Equation 2 in the training-time paper prints the velocity target as
-`noise - action`, while Algorithm 1 and the released implementation use `action - noise`. The latter
-matches the paper's interpolation from noise at `τ=0` to data at `τ=1` and its additive sampling
-update. An implementation should follow Algorithm 1 and the released code unless the authors issue
-an erratum; the equation should not be copied literally without checking the sign.
+**Khác biệt đã xác minh:** Phương trình 2 trong paper training-time in velocity target là
+`noise - action`, trong khi Thuật toán 1 và mã được phát hành dùng `action - noise`. Cách sau
+khớp với phép nội suy của paper từ nhiễu tại `τ=0` đến dữ liệu tại `τ=1`, cũng như phép cập nhật
+lấy mẫu dạng cộng. Một bản triển khai nên theo Thuật toán 1 và mã được phát hành, trừ khi tác giả
+công bố đính chính; không nên sao chép nguyên phương trình mà không kiểm tra dấu.
 
-## Results and tradeoffs
+## Kết quả và đánh đổi
 
-- Kinetix uses `H=8`, a four-layer MLP-Mixer, 2,048 trials per point, and delays 0–4. The
-  training-time checkpoint resumes from epoch 24 and fine-tunes for eight epochs so total training
-  compute matches the 32-epoch base policy.
-- Training-time RTC is better than inference-time RTC for simulated delays `d >= 2`, with a larger
-  gap at higher delays. It is marginally worse at `d=0` and `d=1` in the reported plot.
-- For real-world box building and espresso making, both RTC methods have similar performance and
-  duration, while both remove the pauses of synchronous execution. Training-time RTC averages
-  108 ms end-to-end latency (`d` about 5); inference-time RTC averages 135 ms (`d` about 7) on the
-  reported remote-H100 setup.
-- **Tradeoff:** training-time RTC has no guidance/backprop overhead, but its supported delays depend
-  on the delay distribution used in training. It cannot softly constrain the extra overlap beyond the
-  committed prefix.
+- Kinetix dùng `H=8`, MLP-Mixer bốn lớp, 2.048 lượt thử cho mỗi điểm và độ trễ 0–4. Checkpoint
+  training-time tiếp tục từ epoch 24 và fine-tune trong tám epoch để tổng compute training bằng
+  với base policy được train 32 epoch.
+- RTC tại training tốt hơn RTC tại inference khi độ trễ mô phỏng `d >= 2`, và khoảng cách lớn
+  hơn ở độ trễ cao hơn. Trong biểu đồ được báo cáo, nó kém hơn một chút tại `d=0` và `d=1`.
+- Với tác vụ xếp hộp và pha espresso trong thế giới thực, hai phương pháp RTC có hiệu năng và
+  thời lượng tương tự, đồng thời đều loại bỏ khoảng dừng của thực thi đồng bộ. RTC tại training
+  có độ trễ end-to-end trung bình 108 ms (`d` khoảng 5); RTC tại inference trung bình 135 ms
+  (`d` khoảng 7) trên cấu hình H100 từ xa được báo cáo.
+- **Đánh đổi:** RTC tại training không có overhead do guidance/backprop, nhưng các độ trễ được
+  hỗ trợ phụ thuộc vào phân phối độ trễ dùng khi training. Nó không thể dùng ràng buộc mềm cho
+  phần chồng lấn bổ sung nằm sau prefix đã cam kết.
 
-## Evidence
+## Bằng chứng
 
-- *Training-Time Action Conditioning for Efficient Real-Time Chunking*, Sections III–VI and
-  Algorithm 1, pages 2–6:
-  [local PDF](<../../../papers/02-realtime-chunking/Training-Time Action Conditioning for Efficient Real-Time Chunking.pdf>).
-- Released training and sampling paths:
+- *Training-Time Action Conditioning for Efficient Real-Time Chunking*, các Mục III–VI và
+  Thuật toán 1, trang 2–6:
+  [PDF cục bộ](<../../../../papers/02-realtime-chunking/Training-Time Action Conditioning for Efficient Real-Time Chunking.pdf>).
+- Luồng training và lấy mẫu trong mã được phát hành:
   [`model.py`](https://github.com/Physical-Intelligence/real-time-chunking-kinetix/blob/9296f31d62d5bfeb5779dcb2f9bcf71ca37f448b/src/model.py#L253-L289),
-  inspected 2026-07-22.
+  kiểm tra ngày 2026-07-22.

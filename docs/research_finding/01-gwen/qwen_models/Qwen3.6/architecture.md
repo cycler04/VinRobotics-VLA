@@ -1,14 +1,14 @@
 # Qwen3.6-35B-A3B — Kiến trúc
 
-> **Mức độ công khai:** thông tin chính lấy từ Hugging Face model card/config. Bài phân tích bên ngoài dùng để diễn giải và phê bình benchmark, không phải technical report peer-reviewed.
+> **Mức độ công khai:** thông tin chính lấy từ model card/config trên Hugging Face. Bài phân tích bên ngoài dùng để diễn giải và phê bình benchmark, không phải báo cáo kỹ thuật đã qua bình duyệt.
 
 ## 1. Kết luận kiến trúc
 
-Qwen3.6-35B-A3B là multimodal causal language model có Vision Encoder. Điểm quan trọng là model card vẫn dùng architecture class `qwen3_5_moe`: Qwen3.6 **không thay backbone**, mà chủ yếu cải thiện post-training và agent capability.
+Qwen3.6-35B-A3B là mô hình ngôn ngữ nhân quả đa phương thức có vision encoder. Điểm quan trọng là model card vẫn dùng lớp kiến trúc `qwen3_5_moe`: Qwen3.6 **không thay backbone**, mà chủ yếu cải thiện hậu huấn luyện và năng lực agent.
 
 ```mermaid
 flowchart LR
-  I[Văn bản/Hình ảnh/Video] --> E[Token + Bộ mã hóa tầm nhìn]
+  I[Văn bản/Hình ảnh/Video] --> E[Token + Bộ mã hóa thị giác]
   E --> F[Token đa phương thức thống nhất]
   F --> H[Bộ giải mã lai 40 lớp]
   H --> O[Suy nghĩ/trả lời/gọi công cụ]
@@ -18,16 +18,16 @@ flowchart LR
 
 | Thuộc tính                 |                                                      Qwen3.6-35B-A3B |
 | ---------------------------- | -------------------------------------------------------------------: |
-| Tổng / activated parameters |                                                             35B / 3B |
+| Tổng tham số / tham số kích hoạt |                                                             35B / 3B |
 | Lớp / chiều ẩn |                                                            40/2048 |
 | Lớp kiến ​​trúc |                                                      `qwen3_5_moe` |
-| Layer layout                 | `10 × [3 Gated DeltaNet + 1 Gated Attention]`, mỗi layer có MoE |
+| Bố cục lớp                 | `10 × [3 Gated DeltaNet + 1 Gated Attention]`, mỗi lớp có MoE |
 | Chuyên gia |                                   256; 8 định tuyến + 1 chia sẻ được kích hoạt |
-| DeltaNet |                                32 đầu V, 16 đầu QK, đầu mờ 128 |
-| Kiểm soát attention |                                 16 đầu Q, 2 đầu KV, đầu mờ 256 |
+| DeltaNet |                                32 head V, 16 head QK, head dimension 128 |
+| Gated attention |                                 16 head Q, 2 head KV, head dimension 256 |
 | Kích thước RoPE |                                                                   64 |
-| Bối cảnh bản địa |                                                       262.144 token |
-| Extended context             |                                   khoảng 1,010,000 tokens với YaRN |
+| Ngữ cảnh gốc |                                                       262.144 token |
+| Ngữ cảnh mở rộng             |                                   khoảng 1.010.000 token với YaRN |
 | MTP |                                             được huấn luyện với nhiều bước |
 | Giấy phép |                                                           Apache 2.0 |
 
@@ -36,44 +36,44 @@ flowchart LR
 ### Gated DeltaNet + MoE
 
 ```text
-Input
+Đầu vào
   ↓
 RMSNorm
   ↓
 Gated DeltaNet (linear/recurrent token mixer)
   ↓
-Residual 1
+Kết nối dư 1
   ↓
 RMSNorm
   ↓
-Sparse MoE: router → top-8 routed experts + shared expert
+MoE thưa: router → top-8 chuyên gia được định tuyến + chuyên gia dùng chung
   ↓
-Residual 2
+Kết nối dư 2
   ↓
-Output
+Đầu ra
 ```
 
 ### Attention có kiểm soát + MoE
 
 ```text
-Input
+Đầu vào
   ↓
 RMSNorm
   ↓
-Gated GQA + RoPE (global token mixing)
+Gated GQA + RoPE (trộn token toàn cục)
   ↓
-Residual 1
+Kết nối dư 1
   ↓
 RMSNorm
   ↓
-Sparse MoE
+MoE thưa
   ↓
-Residual 2
+Kết nối dư 2
   ↓
-Output
+Đầu ra
 ```
 
-Ba DeltaNet layers xử lý phần lớn sequence với chi phí gần tuyến tính theo độ dài; layer full attention định kỳ giữ khả năng truy xuất chính xác giữa các token xa. Trong 40 layers, tỷ lệ là 30 DeltaNet và 10 Gated Attention.
+Ba lớp DeltaNet xử lý phần lớn chuỗi với chi phí gần tuyến tính theo độ dài; lớp full attention định kỳ giữ khả năng truy xuất chính xác giữa các token xa. Trong 40 lớp, có 30 lớp DeltaNet và 10 lớp Gated Attention.
 
 ## 4. Gated DeltaNet
 
@@ -88,11 +88,11 @@ flowchart TB
   O --> R[Thêm dư]
 ```
 
-DeltaNet duy trì recurrent state thay vì lưu toàn bộ attention matrix. `β` điều khiển update strength, `g` điều khiển memory decay và `z` là output gate theo mô tả cấu hình/implementation. Trade-off: tiết kiệm memory/KV cache hơn full attention nhưng global retrieval được bổ sung bằng các attention layer định kỳ.
+DeltaNet duy trì trạng thái hồi quy thay vì lưu toàn bộ ma trận attention. `β` điều khiển cường độ cập nhật, `g` điều khiển độ suy giảm bộ nhớ và `z` là cổng đầu ra theo mô tả cấu hình/triển khai. Đánh đổi: tiết kiệm bộ nhớ/KV cache hơn full attention, còn khả năng truy xuất toàn cục được bổ sung bằng các lớp attention định kỳ.
 
 ## 5. Gated Full Attention và GQA
 
-Qwen3.6 dùng 16 query heads nhưng chỉ 2 KV heads. GQA cho phép nhiều query cùng chia sẻ key/value, giảm KV cache và bandwidth. RoPE dimension là 64; output gate điều tiết mức đóng góp của attention trước residual.
+Qwen3.6 dùng 16 query head nhưng chỉ 2 KV head. GQA cho phép nhiều query cùng chia sẻ key/value, giảm KV cache và băng thông. RoPE có 64 chiều; cổng đầu ra điều tiết mức đóng góp của attention trước kết nối dư.
 
 ## 6. MoE thưa thớt
 
@@ -106,35 +106,35 @@ flowchart LR
   C --> O[Đầu ra MoE]
 ```
 
-Qwen3.6 giữ nguyên cấu hình MoE chính so với Qwen3.5: 256 experts, 8 routed experts và 1 shared expert. `A3B` chỉ lượng parameters được activate mỗi token, không phải số parameters tổng.
+Qwen3.6 giữ nguyên cấu hình MoE chính so với Qwen3.5: 256 chuyên gia, 8 chuyên gia được định tuyến và 1 chuyên gia dùng chung. `A3B` chỉ lượng tham số được kích hoạt cho mỗi token, không phải tổng số tham số.
 
 ## 7. MTP và context
 
-MTP được huấn luyện multi-step để dự đoán nhiều token tương lai, có thể hỗ trợ speculative decoding. Native context là 262K; mở rộng tới khoảng 1.01M dùng YaRN. YaRN là thay đổi cấu hình positional scaling khi serving, không phải kiến trúc backbone mới.
+MTP được huấn luyện nhiều bước để dự đoán nhiều token tương lai, có thể hỗ trợ speculative decoding. Ngữ cảnh gốc là 262K; mở rộng tới khoảng 1,01M bằng YaRN. YaRN thay đổi cấu hình co giãn vị trí khi serving, không phải kiến trúc backbone mới.
 
-## 8. Thinking Preservation — điểm mới nổi bật
+## 8. Duy trì thinking — điểm mới nổi bật
 
 ```mermaid
 sequenceDiagram
-  participant U as User
+  participant U as Người dùng
   participant M as Qwen3.6
-  U->>M: Turn 1: task
-  M-->>U: Thinking 1 + answer 1
+  U->>M: Lượt 1: tác vụ
+  M-->>U: Thinking 1 + câu trả lời 1
   Note over M: preserve_thinking = True
-  U->>M: Turn 2 / tool result
-  M-->>U: Reuse historical thinking + continue reasoning
+  U->>M: Lượt 2 / kết quả công cụ
+  M-->>U: Tái sử dụng thinking trước đó + tiếp tục suy luận
 ```
 
-Mặc định chỉ thinking của message gần nhất được giữ. `preserve_thinking` cho phép giữ và sử dụng thinking traces lịch sử, phù hợp coding nhiều vòng, repository reasoning và tool loop. Qwen3.5 không công bố option này như một tính năng chính thức tương đương.
+Mặc định chỉ thinking của message gần nhất được giữ. `preserve_thinking` cho phép giữ và sử dụng dấu vết thinking trong lịch sử, phù hợp với lập trình nhiều vòng, suy luận trên repository và vòng lặp công cụ. Qwen3.5 không công bố tùy chọn tương đương như một tính năng chính thức.
 
 ## 9. Qwen3.5 so với Qwen3.6
 
 | Thành phần       | Qwen3.5-35B-A3B                         | Qwen3.6-35B-A3B              | Thay đổi                |
 | ------------------ | --------------------------------------- | ---------------------------- | ------------------------- |
-| Backbone           | Hybrid DeltaNet + Gated Attention + MoE | Gần như giữ nguyên       | Không đổi đáng kể   |
-| Parameters         | 35B / 3B active                         | 35B / 3B active              | Không đổi              |
-| Context            | 262K native, ~1.01M extended            | 262K native, ~1.01M extended | Không đổi chính       |
-| MTP                | Multi-step                              | Multi-step                   | Không đổi chính       |
-| Agent coding       | Có                                     | Tập trung mạnh hơn        | Cải thiện post-training |
-| Thinking history   | Chưa có option tương đương       | `preserve_thinking`        | Điểm mới chính        |
-| Architecture class | `qwen3_5_moe`                         | `qwen3_5_moe`              | Xác nhận backbone chung |
+| Backbone           | DeltaNet lai + Gated Attention + MoE | Gần như giữ nguyên       | Không đổi đáng kể   |
+| Tham số         | 35B / 3B kích hoạt                         | 35B / 3B kích hoạt              | Không đổi              |
+| Ngữ cảnh            | 262K gốc, ~1,01M mở rộng            | 262K gốc, ~1,01M mở rộng | Không đổi chính       |
+| MTP                | Nhiều bước                              | Nhiều bước                   | Không đổi chính       |
+| Lập trình bằng agent       | Có                                     | Tập trung mạnh hơn        | Cải thiện hậu huấn luyện |
+| Lịch sử thinking   | Chưa có tùy chọn tương đương       | `preserve_thinking`        | Điểm mới chính        |
+| Lớp kiến trúc | `qwen3_5_moe`                         | `qwen3_5_moe`              | Xác nhận backbone chung |

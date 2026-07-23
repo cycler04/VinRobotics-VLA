@@ -1,13 +1,12 @@
 # Query-Key Normalization (QK-Norm)
 
-**Improves:** attention that relies only on the conventional
-`1 / sqrt(d_head)` scale to keep logits controlled.  
-**Primary goal:** prevent Q/K magnitudes from driving attention logits to extreme
-values and saturating softmax during large-scale training.
+**Cải thiện:** attention chỉ dựa vào hệ số chuẩn `1 / sqrt(d_head)` để kiểm soát logit.
+**Mục tiêu chính:** ngăn cường độ Q/K đẩy mức độ chú ý lên mức cực độ
+giá trị và độ bão hòa softmax trong quá trình đào tạo quy mô lớn.
 
-## The problem: learned magnitude can overwhelm similarity
+## Vấn đề: độ lớn đã học có thể lấn át sự giống nhau
 
-Standard scaled dot-product attention computes:
+Sự chú ý của sản phẩm chấm có tỷ lệ tiêu chuẩn sẽ tính toán:
 
 $$
 \begin{aligned}
@@ -16,13 +15,13 @@ a_i &= \operatorname{softmax}\!\left(\ell_{i,:}\right)
 \end{aligned}
 $$
 
-The square-root factor compensates for expected variance at initialization, but
-it does not stop learned Q and K norms from growing. A very large logit gap makes
-softmax nearly one-hot; gradients through saturated probabilities become poorly
-conditioned, and extreme logits can precede training divergence.
+Hệ số căn bậc hai bù cho phương sai dự kiến ​​khi khởi tạo, nhưng
+nó không ngăn cản sự phát triển của các chỉ tiêu Q và K đã học. Khoảng cách logit rất lớn khiến
+softmax gần một nóng; độ dốc thông qua xác suất bão hòa trở nên kém
+nhật ký có điều kiện và cực đoan có thể xảy ra trước sự phân kỳ huấn luyện.
 
-QK-Norm inserts normalization after the Q/K projections and before the dot
-product:
+QK-Norm chèn chuẩn hóa sau các phép chiếu Q/K và trước dấu chấm
+sản phẩm:
 
 $$
 \begin{aligned}
@@ -32,16 +31,16 @@ k_j &= \operatorname{Norm}\!\left(W_kx_j\right), \\
 \end{aligned}
 $$
 
-The exact `Norm` is implementation-specific. The original QKNorm paper uses
-L2-normalized Q/K and a learned scale instead of `sqrt(d_head)`; it motivates the
-method as preventing arbitrary softmax saturation.
-([Henry et al., 2020](https://arxiv.org/abs/2010.04245))
-The work cited by Qwen3 applies LayerNorm to projected queries and keys to
-stabilize a 22B Vision Transformer.
-([Dehghani et al., 2023, §2](https://proceedings.mlr.press/v202/dehghani23a.html))
-Therefore, “QK-Norm” names a placement and purpose, not one universal equation.
+`Norm` chính xác được triển khai cụ thể. Giấy QKNorm ban đầu sử dụng
+L2-normalized Q/K và thang đo đã học thay vì `sqrt(d_head)`; nó thúc đẩy
+phương pháp ngăn chặn độ bão hòa softmax tùy ý.
+([Henry và cộng sự, 2020](https://arxiv.org/abs/2010.04245))
+Công việc được trích dẫn bởi Qwen3 áp dụng LayerNorm cho các truy vấn và khóa được chiếu cho
+ổn định Máy biến áp Vision 22B.
+([Dehghani và cộng sự, 2023, §2](https://proceedings.mlr.press/v202/dehghani23a.html))
+Do đó, “QK-Norm” đặt tên cho vị trí và mục đích chứ không phải một phương trình phổ quát.
 
-## Where it sits in the block
+## Nó nằm ở đâu trong khối
 
 ```mermaid
 flowchart LR
@@ -59,14 +58,14 @@ flowchart LR
     SM --> OUT
 ```
 
-RMSNorm on `x` cannot guarantee bounded projected Q and K because `Wq` and `Wk`
-can amplify particular directions. QK-Norm acts after those projections. RoPE is
-an orthogonal rotation, so when normalization precedes RoPE, it does not change
-the Q/K norms.
+RMSNorm trên `x` không thể đảm bảo Q và K được giới hạn vì `Wq` và `Wk`
+có thể khuếch đại các hướng cụ thể. QK-Norm hoạt động theo những dự đoán đó. RoPE là
+một phép quay trực giao, do đó khi chuẩn hóa trước RoPE, nó không thay đổi
+định mức Q/K.
 
-## Simple magnitude example
+## Ví dụ về độ lớn đơn giản
 
-Two query/key pairs may have the same angle but very different norms:
+Hai cặp truy vấn/khóa có thể có cùng góc độ nhưng các chỉ tiêu rất khác nhau:
 
 $$
 \begin{aligned}
@@ -79,38 +78,38 @@ k_2=\begin{bmatrix}100\\0\end{bmatrix}
 \end{aligned}
 $$
 
-Without QK-Norm, magnitude alone can produce a massive softmax logit. L2
-normalization maps both pairs to dot product 1; LayerNorm/RMSNorm variants also
-control scale, though their exact geometry differs. A learned scale can then
-recover an appropriate attention temperature without allowing arbitrary vector
-norm growth.
+Nếu không có QK-Norm, chỉ riêng cường độ cũng có thể tạo ra logit softmax lớn. L2
+chuẩn hóa ánh xạ cả hai cặp tới sản phẩm chấm 1; Các biến thể LayerNorm/RMSNorm cũng
+quy mô kiểm soát, mặc dù hình dạng chính xác của chúng khác nhau. Sau đó, một thang đo đã học có thể
+khôi phục nhiệt độ chú ý thích hợp mà không cho phép vectơ tùy ý
+tăng trưởng bình thường.
 
-## Benefits and limits
+## Lợi ích và giới hạn
 
-- It directly controls one known source of attention-logit explosion.
-- It can permit more aggressive large-scale training settings, but it is not a
-  complete cure for optimizer instability or massive residual activations.
-- Extra normalization adds parameters/operations and must be fused well for
-  efficient inference.
-- It can remove information encoded purely in Q/K magnitude; learned affine
-  scales partially restore flexibility.
-- QK-Norm is separate from output gating, logit capping, attention sinks, and
-  residual-stream normalization. Those mechanisms target different pathologies.
+- Nó trực tiếp kiểm soát một nguồn bùng nổ logit chú ý đã biết.
+- Nó có thể cho phép các cơ sở đào tạo quy mô lớn tích cực hơn, nhưng nó không phải là một
+  chữa trị hoàn toàn cho sự mất ổn định của trình tối ưu hóa hoặc kích hoạt dư lớn.
+- Việc chuẩn hóa bổ sung thêm các tham số/thao tác và phải được hợp nhất tốt cho
+  suy luận hiệu quả.
+- Nó có thể loại bỏ thông tin được mã hóa hoàn toàn ở độ lớn Q/K; đã học được
+  quy mô khôi phục một phần tính linh hoạt.
+- QK-Norm tách biệt với cổng đầu ra, giới hạn logit, mức chú ý và
+  chuẩn hóa dòng dư. Những cơ chế đó nhắm vào các bệnh lý khác nhau.
 
-## How Qwen uses it
+## Qwen sử dụng nó như thế nào
 
-**Verified:** Qwen3 removes the QKV bias used in Qwen2 and introduces QK-Norm
-“to ensure stable training.” The report does not claim QK-Norm is responsible
-for a standalone benchmark improvement, so that causal attribution should not
-be made. ([Qwen3 Technical Report, §2](https://arxiv.org/abs/2505.09388))
+**Đã xác minh:** Qwen3 loại bỏ thành kiến ​​QKV được sử dụng trong Qwen2 và giới thiệu QK-Norm
+“để đảm bảo đào tạo ổn định.” Báo cáo không khẳng định QK-Norm phải chịu trách nhiệm
+để cải thiện điểm chuẩn độc lập, do đó việc phân bổ nhân quả không nên
+được thực hiện. ([Báo cáo kỹ thuật Qwen3, §2](https://arxiv.org/abs/2505.09388))
 
-The integrated Qwen3 implementation uses a separate per-head RMSNorm on the
-projected Q and K tensors before applying RoPE; this is more specific than the
-generic name used in the report.
-([Transformers Qwen3 implementation](https://github.com/huggingface/transformers/blob/main/src/transformers/models/qwen3/modeling_qwen3.py))
+Việc triển khai Qwen3 tích hợp sử dụng RMSNorm theo đầu riêng biệt trên
+dự kiến ​​các tensor Q và K trước khi áp dụng RoPE; điều này cụ thể hơn
+tên chung được sử dụng trong báo cáo.
+([Triển khai Transformers Qwen3](https://github.com/huggingface/transformers/blob/main/src/transformers/models/qwen3/modeling_qwen3.py))
 
-**Verified:** Qwen3-Next reports that some normalization weights in the Qwen3
-design grew abnormally large. It moves to zero-centered, weight-decayed RMSNorm
-as part of a broader stability redesign. This is evidence that QK-Norm is useful
-but not a final or cost-free solution.
-([official Qwen3-Next architecture post](https://qwen.ai/blog?id=e34c4305036ce60d55a0791b170337c2b70ae51d))
+**Đã xác minh:** Qwen3-Next báo cáo rằng một số trọng số chuẩn hóa trong Qwen3
+thiết kế phát triển lớn bất thường. Nó di chuyển đến RMSNorm không tâm, giảm trọng lượng
+như một phần của việc thiết kế lại độ ổn định rộng hơn. Đây là bằng chứng cho thấy QK-Norm hữu ích
+nhưng không phải là giải pháp cuối cùng hoặc miễn phí.
+([bài đăng kiến ​​trúc Qwen3-Next chính thức](https://qwen.ai/blog?id=e34c4305036ce60d55a0791b170337c2b70ae51d))

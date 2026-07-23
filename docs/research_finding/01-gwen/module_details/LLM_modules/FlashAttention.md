@@ -1,16 +1,21 @@
 # FlashAttention
 
-**Improves:** the memory access pattern of standard exact attention.
-**Primary goal:** avoid writing the full attention-score and probability matrices
-to high-bandwidth memory (HBM).
+**Cải tiến:** mẫu truy cập bộ nhớ của attention chính xác tiêu chuẩn.
+**Mục tiêu chính:** tránh ghi toàn bộ ma trận điểm attention và ma trận xác suất
+vào bộ nhớ băng thông cao (HBM).
 
-**Simple explanation:** FlashAttention makes standard Transformer attention faster and more memory-efficient by computing it in small blocks that fit in fast on-chip memory. It reduces slow data transfers to and from GPU memory without approximating or changing the attention result.
+**Giải thích đơn giản:** FlashAttention giúp attention tiêu chuẩn của Transformer
+nhanh hơn và tiết kiệm bộ nhớ hơn bằng cách tính toán theo các khối nhỏ vừa với
+bộ nhớ nhanh trên chip. Nó giảm việc truyền dữ liệu chậm đến và đi từ bộ nhớ GPU
+mà không xấp xỉ hoặc thay đổi kết quả attention.
 
-It does **not** reduce attention’s theoretical (O(n^2)) computation. Instead, it performs the same exact attention calculation with a more efficient GPU implementation.
+Nó **không** làm giảm độ phức tạp tính toán lý thuyết \(O(n^2)\) của attention.
+Thay vào đó, nó thực hiện cùng phép tính attention chính xác bằng một triển khai
+GPU hiệu quả hơn.
 
-## It is an algorithm, not a different learned attention layer
+## Đây là một thuật toán, không phải tầng attention được học khác
 
-Standard attention is:
+Attention tiêu chuẩn là:
 
 $$
 \begin{aligned}
@@ -20,27 +25,29 @@ O &= PV
 \end{aligned}
 $$
 
-A naive GPU implementation materializes `S` and `P`, each shaped approximately
-`sequence_length × sequence_length` per head. It writes them to HBM, reads them
-back for softmax/value mixing, and stores large intermediates for backward.
+Một triển khai GPU ngây thơ hiện thực hóa `S` và `P`, mỗi ma trận có kích thước
+xấp xỉ `sequence_length × sequence_length` trên mỗi head. Triển khai ghi chúng
+vào HBM, đọc lại để thực hiện softmax/trộn value và lưu các tensor trung gian
+lớn cho lượt truyền ngược.
 
-FlashAttention computes the same mathematical result, up to ordinary floating-point ordering differences. Its main innovation is IO-aware tiling:
+FlashAttention tính cùng một kết quả toán học, ngoại trừ sai khác thông thường do
+thứ tự phép toán dấu phẩy động. Đổi mới chính của nó là chia khối có xét đến I/O:
 
-1. load blocks of Q, K, and V from HBM into small, fast on-chip SRAM;
-2. compute one score tile;
-3. update an online softmax maximum, normalizer, and output accumulator;
-4. discard the score tile instead of writing an `N × N` matrix to HBM;
-5. repeat over all K/V tiles; recompute selected quantities during backward.
+1. nạp các khối Q, K và V từ HBM vào SRAM nhỏ, nhanh trên chip;
+2. tính một khối điểm;
+3. cập nhật giá trị cực đại, hệ số chuẩn hóa và bộ tích lũy đầu ra của softmax trực tuyến;
+4. loại bỏ khối điểm thay vì ghi ma trận `N × N` vào HBM;
+5. lặp lại trên mọi khối K/V; tính lại một số đại lượng trong lượt truyền ngược.
 
-The paper proves fewer HBM accesses than a standard materialized implementation
-for the analyzed memory regime.
+Bài báo chứng minh số lần truy cập HBM ít hơn triển khai hiện thực hóa tiêu chuẩn
+trong chế độ bộ nhớ được phân tích.
 ([Dao et al., 2022, §§3.1–3.2](https://arxiv.org/abs/2205.14135))
 
-## Why online softmax is exact
+## Vì sao softmax trực tuyến vẫn chính xác
 
-For one query row, suppose a previous tile has running maximum `m_old`,
-normalizer `l_old`, and unnormalized weighted-value accumulator `a_old`. For a
-new score tile `s`:
+Với một hàng query, giả sử khối trước có giá trị cực đại đang chạy `m_old`, hệ số
+chuẩn hóa `l_old` và bộ tích lũy value có trọng số chưa chuẩn hóa `a_old`. Với
+khối điểm mới `s`:
 
 $$
 \begin{aligned}
@@ -56,62 +63,61 @@ o &= \frac{a_{\mathrm{new}}}{\ell_{\mathrm{new}}}
 \end{aligned}
 $$
 
-Rescaling the previous accumulator when `m_new` changes makes the result equal
-to a softmax over all tiles; the whole score row never has to coexist in HBM.
+Việc đổi tỷ lệ bộ tích lũy trước khi `m_new` thay đổi giúp kết quả bằng softmax
+trên tất cả các khối; toàn bộ hàng điểm không bao giờ phải cùng tồn tại trong HBM.
 
-## Dataflow comparison
+## So sánh luồng dữ liệu
 
 ```mermaid
 flowchart TD
-    subgraph Standard_materialized_attention
-      Q1[Q] --> S1[Write full QK^T to HBM]
+    subgraph Standard_materialized_attention[Attention tiêu chuẩn được hiện thực hóa]
+      Q1[Q] --> S1[Ghi toàn bộ QK^T vào HBM]
       K1[K] --> S1
-      S1 --> P1[Read, softmax, write full P]
-      P1 --> O1[Read P and multiply V]
+      S1 --> P1[Đọc, softmax, ghi toàn bộ P]
+      P1 --> O1[Đọc P và nhân với V]
       V1[V] --> O1
     end
     subgraph FlashAttention
-      Q2[Q tiles] --> SRAM[Q/K/V tile in SRAM]
-      K2[K tiles] --> SRAM
-      V2[V tiles] --> SRAM
-      SRAM --> OS[Online softmax + output accumulator]
-      OS --> O2[Write final O]
+      Q2[Các khối Q] --> SRAM[Khối Q/K/V trong SRAM]
+      K2[Các khối K] --> SRAM
+      V2[Các khối V] --> SRAM
+      SRAM --> OS[Softmax trực tuyến + bộ tích lũy đầu ra]
+      OS --> O2[Ghi O cuối cùng]
     end
 ```
 
-## Complexity and practical benefit
+## Độ phức tạp và lợi ích thực tế
 
-- Arithmetic remains quadratic for dense full attention: approximately
-  `O(N^2 d)`. FlashAttention is not a linear-attention method.
-- It avoids quadratic-size stored score/probability intermediates, reducing
-  auxiliary memory toward `O(Nd)`.
-- Lower HBM traffic can make attention much faster because GPUs often have more
-  arithmetic capacity than memory bandwidth for this operation.
-- The advantage grows with sequence length, but exact speed depends on GPU,
-  dtype, head dimension, masks, dropout, batching, and kernel generation.
+- Phép tính vẫn có độ phức tạp bậc hai đối với full attention dày đặc: xấp xỉ
+  `O(N^2 d)`. FlashAttention không phải phương pháp attention tuyến tính.
+- Nó tránh lưu các tensor điểm/xác suất trung gian có kích thước bậc hai, giảm
+  bộ nhớ phụ trợ về gần `O(Nd)`.
+- Lưu lượng HBM thấp hơn có thể giúp attention nhanh hơn nhiều vì GPU thường có
+  năng lực số học lớn hơn băng thông bộ nhớ dành cho phép toán này.
+- Lợi thế tăng theo chiều dài chuỗi, nhưng tốc độ chính xác phụ thuộc vào GPU,
+  dtype, kích thước head, mask, dropout, batching và thế hệ kernel.
 
-FlashAttention does not shrink the persistent autoregressive KV cache. GQA does
-that. The two techniques are complementary: GQA stores fewer K/V heads, while
-FlashAttention executes attention over the available Q/K/V tensors with a better
-IO schedule.
+FlashAttention không thu nhỏ KV cache tự hồi quy tồn tại lâu dài; GQA đảm nhiệm
+việc đó. Hai kỹ thuật bổ trợ cho nhau: GQA lưu ít K/V head hơn, còn FlashAttention
+thực thi attention trên các tensor Q/K/V sẵn có với lịch I/O tốt hơn.
 
-## How Qwen uses it
+## Cách Qwen sử dụng FlashAttention
 
-FlashAttention should not be listed as a weight-level Qwen architecture feature.
-The same Qwen checkpoint can use a framework's eager/SDPA attention or a
-FlashAttention kernel and represent the same learned function.
+Không nên liệt kê FlashAttention là đặc trưng kiến trúc ở cấp trọng số của Qwen.
+Cùng một checkpoint Qwen có thể sử dụng attention eager/SDPA của framework hoặc
+kernel FlashAttention mà vẫn biểu diễn cùng hàm đã học.
 
-**Verified historical use:** the original Qwen technical report says
-FlashAttention was used to improve attention efficiency during pretraining. This
-describes the training implementation, not an extra learned module stored in the
-weights. ([Qwen Technical Report, §2.4](https://arxiv.org/abs/2309.16609))
+**Việc sử dụng trong lịch sử đã được xác minh:** báo cáo kỹ thuật Qwen gốc cho
+biết FlashAttention được dùng để nâng cao hiệu quả attention trong tiền huấn
+luyện. Đây là mô tả về triển khai huấn luyện, không phải mô-đun được học bổ sung
+lưu trong trọng số. ([Báo cáo kỹ thuật Qwen, §2.4](https://arxiv.org/abs/2309.16609))
 
-**Verified runtime support:** the official Qwen3-VL README recommends
-FlashAttention-2 for acceleration and memory saving and enables it with
-`attn_implementation="flash_attention_2"`. It also notes that the documented
-path requires FP16 or BF16 and compatible hardware.
-([Qwen3-VL README](https://github.com/QwenLM/Qwen3-VL/blob/main/README.md#flash-attention-2-to-speed-up-generation))
+**Hỗ trợ runtime đã được xác minh:** README Qwen3-VL chính thức khuyến nghị
+FlashAttention-2 để tăng tốc và tiết kiệm bộ nhớ, đồng thời bật nó bằng
+`attn_implementation="flash_attention_2"`. Tài liệu cũng lưu ý rằng cách dùng
+này yêu cầu FP16 hoặc BF16 và phần cứng tương thích.
+([README Qwen3-VL](https://github.com/QwenLM/Qwen3-VL/blob/main/README.md#flash-attention-2-to-speed-up-generation))
 
-So the precise statement is: **Qwen can be executed with FlashAttention where
-the framework and hardware support it; FlashAttention is not what the checkpoint
-learned.**
+Do đó, phát biểu chính xác là: **Qwen có thể chạy với FlashAttention khi
+framework và phần cứng hỗ trợ; FlashAttention không phải nội dung mà checkpoint
+đã học.**

@@ -1,158 +1,158 @@
-# Flow-Matching Transformer Action Experts
+# Action expert Transformer dùng flow matching
 
-> **Scope.** A pretrained VLM supplies semantic context while a distinct set of
-> Transformer weights specializes in continuous action generation through flow
-> matching. Representative models: π0 and π0.5. Sources checked 2026-07-21.
+> **Phạm vi.** VLM đã huấn luyện trước cung cấp ngữ cảnh ngữ nghĩa, còn một bộ
+> trọng số Transformer riêng chuyên sinh hành động liên tục bằng flow matching.
+> Các mô hình đại diện là π0 và π0,5. Nguồn được kiểm tra ngày 2026-07-21.
 
-## Core idea
+## Ý tưởng cốt lõi
 
-The VLM and action generator share attention context but do different jobs:
+VLM và trình tạo hành động chia sẻ bối cảnh chú ý nhưng thực hiện các công việc khác nhau:
 
 ```text
-images + instruction -> pretrained VLM weights ------+
-robot state -----------------------------------------+--> shared token context
-noisy action chunk -> action-expert weights ---------+
+hình ảnh + hướng dẫn -> trọng lượng VLM được huấn luyện trước ------+
+trạng thái robot -----------------------------------------+--> bối cảnh token được chia sẻ
+đoạn hành động nhiễu -> trọng số của action expert ----------------+
                                                        |
-                                              velocity field v_theta
+                                              trường vận tốc v_theta
                                                        |
-                                            repeated ODE integration
+                                            tích hợp ODE lặp đi lặp lại
                                                        |
                                                        v
-                                              continuous action chunk
+                                              đoạn hành động liên tục
 ```
 
-The expert is not merely a final linear projection. It is a separate
-Transformer parameter set for action slots, analogous to a modality expert in a
-mixture-of-experts architecture. Action tokens attend bidirectionally within
-the chunk and to the multimodal prefix.
+Chuyên gia không chỉ là một phép chiếu tuyến tính cuối. Đây là một bộ tham số
+Transformer riêng cho các vị trí hành động, tương tự chuyên gia theo modality trong
+kiến trúc mixture-of-experts. Token hành động attention hai chiều trong
+đoạn và tiền tố đa phương thức.
 
-More precisely, π0 is one Transformer computation with two token-routed sets of
-weights: image/language tokens use the PaliGemma-initialized expert, while state
-and noisy-action tokens use the smaller action expert. They exchange
-information through shared self-attention. “Separate expert” therefore does not
-mean a detached encoder-decoder connected only by one context vector.
+Chính xác hơn, π0 là một phép tính Transformer với hai bộ định tuyến token
+trọng số: token hình ảnh/ngôn ngữ sử dụng chuyên gia do PaliGemma khởi tạo, trong khi trạng thái
+và token hành động ồn ào sử dụng chuyên gia hành động nhỏ hơn. Họ trao đổi
+thông tin thông qua sự tự chú ý được chia sẻ. Do đó, “chuyên gia riêng biệt” không
+có nghĩa là bộ mã hóa-giải mã tách rời chỉ được kết nối bởi một vectơ ngữ cảnh.
 
-## π0 architecture
+## Kiến trúc π0
 
-π0 starts from PaliGemma, a 3B-parameter pretrained VLM, and adds about 300M
-randomly initialized action-expert parameters. The complete model has about
-3.3B parameters. Images, language, and proprioceptive state form the
-conditioning observation; the target is a horizon of `H=50` future actions.
+π0 bắt đầu từ PaliGemma, VLM được huấn luyện trước tham số 3B và thêm khoảng 300M
+các tham số chuyên gia hành động được khởi tạo ngẫu nhiên. Mô hình hoàn chỉnh có khoảng
+Thông số 3.3B. Hình ảnh, ngôn ngữ và trạng thái proprioception hình thành nên
+quan sát điều hòa; mục tiêu là chân trời của các hành động trong tương lai của `H=50`.
 [π0, §IV](https://arxiv.org/abs/2410.24164)
 
-For a demonstrated chunk `A` and Gaussian noise `epsilon`, π0 samples a flow
-time `tau` and creates an intermediate point:
+Đối với đoạn `A` đã được chứng minh và nhiễu Gaussian `epsilon`, π0 lấy mẫu một luồng
+thời gian `tau` và tạo điểm trung gian:
 
 ```text
 A_tau = tau * A + (1 - tau) * epsilon
-target velocity = A - epsilon
+vận tốc mục tiêu = A - epsilon
 ```
 
-The action expert learns the conditional velocity field from the noisy chunk
-toward the data chunk. At inference, it starts at Gaussian noise and integrates
-from `tau=0` to `tau=1`. The reported implementation uses ten forward-Euler
-steps (`delta=0.1`) and caches prefix attention keys/values so that each step
-recomputes only the action suffix. [π0, §IV](https://arxiv.org/abs/2410.24164)
+Chuyên gia hành động tìm hiểu trường vận tốc có điều kiện từ đoạn nhiễu
+về phía khối dữ liệu. Khi suy luận, nó bắt đầu ở nhiễu Gaussian và tích phân
+từ `tau=0` đến `tau=1`. Việc triển khai được báo cáo sử dụng mười chuyển tiếp Euler
+các bước (`delta=0.1`) và lưu trữ các khóa/giá trị chú ý tiền tố để mỗi bước
+chỉ tính toán lại hậu tố hành động. [π0, §IV](https://arxiv.org/abs/2410.24164)
 
-This differs from a DDPM head: the learned target is a flow velocity along an
-explicit probability path, and deployment integrates an ODE rather than
-following a reverse-noise Markov chain.
+Điều này khác với đầu DDPM: mục tiêu đã học là tốc độ dòng chảy dọc theo một
+đường dẫn xác suất rõ ràng và việc triển khai tích hợp ODE thay vì
+theo chuỗi Markov có nhiễu ngược.
 
-## Why an expert instead of action tokens?
+## Tại sao lại là chuyên gia thay vì token hành động?
 
-The π0 design preserves the VLM's pretrained perception and language path while
-giving continuous robot values their own computation. The paper uses this to
-predict high-frequency chunks for tasks evaluated at up to 50 Hz. Continuous
-joint generation avoids producing hundreds of correlated vocabulary tokens for
-one second of dexterous motion. [π0 paper](https://arxiv.org/abs/2410.24164)
+Thiết kế π0 duy trì đường dẫn ngôn ngữ và nhận thức đã được huấn luyện trước của VLM trong khi
+đưa ra các giá trị robot liên tục theo tính toán của riêng chúng. Bài viết sử dụng điều này để
+dự đoán các khối tần số cao cho các tác vụ được đánh giá ở tần số lên tới 50 Hz. liên tục
+việc tạo chung tránh tạo ra hàng trăm token từ vựng tương quan cho
+một giây chuyển động khéo léo. [giấy π0](https://arxiv.org/abs/2410.24164)
 
-The split also permits an asymmetric allocation:
+Việc phân chia cũng cho phép phân bổ không đối xứng:
 
-- the larger VLM imports Internet-scale semantic knowledge;
-- the smaller expert specializes in proprioception, noisy actions, and motor
-  precision;
-- attention connects the two without forcing motor values through a text
-  vocabulary.
+- VLM lớn hơn nhập kiến ​​thức ngữ nghĩa ở quy mô Internet;
+- chuyên gia nhỏ hơn chuyên về cảm giác bản thể, hành động ồn ào và vận động
+  độ chính xác;
+- sự chú ý kết nối cả hai mà không buộc các giá trị động cơ thông qua một văn bản
+  từ vựng.
 
-## π0.5: discrete pretraining, flow deployment
+## π0,5: đào tạo trước rời rạc, triển khai luồng
 
-π0.5 is intentionally hybrid. Its broad first stage represents robot actions
-with FAST tokens and trains them with next-token prediction alongside web,
-grounding, and high-level semantic tasks. During post-training it adds the
-π0-style action expert and a flow loss for continuous low-level actions.
-[π0.5, §IV and Fig. 3](https://arxiv.org/abs/2504.16054)
+π0,5 là sự lai ghép có chủ ý. Giai đoạn đầu tiên rộng lớn của nó đại diện cho hành động của robot
+với token FAST và đào tạo chúng với dự đoán token tiếp theo cùng với web,
+các nhiệm vụ nền tảng và ngữ nghĩa cấp cao. Trong quá trình đào tạo sau, nó bổ sung thêm
+Chuyên gia hành động kiểu π0 và mất lưu lượng cho các hành động cấp thấp liên tục.
+[π0,5, §IV và Hình 3](https://arxiv.org/abs/2504.16054)
 
-At inference, the same model performs two different decoding operations:
+Khi suy luận, cùng một mô hình thực hiện hai thao tác giải mã khác nhau:
 
 ```text
-overall task + observation
-  -> autoregressive text decoding
-  -> high-level subtask, e.g. "pick up the plate"
-  -> condition flow expert on that subtask
-  -> ten flow-integration steps
-  -> continuous low-level action chunk
+nhiệm vụ tổng thể + quan sát
+  -> giải mã văn bản tự hồi quy
+  -> nhiệm vụ phụ cấp cao, ví dụ: "nhấc đĩa lên"
+  -> chuyên gia về luồng điều kiện về nhiệm vụ con đó
+  -> mười bước tích hợp dòng chảy
+  -> đoạn hành động cấp thấp liên tục
 ```
 
-The high-level text is generated less frequently; the action expert supplies
-the fast control chunks. π0.5 therefore cannot be classified from only its
-pretraining representation: it belongs to the FAST/autoregressive family during
-part of training and the flow-expert family during low-level deployment.
+Văn bản cấp cao được tạo ra ít thường xuyên hơn; chuyên gia hành động cung cấp
+các khối điều khiển nhanh. do đó π0,5 không thể được phân loại chỉ từ
+biểu diễn tiền huấn luyện: nó thuộc họ FAST/tự hồi quy trong quá trình
+một phần của chương trình đào tạo và nhóm chuyên gia về dòng chảy trong quá trình triển khai ở cấp độ thấp.
 
-## Relationship to Qwen-VLA
+## Mối quan hệ với Qwen-VLA
 
-Qwen-VLA should not be treated as another π0-style Transformer expert. In π0,
-VLM tokens and robot tokens select different weight sets inside one shared
-Transformer computation. Qwen-VLA first computes VLM hidden states, projects
-them into a separate 16-block DiT, concatenates them with noisy action tokens,
-and runs joint self-attention **inside that downstream decoder**.
+Không nên coi Qwen-VLA như một chuyên gia về Transformer kiểu π0 khác. Trong π0,
+Mã thông báo VLM và token robot chọn các bộ trọng lượng khác nhau trong một mã chung
+Tính toán Transformer. Qwen-VLA lần đầu tiên tính toán các trạng thái, dự án ẩn của VLM
+chúng thành một DiT 16 khối riêng biệt, nối chúng với các token hành động ồn ào,
+và chạy tính năng tự chú ý chung **bên trong bộ giải mã xuôi dòng**.
 
-The Qwen-VLA paper sometimes calls this module an “action expert,” but its
-architectural boundary is a DiT action decoder rather than π0's token-routed
-expert weights. It is therefore documented under
-[large Diffusion Transformers](05_large_diffusion_transformer.md), not as a
-representative of this family. [Qwen-VLA, §§2.2-2.5](https://arxiv.org/abs/2605.30280)
+Bài báo Qwen-VLA đôi khi gọi mô-đun này là “chuyên gia hành động”, nhưng nó
+ranh giới kiến ​​trúc là bộ giải mã hành động DiT chứ không phải định tuyến token của π0
+trọng lượng chuyên gia. Do đó nó được ghi lại dưới
+[Transformer khuếch tán lớn](05_large_diffusion_transformer.md), không phải là
+đại diện của gia đình này. [Qwen-VLA, §§2.2-2.5](https://arxiv.org/abs/2605.30280)
 
-## Strengths
+## Điểm mạnh
 
-- continuous, coherent chunks without action-token quantization;
-- a generative conditional distribution can represent multiple plausible
-  trajectories;
-- motor-specific capacity does not require replacing the pretrained VLM path;
-- cached prefix features reduce repeated work during integration;
-- the expert can use bidirectional action attention while the language path
-  remains autoregressive.
+- các khối liên tục, mạch lạc mà không cần lượng tử hóa token hành động;
+- một phân phối có điều kiện tổng quát có thể biểu diễn nhiều giá trị hợp lý
+  quỹ đạo;
+- công suất dành riêng cho động cơ không yêu cầu thay thế đường dẫn VLM đã được huấn luyện trước;
+- các tính năng tiền tố được lưu trong bộ nhớ đệm giúp giảm công việc lặp lại trong quá trình tích hợp;
+- chuyên gia có thể sử dụng sự chú ý hành động hai chiều trong khi con đường ngôn ngữ
+  vẫn có tính chất tự hồi quy.
 
-## Costs and unresolved questions
+## Chi phí và những câu hỏi chưa được giải quyết
 
-- ten expert evaluations are slower than a one-pass regressor at equal per-pass
-  cost;
-- flow-step count and numerical solver affect latency and accuracy;
-- more expressive distributions are useful only if demonstrations actually
-  contain meaningful modes rather than annotation noise;
-- π0's results combine architecture, cross-embodiment data, and pre/post-
-  training recipes, so they do not isolate the expert design;
-- π0.5's benefits likewise cannot be attributed to flow matching alone because
-  FAST pretraining and high-level subtask supervision also change the system.
+- mười đánh giá của chuyên gia chậm hơn so với một biến hồi quy một lần ở mức bằng nhau cho mỗi lần vượt qua
+  trị giá;
+- số bước lưu lượng và bộ giải số ảnh hưởng đến độ trễ và độ chính xác;
+- phân phối biểu cảm hơn chỉ hữu ích nếu các cuộc biểu tình thực sự
+  chứa các chế độ có ý nghĩa thay vì nhiễu chú thích;
+- Kết quả của π0 kết hợp kiến ​​trúc, dữ liệu đa hiện thân và dữ liệu trước/sau
+  công thức đào tạo, để họ không cô lập các chuyên gia thiết kế;
+- Tương tự như vậy, lợi ích của π0,5 không thể chỉ quy cho việc kết hợp luồng vì
+  Việc đào tạo trước FAST và giám sát nhiệm vụ phụ cấp cao cũng thay đổi hệ thống.
 
-**Implementation-status caveat.** The π0.5 paper describes autoregressive
-high-level subtask generation followed by the flow expert. The public `openpi`
-README, at the version checked on 2026-07-21, says π0.5 support is limited to its
-flow-matching head; its standard sampling path consumes a supplied prompt and
-directly runs the flow loop. The released runtime should not be described as
-fully reproducing the paper's hierarchical text-decoding stage without a
-specific checkpoint/code path that demonstrates it.
-[Official openpi repository](https://github.com/Physical-Intelligence/openpi)
+**Thông báo trước về trạng thái triển khai.** Bài viết π0,5 mô tả hiện tượng tự hồi quy
+tạo nhiệm vụ phụ cấp cao theo sau là chuyên gia về luồng. `openpi` công cộng
+README, tại phiên bản được kiểm tra vào ngày 21-07-2026, cho biết hỗ trợ π0,5 bị giới hạn ở
+đầu khớp dòng chảy; đường dẫn lấy mẫu tiêu chuẩn của nó sử dụng lời nhắc được cung cấp và
+trực tiếp chạy vòng lặp dòng chảy. Thời gian chạy đã phát hành không nên được mô tả là
+tái tạo đầy đủ giai đoạn giải mã văn bản theo cấp bậc của tờ giấy mà không cần
+đường dẫn điểm kiểm tra/mã cụ thể chứng minh điều đó.
+[Kho lưu trữ openpi chính thức](https://github.com/Physical-Intelligence/openpi)
 
-## Sources
+## Nguồn
 
-- Black et al. *π0: A Vision-Language-Action Flow Model for General Robot
-  Control*, §IV, arXiv:2410.24164v4, 2026.
-  [Paper](https://arxiv.org/abs/2410.24164)
-- Physical Intelligence et al. *π0.5: a Vision-Language-Action Model with
-  Open-World Generalization*, §IV, arXiv:2504.16054, 2025.
-  [Paper](https://arxiv.org/abs/2504.16054)
-- Pertsch et al. *FAST: Efficient Action Tokenization for Vision-Language-Action
-  Models*, arXiv:2501.09747. [Paper](https://arxiv.org/abs/2501.09747)
-- Wang et al. *Qwen-VLA: Unifying Vision-Language-Action Modeling across Tasks,
-  Environments, and Robot Embodiments*, arXiv:2605.30280v2.
-  [Paper](https://arxiv.org/abs/2605.30280)
+- Đen và cộng sự. *π0: Mô hình luồng hành động-ngôn ngữ-thị giác cho Robot thông thường
+  Kiểm soát*, §IV, arXiv:2410.24164v4, 2026.
+  [Giấy](https://arxiv.org/abs/2410.24164)
+- Trí tuệ thể chất và cộng sự. *π0,5: Mô hình Hành động-Ngôn ngữ-Tầm nhìn với
+  Tổng quát hóa thế giới mở*, §IV, arXiv:2504.16054, 2025.
+  [Giấy](https://arxiv.org/abs/2504.16054)
+- Pertsch và cộng sự. *FAST: Mã thông báo hành động hiệu quả cho hành động-ngôn ngữ-chân trời
+  Các mẫu*, arXiv:2501.09747. [Giấy](https://arxiv.org/abs/2501.09747)
+- Vương và cộng sự. *Qwen-VLA: Thống nhất Mô hình Hành động-Ngôn ngữ-Tầm nhìn giữa các Nhiệm vụ,
+  Môi trường và Phương án Robot*, arXiv:2605.30280v2.
+  [Giấy](https://arxiv.org/abs/2605.30280)

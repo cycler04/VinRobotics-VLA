@@ -1,15 +1,17 @@
-# SwiGLU Feed-Forward Networks
+# Mạng feed-forward SwiGLU
 
-**Improves:** the original two-matrix ReLU FFN and its GELU successor.
-**Primary goal:** use a learned, input-dependent multiplicative gate to control
-which expanded features pass through the token-wise FFN.
+**Cải tiến:** ReLU FFN hai ma trận ban đầu và phiên bản kế nhiệm GELU của nó.
+**Mục tiêu chính:** sử dụng cổng nhân đã học, phụ thuộc vào đầu vào để kiểm soát
+các tính năng mở rộng này sẽ chuyển qua FFN thông minh về mã thông báo.
 
-Simple Explanation: Instead of a direct pass, make 2 pass, 1 is caried through SiLU fuction (gate), 1 is keeped (value), the final value is **gate * value,** adopt **what** and **how much** the token is.
+**Giải thích đơn giản:** Tạo hai nhánh: một nhánh đi qua SiLU để làm cổng, nhánh
+còn lại giữ giá trị. Đầu ra là **gate × value**, giúp chọn đặc trưng nào và lượng
+bao nhiêu được truyền tiếp cho mỗi token.
 
-## From ReLU/GELU FFN to a gated FFN
+## Từ ReLU/GELU FFN đến FFN có cổng
 
-The original Transformer applies the same position-wise MLP independently to
-every token:
+Máy biến áp ban đầu áp dụng MLP theo vị trí tương tự một cách độc lập cho
+mọi mã thông báo:
 
 $$
 \operatorname{FFN}_{\mathrm{ReLU}}(x)
@@ -18,11 +20,11 @@ $$
   + b_{\mathrm{down}}
 $$
 
-Many later models replace ReLU with GELU, which is smooth, but the topology is
-still one expansion projection, one activation, and one contraction projection.
+Nhiều mẫu sau này thay thế ReLU bằng GELU, chạy mượt nhưng cấu trúc liên kết
+vẫn là một phép chiếu mở rộng, một phép chiếu kích hoạt và một phép chiếu thu gọn.
 
-SwiGLU creates two separate expanded representations. One becomes a gate through
-SiLU/Swish; the other carries candidate content:
+SwiGLU tạo ra hai biểu diễn mở rộng riêng biệt. Một người trở thành một cánh cổng xuyên qua
+SiLU/Swish; cái còn lại mang nội dung ứng cử viên:
 
 $$
 \begin{aligned}
@@ -34,19 +36,19 @@ h &= g \odot u, \\
 \end{aligned}
 $$
 
-Biases are omitted above because many LLM implementations omit them. They are not
-essential to the SwiGLU definition. The key change is the element-wise product
-between two learned projections. The GLU-variants paper found SwiGLU and related
-gated variants better than the ReLU/GELU baselines in its Transformer
-experiments. ([Shazeer, 2020](https://arxiv.org/abs/2002.05202))
+Các thành kiến ​​bị bỏ qua ở trên vì nhiều triển khai LLM bỏ qua chúng. Họ không phải
+cần thiết cho định nghĩa SwiGLU. Sự thay đổi quan trọng là sản phẩm theo yếu tố
+giữa hai phép chiếu đã học. Bài báo GLU-variants đã tìm thấy SwiGLU và các vấn đề liên quan
+các biến thể có kiểm soát tốt hơn các đường cơ sở ReLU/GELU trong Transformer của nó
+thí nghiệm. ([Shazeer, 2020](https://arxiv.org/abs/2002.05202))
 
-![1784536547554](image/SwiGLU/1784536547554.png)
+![1784536547554](hình ảnh/SwiGLU/1784536547554.png)
 
-## Architectural interpretation
+## Giải thích kiến ​​trúc
 
-The ordinary FFN answers: “which nonlinear expanded features are positive or
-large?” SwiGLU can additionally answer: “given this token state, how strongly
-should a separately learned feature channel pass?”
+Câu trả lời FFN thông thường: “các tính năng mở rộng phi tuyến tính nào là dương hoặc
+lớn?" SwiGLU có thể trả lời thêm: “với trạng thái mã thông báo này, mức độ mạnh mẽ như thế nào
+kênh tính năng được học riêng có nên vượt qua không?
 
 ```mermaid
 flowchart LR
@@ -59,7 +61,7 @@ flowchart LR
     WD --> Y[FFN output]
 ```
 
-Suppose one expanded channel produces `content = 2.0`:
+Giả sử một kênh mở rộng tạo ra `content = 2.0`:
 
 $$
 \begin{aligned}
@@ -70,52 +72,52 @@ a= 3&:\quad \operatorname{SiLU}(3)\approx 2.858
 \end{aligned}
 $$
 
-The same candidate content is suppressed or amplified based on another learned
-view of the input. A gate is continuous rather than a hard on/off decision; it
-can also be negative.
+Nội dung ứng cử viên tương tự bị loại bỏ hoặc khuếch đại dựa trên một nội dung đã học khác
+cái nhìn của đầu vào. Một cổng là liên tục chứ không phải là một quyết định bật/tắt khó khăn; Nó
+cũng có thể tiêu cực.
 
-## Parameter and compute accounting
+## Kế toán tham số và tính toán
 
-An ordinary FFN with expansion width `d_ff` has roughly:
+Một FFN thông thường có chiều rộng mở rộng `d_ff` có khoảng:
 
 $$
 P_{\mathrm{FFN}} \approx 2d_{\mathrm{model}}d_{\mathrm{ff}}
 $$
 
-SwiGLU has three matrices:
+SwiGLU có ba ma trận:
 
 $$
 P_{\mathrm{SwiGLU}}
 \approx 3d_{\mathrm{model}}d_{\mathrm{ff,SwiGLU}}
 $$
 
-Therefore, model builders often reduce the SwiGLU intermediate width to around
-two thirds of the baseline FFN width when matching parameter or FLOP budgets.
-For example, compared with a conventional `4 × d_model` FFN, an approximately
-budget-matched SwiGLU width is near `8/3 × d_model`, usually rounded for hardware
-alignment. This is a budget derivation, not a fixed rule in the SwiGLU paper.
+Do đó, người xây dựng mô hình thường giảm chiều rộng trung gian SwiGLU xuống khoảng
+hai phần ba chiều rộng FFN cơ sở khi khớp với tham số hoặc ngân sách FLOP.
+Ví dụ: so với `4 × d_model` FFN thông thường, khoảng
+chiều rộng SwiGLU phù hợp với ngân sách là gần `8/3 × d_model`, thường được làm tròn cho phần cứng
+căn chỉnh. Đây là nguồn gốc ngân sách, không phải là quy tắc cố định trong bài báo SwiGLU.
 
-Trade-offs:
+Sự đánh đổi:
 
-- the gate improves expressivity empirically, but requires an extra input
-  projection;
-- performance depends on chosen intermediate width, initialization, data, and the rest of the architecture;
-- SwiGLU changes the per-expert computation but does not make an FFN sparse;
-  MoE is the separate routing mechanism that chooses which FFNs execute;
-- fused kernels can reduce memory traffic, but “SwiGLU” alone does not promise
-  lower wall-clock time than a smaller GELU FFN.
+- cổng cải thiện khả năng biểu đạt theo kinh nghiệm, nhưng yêu cầu đầu vào bổ sung
+  phép chiếu;
+- hiệu suất phụ thuộc vào độ rộng trung gian đã chọn, quá trình khởi tạo, dữ liệu và phần còn lại của kiến ​​trúc;
+- SwiGLU thay đổi cách tính toán theo mỗi chuyên gia nhưng không làm cho FFN trở nên thưa thớt;
+  MoE là cơ chế định tuyến riêng biệt để chọn FFNs nào thực thi;
+- hạt nhân hợp nhất có thể giảm lưu lượng bộ nhớ, nhưng chỉ riêng “SwiGLU” thì không hứa hẹn
+  thời gian trên đồng hồ treo tường thấp hơn GELU FFN nhỏ hơn.
 
-## How Qwen uses it
+## Qwen sử dụng nó như thế nào
 
-**Verified:** Qwen2 explicitly follows Qwen in using SwiGLU as its FFN
-activation. Its dense models use a SwiGLU FFN, while its MoE model uses a bank of
-smaller routed FFNs.
-([Qwen2 Technical Report, §2.2](https://arxiv.org/abs/2407.10671))
+**Đã xác minh:** Qwen2 rõ ràng tuân theo Qwen trong việc sử dụng SwiGLU làm FFN
+kích hoạt. Các mô hình dày đặc của nó sử dụng SwiGLU FFN, trong khi mô hình MoE của nó sử dụng một dãy
+định tuyến nhỏ hơn FFNs.
+([Báo cáo kỹ thuật Qwen2, §2.2](https://arxiv.org/abs/2407.10671))
 
-**Verified:** Qwen3 retains SwiGLU in both dense and MoE variants.
-([Qwen3 Technical Report, §2](https://arxiv.org/abs/2505.09388))
+**Đã xác minh:** Qwen3 giữ lại SwiGLU ở cả biến thể dày đặc và MoE.
+([Báo cáo kỹ thuật Qwen3, §2](https://arxiv.org/abs/2505.09388))
 
-In an MoE layer, the dataflow becomes:
+Trong lớp MoE, luồng dữ liệu trở thành:
 
 $$
 x
@@ -126,5 +128,5 @@ x
 \;\xrightarrow{\text{residual add}}\; y
 $$
 
-Thus “SwiGLU versus MoE” is the wrong comparison: SwiGLU specifies an expert's
-internal FFN shape; MoE specifies how tokens are routed among multiple experts.
+Do đó, “SwiGLU so với MoE” là sự so sánh sai: SwiGLU chỉ rõ quan điểm của một chuyên gia
+hình dạng FFN bên trong; MoE chỉ định cách chuyển mã thông báo giữa nhiều chuyên gia.

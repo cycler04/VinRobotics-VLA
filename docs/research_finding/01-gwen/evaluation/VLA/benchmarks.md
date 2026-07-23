@@ -1,244 +1,246 @@
-# Qwen-VLA Evaluation and Benchmark Evidence
+# Bằng chứng đánh giá và điểm chuẩn Qwen-VLA
 
-> **Question:** What do the published Qwen-VLA evaluations actually establish,
-> and what remains unverified?
+> **Câu hỏi:** Các đánh giá Qwen-VLA được công bố thực sự thiết lập điều gì,
+> và những gì vẫn chưa được xác minh?
 >
-> **Scope:** Qwen-VLA arXiv:2605.30280v2 and its official repository, checked on
-> 2026-07-22. Architecture and training are covered in
+> **Phạm vi:** Qwen-VLA arXiv:2605.30280v2 và kho lưu trữ chính thức của nó, đã được kiểm tra trên
+> 22-07-2026. Kiến trúc và đào tạo được đề cập trong
 > [qwen_vla_details.md](../../qwen_models/Qwen-VLA/qwen_vla_details.md).
 
-## Short answer
+## Câu trả lời ngắn
 
-Qwen-VLA is evaluated as one generalist checkpoint across manipulation,
-navigation, real-world transfer, and out-of-distribution settings. Its strongest
-published evidence is broad coverage with one policy, not proof that every score
-is directly comparable to every specialist baseline.
+Qwen-VLA được đánh giá như một checkpoint tổng quát trên thao tác, điều hướng,
+chuyển giao trong thế giới thực và các thiết lập ngoài phân phối. Bằng chứng công bố
+mạnh nhất là độ bao phủ rộng của một chính sách, không phải bằng chứng rằng mọi điểm
+số đều có thể so sánh trực tiếp với mọi baseline chuyên biệt.
 
-The paper reports:
+Bài báo đưa tin:
 
-- high in-distribution simulation success across single- and dual-arm platforms;
-- real-world ALOHA transfer with a large benefit from pretrained initialization;
-- competitive continuous-environment navigation;
-- non-zero transfer to unseen static and dynamic manipulation tasks;
-- ablations connecting VL co-training, SFT, and RL to measured policy success.
+- thành công mô phỏng trong phân phối cao trên nền tảng một cánh tay và hai cánh tay;
+- truyền ALOHA trong thế giới thực với lợi ích lớn từ việc khởi tạo được huấn luyện trước;
+- điều hướng môi trường liên tục mang tính cạnh tranh;
+- chuyển giao zero-shot sang các tác vụ thao tác tĩnh và động không nhìn thấy được;
+- sự cắt bỏ kết nối đồng đào tạo VL, SFT và RL để đo lường sự thành công của chính sách.
 
-All values below are **author-reported**. No Qwen-VLA checkpoint or evaluation
-code was available in the official repository at the time checked, so the results
-have not been reproduced in this workspace. [Official repository][qwen-vla-repo]
+Tất cả các giá trị bên dưới đều **do tác giả báo cáo**. Không có checkpoint hoặc đánh giá Qwen-VLA
+mã đã có sẵn trong kho chính thức vào thời điểm được kiểm tra, vì vậy kết quả
+chưa được sao chép trong không gian làm việc này. [Kho lưu trữ chính thức] [qwen-vla-repo]
 
-**Note: OOD** stands for  **Out-of-Distribution,** refers to  **testing a model on data that is meaningfully different from the data distribution it was trained on** . OOD evaluation measures a model's ability to generalize beyond its training experience.
+**Lưu ý:** OOD là viết tắt của **out-of-distribution (ngoài phân phối)**, tức thử
+mô hình trên dữ liệu khác đáng kể so với phân phối huấn luyện. Đánh giá OOD đo khả
+năng khái quát hóa ngoài trải nghiệm huấn luyện.
 
-## Benchmark protocol boundaries
+## Ranh giới giao thức điểm chuẩn
 
-Formulas, direction and interpretation are isolated in
-[metrics.md](metrics.md). A VLA benchmark additionally fixes the environment,
-task IDs, split, robot, cameras, controller, reset/timeout rules, success
-predicate, seeds and rollout count.
+Công thức, phương hướng và giải thích được tách biệt trong
+[metrics.md](metrics.md). Điểm chuẩn VLA còn khắc phục môi trường,
+nhiệm vụ IDs, phân chia, robot, camera, bộ điều khiển, quy tắc đặt lại/hết thời gian, thành công
+vị ngữ, hạt giống và số lượng triển khai.
 
-| Suite                                  | Protocol boundary needed to interpret the result                                                                                  |
+| Suite | Ranh giới giao thức cần thiết để diễn giải kết quả |
 | -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| LIBERO / Simpler / RoboCasa / RoboTwin | Exact task variants, simulator revision, initial-state distribution, rollout denominator and success predicate                    |
-| ALOHA                                  | Real robot setup, camera/calibration, operator reset/intervention policy, trial count and OOD-axis construction                   |
-| R2R / RxR VLN-CE                       | `Val-Unseen` release, language subset, sensor panorama, waypoint policy, geodesic distance and success threshold                |
-| DOMINO                                 | `DOMINO@alpha`, task level, embodiment, clean/randomized condition, current-frame/history input and zero-shot/fine-tuned status |
-| EVT-Bench                              | Single-target task, single-view setting and exact per-step tracking predicate                                                     |
-| NAVSIM                                 | v1 PDMS rather than v2 EPDMS,`navtest`, sensor/history inputs and pseudo-simulator revision                                     |
-| EBench                                 | Revision, task-family selection, instance split, per-task partial-credit rubric, seeds and cross-task aggregation                 |
-| RobotWorld suites                      | Generation setup, evaluated subset, judge model/prompt and component aggregation                                                  |
+| LIBERO / Đơn giản hơn / RoboCasa / RoboTwin | Các biến thể nhiệm vụ chính xác, sửa đổi trình mô phỏng, phân phối trạng thái ban đầu, mẫu số triển khai và vị từ thành công |
+| ALOHA | Thiết lập robot thực, camera/hiệu chuẩn, chính sách can thiệp/đặt lại người vận hành, số lần thử và cấu trúc OOD-axis |
+| R2R / RxR VLN-CE | Bản phát hành `Val-Unseen`, tập hợp con ngôn ngữ, toàn cảnh cảm biến, chính sách điểm tham chiếu, khoảng cách trắc địa và ngưỡng thành công |
+| DOMINO | `DOMINO@alpha`, cấp độ nhiệm vụ, phương án, điều kiện sạch/ngẫu nhiên, đầu vào khung hình hiện tại/lịch sử và trạng thái không bắn/tinh chỉnh |
+| EVT-Bench | Nhiệm vụ một mục tiêu, cài đặt một chế độ xem và vị từ theo dõi chính xác theo từng bước |
+| NAVSIM | v1 PDMS thay vì v2 EPDMS,`navtest`, đầu vào cảm biến/lịch sử và sửa đổi trình mô phỏng giả |
+| EBench | Sửa đổi, lựa chọn nhóm nhiệm vụ, phân chia phiên bản, phiếu đánh giá tín chỉ một phần cho mỗi nhiệm vụ, hạt giống và tổng hợp nhiệm vụ chéo |
+| Bộ RobotWorld | Thiết lập thế hệ, tập hợp con được đánh giá, mô hình/lời nhắc đánh giá và tổng hợp thành phần |
 
-Qwen-RobotNav's NAVSIM result supplies ground-truth trajectories from the three
-previous frames as history. Its table calls the measures “closed-loop,” but
-NAVSIM v1 PDMS uses a four-second non-reactive pseudo-simulation, so it must not
-be read as a reactive closed-loop success probability. [NAVSIM metrics][navsim]
-[Qwen-RobotNav, Section 5][robotnav]
+Kết quả NAVSIM của Qwen-RobotNav cung cấp quỹ đạo chân thực từ ba
+các khung hình trước đó làm lịch sử. Bảng của nó gọi các biện pháp này là “vòng kín”, nhưng
+NAVSIM v1 PDMS sử dụng mô phỏng giả không phản ứng trong bốn giây, vì vậy nó không được
+được đọc dưới dạng xác suất thành công của vòng kín phản ứng. [Số liệu NAVSIM][navsim]
+[Qwen-RobotNav, Phần 5][robotnav]
 
-Qwen-RobotManip names EBench Table Top, Simple PnP and Long Horizon as “splits,”
-while current EBench materials distinguish task families from data splits such
-as Validation-Train, Validation-Unseen and Test. Pinning the EBench revision is
-therefore part of reproduction, not a cosmetic label. [EBench][ebench]
+Qwen-RobotManip đặt tên cho Bảng EBench, PnP đơn giản và Long Horizon là “tách rời”,
+trong khi các tài liệu EBench hiện tại phân biệt các họ nhiệm vụ với các phân tách dữ liệu như
+như Xác thực-Đào tạo, Xác thực-Chưa nhìn thấy và Kiểm tra. Ghim bản sửa đổi EBench là
+do đó là một phần của việc tái sản xuất, không phải là nhãn hiệu mỹ phẩm. [EBench][băng ghế dài]
 
-## Main simulation results
+## Kết quả mô phỏng chính
 
-The paper uses action chunk length `H = 16` and reports average task success rate
-under the StarVLA protocol. Qwen-VLA is trained jointly across embodiments;
-specialist baselines are fine-tuned separately for each benchmark.
+Bài viết sử dụng độ dài đoạn hành động `H = 16` và báo cáo tỷ lệ thành công nhiệm vụ trung bình
+theo giao thức StarVLA. Qwen-VLA được đào tạo chung theo các phương án;
+baseline chuyên môn được tinh chỉnh riêng cho từng điểm chuẩn.
 
-| Model                                   |         LIBERO |   RoboCasa-GR1 | Simpler-WidowX |  RoboTwin Easy |  RoboTwin Hard |
+| Người mẫu |         LIBERO |   RoboCasa-GR1 | Đơn giản hơn-WidowX |  RoboTwin Dễ dàng |  RoboTwin Khó |
 | --------------------------------------- | -------------: | -------------: | -------------: | -------------: | -------------: |
-| Qwen-VLA-Base                           |           90.8 |           40.4 |           64.3 |           64.3 |           66.4 |
-| Qwen-VLA-Instruct                       | **97.9** | **56.7** | **73.7** | **86.1** | **87.2** |
-| Best specialist value listed in Table 4 |           98.6 |           58.3 |           64.6 |           86.0 |           85.0 |
+| Qwen-VLA-Base |           90,8 |           40,4 |           64,3 |           64,3 |           66,4 |
+| Qwen-VLA-Instruct | **97,9** | **56,7** | **73,7** | **86.1** | **87,2** |
+| Giá trị chuyên môn tốt nhất được liệt kê trong Bảng 4 |           98,6 |           58,3 |           64,6 |           86,0 |           85,0 |
 
-**Verified from the paper:** Qwen-VLA-Instruct is competitive with or above the
-listed specialists on most columns while using one generalist policy.
+**Đã được xác minh từ bài báo:** Qwen-VLA-Instruct có khả năng cạnh tranh bằng hoặc cao hơn
+liệt kê các chuyên gia trên hầu hết các cột trong khi sử dụng một chính sách chung.
 
-**Comparison limit:** the specialist and generalist rows have different training
-regimes. The table demonstrates a strong generalist result under the authors'
-protocol; it does not isolate equal data, compute, architecture, or tuning budget.
-[Qwen-VLA, Section 5.1.1 and Table 4][qwen-vla]
+**Giới hạn so sánh:** các hàng chuyên gia và tổng quát được đào tạo khác nhau
+chế độ. Bảng này thể hiện một kết quả tổng quát mạnh mẽ theo quan điểm của tác giả.
+giao thức; nó không tách biệt dữ liệu, điện toán, kiến ​​trúc hoặc ngân sách điều chỉnh như nhau.
+[Qwen-VLA, Mục 5.1.1 và Bảng 4][qwen-vla]
 
-## Real-world ALOHA transfer
+## Chuyển ALOHA trong thế giới thực
 
-Both Qwen-VLA ALOHA variants use the same architecture. One trains from scratch;
-the other fine-tunes from Qwen-VLA-Base.
+Cả hai biến thể Qwen-VLA ALOHA đều sử dụng cùng một kiến ​​trúc. Một chuyến tàu từ đầu;
+các tinh chỉnh khác từ Qwen-VLA-Base.
 
-| Setting                                        | From scratch | From Qwen-VLA-Base | Difference |
+| Cài đặt | Từ đầu | Từ Qwen-VLA-Base | Sự khác biệt |
 | ---------------------------------------------- | -----------: | -----------------: | ---------: |
-| Six in-domain task categories, average success |         48.5 |     **83.6** |   +35.1 pp |
-| Five OOD categories, average success           |         36.2 |     **76.9** |   +40.7 pp |
+| Sáu loại nhiệm vụ trong miền, thành công trung bình |         48,5 |     **83,6** |   +35,1 trang |
+| Năm hạng mục OOD, thành công trung bình |         36,2 |     **76,9** |   +40,7 trang |
 
-The **OOD** categories are color, object instance, position, background, and
-instruction. This is the cleanest evidence in the report that broad pretraining,
-not architecture alone, improves transfer because the two variants share the
-same architecture. It remains one robot platform and a finite set of laboratory
-conditions. [Qwen-VLA, Section 5.1.2 and Tables 5-6][qwen-vla]
+Các danh mục **OOD** là màu sắc, phiên bản đối tượng, vị trí, nền và
+chỉ dẫn. Đây là bằng chứng rõ ràng nhất trong báo cáo rằng việc đào tạo trước trên diện rộng,
+không chỉ kiến ​​trúc, cải thiện khả năng truyền tải vì hai biến thể có chung
+kiến trúc giống nhau. Nó vẫn là một nền tảng robot và một bộ phòng thí nghiệm hữu hạn
+điều kiện. [Qwen-VLA, Mục 5.1.2 và Bảng 5-6][qwen-vla]
 
-## Navigation
+## Điều hướng
 
-Qwen-VLA is evaluated on the `Val-Unseen` splits of R2R and RxR in VLN-CE using
-a sliding-window waypoint action.
+Qwen-VLA được đánh giá trên phần tách `Val-Unseen` của R2R và RxR trong VLN-CE bằng cách sử dụng
+một hành động điểm tham chiếu cửa sổ trượt.
 
-| Model              |         R2R OS |         R2R SR |        R2R SPL |         RxR SR |        RxR SPL |       RxR nDTW |
+| Người mẫu |         R2R OS |         R2R SR |        R2R SPL |         RxR SR |        RxR SPL |       RxR nDTW |
 | ------------------ | -------------: | -------------: | -------------: | -------------: | -------------: | -------------: |
-| Qwen-VLA-Base      |           61.7 |           53.8 |           49.4 |           55.1 |           45.8 |           56.2 |
-| Qwen-VLA-Instruct  | **69.0** | **57.5** |           51.2 | **59.6** | **47.8** |           57.1 |
-| StreamVLN baseline |           64.2 |           56.9 | **51.9** |           52.9 |           46.0 | **61.9** |
+| Qwen-VLA-Base |           61,7 |           53,8 |           49,4 |           55,1 |           45,8 |           56,2 |
+| Qwen-VLA-Instruct | **69,0** | **57,5** |           51,2 | **59,6** | **47,8** |           57,1 |
+| Đường cơ sở StreamVLN |           64,2 |           56,9 | **51,9** |           52,9 |           46.0 | **61,9** |
 
-Qwen-VLA-Instruct leads the listed open baselines in success rate, but not every
-path-quality metric. This matters: a higher SR with lower nDTW means destination
-success and trajectory fidelity should remain separate conclusions.
-[Qwen-VLA, Section 5.1.3 and Table 7][qwen-vla]
+Qwen-VLA-Instruct dẫn đầu các baseline mở được liệt kê về tỷ lệ thành công, nhưng không phải mọi
+thước đo chất lượng đường đi. Vấn đề này: SR cao hơn với nDTW thấp hơn có nghĩa là đích đến
+thành công và độ chính xác của quỹ đạo nên vẫn là những kết luận riêng biệt.
+[Qwen-VLA, Mục 5.1.3 và Bảng 7][qwen-vla]
 
-## Static and dynamic OOD manipulation
+## Thao tác OOD tĩnh và động
 
-| Benchmark      | Training/evaluation distinction                                |     Qwen-VLA-Base |           Qwen-VLA-Instruct | Strong comparison in paper    |
+| Điểm chuẩn | Phân biệt đào tạo/đánh giá |     Qwen-VLA-Base |           Qwen-VLA-Instruct | So sánh mạnh mẽ trên giấy |
 | -------------- | -------------------------------------------------------------- | ----------------: | --------------------------: | ----------------------------- |
-| SimplerEnv-OOD | Fine-tune on Bridge pick-and-place; test six unseen task types |           25.3 SR |           **32.0 SR** | pi0.5: 12.6 SR                |
-| DOMINO         | Zero-shot on all 35 dynamic suites; no dynamic fine-tuning     | 21.1 SR / 37.4 MS | **26.6 SR / 39.5 MS** | LingBot-VA: 24.1 SR / 36.1 MS |
+| SimplerEnv-OOD | Tinh chỉnh chọn và đặt cầu; kiểm tra sáu loại nhiệm vụ chưa nhìn thấy |           25.3 SR |           **32.0 SR** | pi0.5: 12.6 SR |
+| DOMINO | Zero-shot trên tất cả 35 dãy động; không tinh chỉnh động | 21.1 SR / 37.4 MS | **26,6 SR / 39,5 MS** | LingBot-VA: 24.1 SR / 36.1 MS |
 
-SimplerEnv-OOD probes unseen spatial instructions, primitives, and color-object
-bindings. DOMINO probes moving-object manipulation and continuous execution
-quality. These are more informative for robustness than the in-distribution
-average, although absolute success remains low on both suites.
-[Qwen-VLA, Sections 5.1.4-5.1.5 and Tables 8-9][qwen-vla]
+SimplerEnv-OOD thăm dò các hướng dẫn không gian chưa được nhìn thấy, nguyên thủy và đối tượng màu
+ràng buộc. DOMINO thăm dò thao tác đối tượng chuyển động và thực thi liên tục
+chất lượng. Đây là nhiều thông tin hơn cho sự mạnh mẽ hơn so với phân phối trong
+trung bình, mặc dù thành công tuyệt đối vẫn ở mức thấp trên cả hai bộ.
+[Qwen-VLA, Phần 5.1.4-5.1.5 và Bảng 8-9][qwen-vla]
 
-## What the ablations support
+## Sự cắt bỏ hỗ trợ những gì
 
-### Post-training stages
+### Giai đoạn sau đào tạo
 
-RL rollouts are collected only in SimplerEnv with binary success reward.
+Việc triển khai RL chỉ được thu thập trong SimplerEnv với phần thưởng thành công nhị phân.
 
-| Stage |        Simpler |       RoboCasa |           RoboTwin E/H |         LIBERO |    Simpler OOD |          DOMINO SR/MS |
+| Sân khấu |        Đơn giản hơn |       RoboCasa |           RoboTwin E/H |         LIBERO |    Đơn giản hơn OOD |          DOMINO SR/MS |
 | ----- | -------------: | -------------: | ---------------------: | -------------: | -------------: | --------------------: |
-| CPT   |           64.3 |           40.4 |            64.3 / 66.4 |           90.8 |           25.3 |           21.1 / 37.4 |
-| + SFT |           70.8 |           56.0 |            86.3 / 87.1 |           97.8 |           31.6 |           25.7 / 39.1 |
-| + RL  | **73.7** | **56.7** | 86.1 / **87.2** | **97.9** | **32.0** | **26.6 / 39.5** |
+| CPT |           64,3 |           40,4 |            64,3 / 66,4 |           90,8 |           25.3 |           21.1 / 37.4 |
+| + SFT |           70,8 |           56,0 |            86,3 / 87,1 |           97,8 |           31.6 |           25,7 / 39,1 |
+| + RL | **73,7** | **56,7** | 86,1 / **87,2** | **97,9** | **32.0** | **26,6 / 39,5** |
 
-**Verified:** SFT supplies most of the gain. RL adds +2.9 pp on its rollout
-environment and small changes elsewhere, including -0.2 pp on RoboTwin-Easy.
-This supports modest transfer without obvious broad forgetting; it does not
-support a claim that RL uniformly improves every task. [Qwen-VLA, Section 5.2.3][qwen-vla]
+**Đã xác minh:** SFT cung cấp phần lớn mức tăng. RL thêm +2,9 trang khi triển khai
+môi trường và những thay đổi nhỏ ở nơi khác, bao gồm -0,2 pp trên RoboTwin-Easy.
+Điều này hỗ trợ việc chuyển giao khiêm tốn mà không bị lãng quên rộng rãi; nó không
+ủng hộ tuyên bố rằng RL cải thiện đồng đều mọi tác vụ. [Qwen-VLA, Mục 5.2.3][qwen-vla]
 
-### VL co-training and state
+### Đồng đào tạo và trạng thái VL
 
-- Mixing VL data with action data improves RoboCasa-GR1 by 4.9 pp and RoboTwin
-  2.0 by 4.6 pp in the reported ablation, while LIBERO and Simpler are similar.
-- Adding joint state changes RoboTwin success by at most +0.7 pp on Easy and
-  +1.3 pp on Hard, so the default model omits proprioceptive state.
+- Việc trộn dữ liệu VL với dữ liệu hành động sẽ cải thiện RoboCasa-GR1 thêm 4,9 pp và RoboTwin
+  2,0 x 4,6 pp trong quá trình cắt bỏ được báo cáo, trong khi LIBERO và Simpler tương tự nhau.
+- Việc thêm trạng thái chung sẽ thay đổi thành công của RoboTwin tối đa là +0,7 pp trên Dễ và
+  +1,3 pp trên Hard, do đó mô hình mặc định bỏ qua trạng thái cảm nhận bản thể.
 
-These are benchmark-specific findings, not universal statements about all VLAs.
-[Qwen-VLA, Sections 5.2.2 and 5.2.4][qwen-vla]
+Đây là những phát hiện cụ thể về điểm chuẩn, không phải là tuyên bố chung về tất cả VLAs.
+[Qwen-VLA, Phần 5.2.2 và 5.2.4][qwen-vla]
 
-## Related Qwen robotics models
+## Các mô hình robot Qwen liên quan
 
-Qwen-VLA is the unified manipulation/navigation model. Three later Qwen reports
-specialize or change the problem, so their scores should not be merged into the
-Qwen-VLA table.
+Qwen-VLA là mô hình thao tác/điều hướng hợp nhất. Ba báo cáo sau đó của Qwen
+chuyên môn hóa hoặc thay đổi vấn đề, vì vậy điểm số của họ sẽ không được gộp vào
+Bàn Qwen-VLA.
 
-| Model           | Output/problem                                | Strong published evidence                                                           | Important counter-evidence                                                                                                                |
+| Người mẫu | Đầu ra/vấn đề | Bằng chứng được công bố mạnh mẽ | Bằng chứng phản biện quan trọng |
 | --------------- | --------------------------------------------- | ----------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| Qwen-RobotManip | Continuous manipulation policy                | LIBERO-Plus 89.0; RoboTwin-Clean2Rand Hard 62.6; EBench 45.6 SR                     | Several new OOD suites are author-proposed; external reproduction is not reported                                                         |
-| Qwen-RobotNav   | Navigation policy                             | Panoramic RxR Val-Unseen 76.5 SR/65.7 SPL; VLNVerse fine-grained 63.75 SR/57.93 SPL | EVT tracking rate is highest, but success 77.4/78.6 trails specialist values 86.0-86.9; driving results depend strongly on history priors |
-| Qwen-RobotWorld | Language-conditioned future-video world model | Best open-source total in the reported DreamGen and WorldModelBench tables          | It does not output executable robot actions; some QA/IF metrics use Qwen2.5-VL as judge, creating potential evaluator-family bias         |
+| Qwen-RobotManip | Chính sách thao túng liên tục | LIBERO-Plus 89.0; RoboTwin-Clean2Rand Cứng 62,6; EBench 45.6 SR | Một số bộ OOD mới do tác giả đề xuất; sinh sản bên ngoài không được báo cáo |
+| Qwen-RobotNav | Chính sách điều hướng | Toàn cảnh RxR Val-Unseen 76,5 SR/65,7 SPL; VLNVerse hạt mịn 63,75 SR/57,93 SPL | Tỷ lệ theo dõi EVT là cao nhất, nhưng thành công 77,4/78,6 kém các giá trị chuyên môn 86,0-86,9; kết quả lái xe phụ thuộc rất nhiều vào lịch sử trước đó |
+| Qwen-RobotWorld | Mô hình thế giới video tương lai có điều kiện về ngôn ngữ | Tổng số nguồn mở tốt nhất trong các bảng DreamGen và WorldModelBench được báo cáo | Nó không xuất ra các hành động thực thi của robot; một số số liệu QA/IF sử dụng Qwen2.5-VL làm đánh giá, tạo ra sự thiên vị tiềm năng cho người đánh giá-gia đình |
 
-The most useful RobotManip finding is that in-distribution scores are already
-near saturation, while OOD tests separate scratch and pretrained variants. For
-example, its scratch model scores 78.3 on LIBERO-Plus versus 89.0 pretrained, and
-22.6 versus 62.6 on RoboTwin-Clean2Rand Hard. This supports treating controlled
-distribution shift as a primary foundation-model evaluation, not an appendix.
-[Qwen-RobotManip, Tables 3-5][robotmanip]
+Phát hiện hữu ích nhất của RobotManip là điểm số trong quá trình phân phối đã được
+gần bão hòa, trong khi OOD kiểm tra các biến thể xước và biến thể được huấn luyện trước riêng biệt. Vì
+ví dụ: mô hình cào của nó đạt điểm 78,3 trên LIBERO-Plus so với 89,0 được huấn luyện trước và
+22,6 so với 62,6 trên RoboTwin-Clean2Rand Hard. Điều này hỗ trợ điều trị được kiểm soát
+sự thay đổi phân phối dưới dạng đánh giá mô hình nền tảng chính chứ không phải là phụ lục.
+[Qwen-RobotManip, Bảng 3-5][robotmanip]
 
-Qwen-RobotNav provides a useful negative result: tracking rate and task success
-can move in different directions. Its 4B model reports 90.0 tracking rate but
-77.4 success, below ABot-N0's 86.9 success. A single navigation headline score
-would hide this behavior. [Qwen-RobotNav, Table 6][robotnav]
+Qwen-RobotNav cung cấp kết quả phủ định hữu ích: theo dõi tỷ lệ và thành công của nhiệm vụ
+có thể di chuyển theo các hướng khác nhau. Mô hình 4B của nó báo cáo tỷ lệ theo dõi 90,0 nhưng
+77,4 thành công, thấp hơn thành công 86,9 của ABot-N0. Điểm tiêu đề điều hướng duy nhất
+sẽ che giấu hành vi này. [Qwen-RobotNav, Bảng 6][robotnav]
 
-Qwen-RobotWorld belongs in evaluation research because world models may become
-simulators, policy critics, or synthetic-data generators. Its current tables do
-**not** establish that training a policy on generated videos improves executable
-control. [Qwen-RobotWorld, Section 5][robotworld]
+Qwen-RobotWorld thuộc nhóm nghiên cứu đánh giá vì các mô hình thế giới có thể trở thành
+trình mô phỏng, nhà phê bình chính sách hoặc trình tạo dữ liệu tổng hợp. Các bảng hiện tại của nó làm
+**không** thiết lập rằng chính sách đào tạo về video được tạo sẽ cải thiện khả năng thực thi
+điều khiển. [Qwen-RobotWorld, Phần 5][thế giới robot]
 
-## Evaluation gaps
+## Khoảng cách đánh giá
 
-- **Verified:** Most quantitative tasks remain short-horizon and benchmark-driven;
-  the paper names long-duration deployment and failure recovery as open problems.
-- **Verified:** Real-world OOD evidence is from ALOHA and a bounded set of visual
-  and instruction shifts; it is not cross-lab replication.
-- **Verified:** The official repository currently presents the report and results
-  but no downloadable model, inference implementation, or evaluation harness.
-- **Unknown:** confidence intervals, run-to-run variance, and the exact number of
-  evaluation rollouts are not reported consistently beside every aggregate.
-- **Unknown:** end-to-end control latency, missed deadlines, memory use, and
-  hardware-dependent throughput.
-- **Unknown:** collision severity, unsafe near-misses, intervention rate, and
-  recovery after partial failure.
-- **Inferred:** A deployment decision should weight OOD success, latency, and
-  safety failures more heavily than small in-distribution score differences.
+- **Đã xác minh:** Hầu hết các nhiệm vụ định lượng vẫn có thời hạn ngắn và dựa trên điểm chuẩn;
+  bài báo gọi việc triển khai trong thời gian dài và khắc phục lỗi là các vấn đề mở.
+- **Đã xác minh:** Bằng chứng OOD trong thế giới thực là từ ALOHA và một tập hợp hình ảnh được giới hạn
+  và ca dạy; nó không phải là sự sao chép giữa các phòng thí nghiệm.
+- **Đã xác minh:** Kho lưu trữ chính thức hiện đang trình bày báo cáo và kết quả
+  nhưng không có mô hình có thể tải xuống, triển khai suy luận hoặc khai thác đánh giá.
+- **Không xác định:** khoảng tin cậy, phương sai từ lần chạy này đến lần chạy khác và số lượng chính xác
+  triển khai đánh giá không được báo cáo nhất quán bên cạnh mỗi tổng hợp.
+- **Không xác định:** độ trễ kiểm soát từ đầu đến cuối, thời hạn bị bỏ lỡ, mức sử dụng bộ nhớ và
+  thông lượng phụ thuộc vào phần cứng.
+- **Không xác định:** mức độ nghiêm trọng của va chạm, tình huống suýt va chạm không an toàn, tỷ lệ can thiệp và
+  phục hồi sau sự cố một phần.
+- **Suy luận:** Quyết định triển khai sẽ ảnh hưởng đến thành công, độ trễ và
+  thất bại về mặt an toàn nặng nề hơn so với sự khác biệt nhỏ về điểm số trong phân phối.
 
-## Minimal reproduction protocol
+## Giao thức tái tạo tối thiểu
 
-For each checkpoint and task, record:
+Đối với mỗi checkpoint và nhiệm vụ, ghi:
 
-1. environment and code revision, task IDs, seeds, and number of rollouts;
-2. robot embodiment, cameras, image preprocessing, control frequency, and action
-   chunk horizon;
-3. action semantics, units, coordinate frame, normalization, and gripper
-   convention;
-4. success predicate, timeout, intervention and collision definitions;
-5. mean success with confidence interval plus per-task results;
-6. inference latency distribution, deadline misses, peak memory, and hardware;
-7. failure taxonomy: perception, grounding, planning, control, recovery, or
-   environment fault.
+1. sửa đổi môi trường và mã, nhiệm vụ IDs, hạt giống và số lần triển khai;
+2. phương án robot, máy ảnh, tiền xử lý hình ảnh, tần số điều khiển và hành động
+   chân trời chunk;
+3. ngữ nghĩa hành động, đơn vị, khung tọa độ, chuẩn hóa và bộ kẹp
+   quy ước;
+4. định nghĩa vị từ thành công, thời gian chờ, can thiệp và va chạm;
+5. thành công trung bình với khoảng tin cậy cộng với kết quả trên mỗi nhiệm vụ;
+6. phân phối độ trễ suy luận, trễ thời hạn, bộ nhớ cao nhất và phần cứng;
+7. phân loại lỗi: nhận thức, nền tảng, lập kế hoạch, kiểm soát, phục hồi hoặc
+   lỗi môi trường.
 
-Without these fields, a reproduced aggregate is difficult to compare with the
-paper and insufficient for a robot deployment decision.
+Nếu không có các trường này, tổng hợp được sao chép sẽ khó so sánh với
+giấy tờ và không đủ để đưa ra quyết định triển khai robot.
 
-## Sources
+## Nguồn
 
-- Wang et al. *Qwen-VLA: Unifying Vision-Language-Action Modeling across Tasks,
-  Environments, and Robot Embodiments*. arXiv:2605.30280v2, 2026.
-  [Paper][qwen-vla] · [Local PDF][qwen-vla-local]
-- Qwen Team. *Qwen-VLA official repository*. Accessed 2026-07-22.
-  [Repository][qwen-vla-repo]
-- Qwen Team. *Qwen-RobotManip*. arXiv:2606.17846, 2026.
-  [Paper][robotmanip] · [Local PDF][robotmanip-local]
-- Qwen Team. *Qwen-RobotNav*. arXiv:2606.18112, 2026.
-  [Paper][robotnav] · [Local PDF][robotnav-local]
-- Qwen Team. *Qwen-RobotWorld*. arXiv:2606.17030, 2026.
-  [Paper][robotworld] · [Local PDF][robotworld-local]
-- Fang et al. *DOMINO*. [Paper][domino]
-- NAVSIM Team. [Official metric definitions][navsim]
-- Intern Robotics. [EBench documentation][ebench]
+- Vương và cộng sự. *Qwen-VLA: Thống nhất Mô hình Hành động-Ngôn ngữ-Tầm nhìn giữa các Nhiệm vụ,
+  Môi trường và các phương án Robot*. arXiv:2605.30280v2, 2026.
+  [Giấy][qwen-vla] · [PDF cục bộ][qwen-vla-local]
+- Đội Qwen. *Kho lưu trữ chính thức của Qwen-VLA*. Truy cập 2026-07-22.
+  [Kho lưu trữ] [qwen-vla-repo]
+- Đội Qwen. *Qwen-RobotManip*. arXiv:2606.17846, 2026.
+  [Giấy][robotmanip] · [PDF cục bộ][robotmanip-local]
+- Đội Qwen. *Qwen-RobotNav*. arXiv:2606.18112, 2026.
+  [Giấy][robotnav] · [PDF cục bộ][robotnav-local]
+- Đội Qwen. *Qwen-Thế giới robot*. arXiv:2606.17030, 2026.
+  [Giấy][thế giới robot] · [PDF cục bộ][robotworld-local]
+- Fang và cộng sự. *DOMINO*. [Giấy][domino]
+- Đội NAVSIM. [Định nghĩa số liệu chính thức][navsim]
+- Thực tập sinh Robotics. [Tài liệu EBench][ebench]
 
 [qwen-vla]: https://arxiv.org/abs/2605.30280v2
-[qwen-vla-local]: ../../../papers/05-gwen/vla-specific/qwen_vla_2605.30280.pdf
+[qwen-vla-local]: ../../../papers/05-gwen/vla-spec/qwen_vla_2605.30280.pdf
 [qwen-vla-repo]: https://github.com/QwenLM/Qwen-VLA
-[robotmanip]: https://arxiv.org/abs/2606.17846
-[robotmanip-local]: ../../../papers/05-gwen/vla-specific/qwen_robotmanip_2606.17846.pdf
+[điều khiển robot]: https://arxiv.org/abs/2606.17846
+[robotmanip-local]: ../../../papers/05-gwen/vla-spec/qwen_robotmanip_2606.17846.pdf
 [robotnav]: https://arxiv.org/abs/2606.18112
-[robotnav-local]: ../../../papers/05-gwen/vla-specific/qwen_robotnav_2606.18112.pdf
-[robotworld]: https://arxiv.org/abs/2606.17030
-[robotworld-local]: ../../../papers/05-gwen/vla-specific/qwen_robotworld_2606.17030.pdf
+[robotnav-local]: ../../../papers/05-gwen/vla-spec/qwen_robotnav_2606.18112.pdf
+[thế giới robot]: https://arxiv.org/abs/2606.17030
+[robotworld-local]: ../../../papers/05-gwen/vla-spec/qwen_robotworld_2606.17030.pdf
 [domino]: https://arxiv.org/abs/2603.15620
-[navsim]: https://github.com/autonomousvision/navsim/blob/main/docs/metrics.md
-[ebench]: https://internrobotics.github.io/EBench-doc/
+[điều hướng]: https://github.com/autonomousvision/navsim/blob/main/docs/metrics.md
+[bàn ghế]: https://internrobotics.github.io/EBench-doc/

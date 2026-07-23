@@ -1,33 +1,33 @@
-# Modern Action Space Representations in Vision-Language-Action (VLA) Models
+# Các biểu diễn không gian hành động hiện đại trong mô hình Vision-Language-Action (VLA)
 
-## Overview
+## Tổng quan
 
-An **action space** defines **what the policy predicts** as the output of a Vision-Language-Action (VLA) model.
+**Không gian hành động** xác định **chính sách dự đoán điều gì** làm đầu ra của một mô hình Vision-Language-Action (VLA).
 
-It is important to distinguish **task type** from **action space**.
+Điều quan trọng là phải phân biệt **loại tác vụ** với **không gian hành động**.
 
 ```text
-Instruction
+Chỉ dẫn
         ↓
-Task
+Tác vụ
         ↓
-Action Space
+Không gian hành động
         ↓
-Robot Controller
+Bộ điều khiển robot
         ↓
-Robot Motion
+Chuyển động của robot
 ```
 
-Example:
+Ví dụ:
 
 ```text
-Instruction:
-"Pick up the red mug."
+Chỉ dẫn:
+"Nhấc chiếc cốc màu đỏ lên."
 
-Task:
-Manipulation
+Tác vụ:
+Thao tác
 
-Action Space:
+Không gian hành động:
 [
  Δx,
  Δy,
@@ -39,45 +39,45 @@ Action Space:
 ]
 ```
 
-Different VLA models may solve the same task while using completely different action spaces.
+Các mô hình VLA khác nhau có thể giải quyết cùng một tác vụ trong khi sử dụng những không gian hành động hoàn toàn khác nhau.
 
 ---
 
-# Taxonomy of Modern Action Spaces
+# Phân loại các không gian hành động hiện đại
 
 ```text
-Action Spaces
+Không gian hành động
 │
-├── Joint-space
-│     ├── Joint Position
-│     ├── Joint Velocity
-│     └── Joint Torque
+├── Không gian khớp
+│     ├── Vị trí khớp
+│     ├── Vận tốc khớp
+│     └── Mô-men xoắn khớp
 │
-├── Cartesian-space
-│     ├── End-Effector Pose
-│     ├── End-Effector Delta
-│     ├── Bimanual Pose
-│     └── Dexterous Hand
+├── Không gian Descartes
+│     ├── Tư thế của đầu công tác
+│     ├── Gia số của đầu công tác
+│     ├── Tư thế hai tay
+│     └── Bàn tay khéo léo
 │
-├── Mobile-space
-│     ├── Base Velocity
-│     ├── Navigation Waypoint
-│     └── Driving Controls
+├── Không gian di động
+│     ├── Vận tốc đế
+│     ├── Điểm tham chiếu điều hướng
+│     └── Điều khiển lái
 │
-├── Trajectory-space
-│     ├── Action Chunk
-│     ├── Human Trajectory
-│     └── Future Path
+├── Không gian quỹ đạo
+│     ├── Đoạn hành động
+│     ├── Quỹ đạo con người
+│     └── Đường đi tương lai
 │
-└── Latent-space
-      └── Learned Motion Embedding
+└── Không gian tiềm ẩn
+      └── Biểu diễn nhúng chuyển động được học
 ```
 
 ---
 
-# 1. Joint Position Space
+# 1. Không gian vị trí khớp
 
-The policy predicts desired joint positions directly.
+Chính sách dự đoán trực tiếp các vị trí khớp mong muốn.
 
 ```text
 [
@@ -89,7 +89,7 @@ The policy predicts desired joint positions directly.
 ]
 ```
 
-Example
+Ví dụ
 
 ```text
 [
@@ -100,31 +100,31 @@ Example
 ]
 ```
 
-The controller simply moves each motor to the desired angle.
+Bộ điều khiển chỉ cần di chuyển từng động cơ đến góc mong muốn.
 
-### Advantages
+### Ưu điểm
 
-- Simple
-- Accurate
-- Direct hardware control
+- Đơn giản
+- Chính xác
+- Điều khiển phần cứng trực tiếp
 
-### Disadvantages
+### Nhược điểm
 
-- Robot-specific
-- Difficult to transfer across embodiments
+- Đặc thù theo robot
+- Khó chuyển giao giữa các hình thái robot
 
-Typical robots
+Các robot tiêu biểu
 
 - Franka
 - UR5
 - xArm
-- Many teleoperation datasets
+- Nhiều bộ dữ liệu điều khiển từ xa
 
 ---
 
-# 2. Joint Velocity Space
+# 2. Không gian vận tốc khớp
 
-Instead of positions, predict joint velocities.
+Thay vì vị trí, mô hình dự đoán vận tốc khớp.
 
 ```text
 [
@@ -134,7 +134,7 @@ Instead of positions, predict joint velocities.
 ]
 ```
 
-Example
+Ví dụ
 
 ```text
 [
@@ -144,23 +144,23 @@ Example
 ]
 ```
 
-Controller integrates velocity into future joint positions.
+Bộ điều khiển tích phân vận tốc để thu được các vị trí khớp trong tương lai.
 
-### Advantages
+### Ưu điểm
 
-- Smooth control
-- Continuous servoing
+- Điều khiển mượt
+- Điều khiển servo liên tục
 
-### Disadvantages
+### Nhược điểm
 
-- Integration drift
-- Requires current robot state
+- Sai lệch tích phân
+- Yêu cầu trạng thái hiện tại của robot
 
 ---
 
-# 3. Joint Torque Space
+# 3. Không gian mô-men xoắn khớp
 
-Lowest-level action representation.
+Biểu diễn hành động ở mức thấp nhất.
 
 ```text
 [
@@ -170,7 +170,7 @@ Lowest-level action representation.
 ]
 ```
 
-Example
+Ví dụ
 
 ```text
 [
@@ -180,29 +180,29 @@ Example
 ]
 ```
 
-Directly controls motor torques.
+Điều khiển trực tiếp mô-men xoắn của động cơ.
 
-### Advantages
+### Ưu điểm
 
-- Maximum control authority
-- Suitable for dynamic behaviors
+- Quyền điều khiển tối đa
+- Phù hợp với các hành vi động
 
-### Disadvantages
+### Nhược điểm
 
-- Extremely robot-dependent
-- Difficult to train
-- Sensitive to latency
+- Phụ thuộc rất nhiều vào robot
+- Khó huấn luyện
+- Nhạy với độ trễ
 
-Mostly used in
+Chủ yếu được sử dụng trong
 
-- Reinforcement Learning
-- Humanoid locomotion
+- Học tăng cường
+- Chuyển động của robot hình người
 
 ---
 
-# 4. End-Effector Pose Space
+# 4. Không gian tư thế của đầu công tác
 
-Predict the robot hand pose instead of joints.
+Dự đoán tư thế của bàn tay robot thay vì các khớp.
 
 ```text
 [
@@ -216,7 +216,7 @@ Predict the robot hand pose instead of joints.
 ]
 ```
 
-Sometimes orientation uses quaternion
+Đôi khi hướng được biểu diễn bằng quaternion
 
 ```text
 [
@@ -231,24 +231,24 @@ Sometimes orientation uses quaternion
 ]
 ```
 
-The robot solves inverse kinematics afterwards.
+Sau đó robot giải bài toán động học nghịch.
 
-### Advantages
+### Ưu điểm
 
-- More transferable
-- Easier across robot arms
+- Có khả năng chuyển giao cao hơn
+- Dễ áp dụng giữa các cánh tay robot hơn
 
-### Disadvantages
+### Nhược điểm
 
-- Requires IK solver
+- Yêu cầu bộ giải IK
 
 ---
 
-# 5. End-Effector Delta Space
+# 5. Không gian gia số của đầu công tác
 
-The most common action representation in modern VLAs.
+Đây là biểu diễn hành động phổ biến nhất trong các VLA hiện đại.
 
-Instead of absolute position:
+Thay vì vị trí tuyệt đối:
 
 ```text
 [
@@ -262,7 +262,7 @@ Instead of absolute position:
 ]
 ```
 
-Example
+Ví dụ
 
 ```text
 [
@@ -276,91 +276,91 @@ close
 ]
 ```
 
-Each action is a small correction from the current pose.
+Mỗi hành động là một hiệu chỉnh nhỏ so với tư thế hiện tại.
 
-### Advantages
+### Ưu điểm
 
-- Stable
-- Reactive
-- Easy to learn
-- Better transferability
+- Ổn định
+- Có tính phản ứng
+- Dễ học
+- Khả năng chuyển giao tốt hơn
 
-Used by
+Được sử dụng bởi
 
 - π0
 - π0.5
 - OpenVLA
-- RT-2 (discretized)
+- RT-2 (được rời rạc hóa)
 - DiffusionVLA
 
 ---
 
-# 6. Bimanual Action Space
+# 6. Không gian hành động hai tay
 
-For robots with two arms.
-
-```text
-[
- left arm pose,
-
- right arm pose,
-
- left gripper,
-
- right gripper
-]
-```
-
-Example
+Dành cho robot có hai cánh tay.
 
 ```text
 [
-Left EE,
+ tư thế cánh tay trái,
 
-Right EE,
+ tư thế cánh tay phải,
 
-Open,
+ bộ kẹp trái,
 
-Close
+ bộ kẹp phải
 ]
 ```
 
-Common for
+Ví dụ
+
+```text
+[
+EE trái,
+
+EE phải,
+
+Mở,
+
+Đóng
+]
+```
+
+Phổ biến với
 
 - ALOHA
 - Mobile ALOHA
-- Bimanual humanoids
+- Robot hình người hai tay
 
 ---
 
-# 7. Dexterous Hand Space
+# 7. Không gian bàn tay khéo léo
 
-Instead of one gripper value, every finger is controlled.
+Thay vì một giá trị bộ kẹp, từng ngón tay đều được điều khiển.
 
 ```text
 [
- arm,
+ cánh tay,
 
- thumb joints,
+ các khớp ngón cái,
 
- index joints,
+ các khớp ngón trỏ,
 
- middle joints,
+ các khớp ngón giữa,
 
- ring joints,
+ các khớp ngón áp út,
 
- little finger joints
+ các khớp ngón út
 ]
 ```
 
-May contain
+Có thể gồm
 
 - 20
 - 30
 - 40+
-  dimensions
+  chiều
 
-Typical robots
+Các robot điển hình
 
 - Shadow Hand
 - Inspire Hand
@@ -368,9 +368,9 @@ Typical robots
 
 ---
 
-# 8. Navigation Waypoint Space
+# 8. Không gian điểm tham chiếu điều hướng
 
-Common for mobile robots.
+Phổ biến với robot di động.
 
 ```text
 [
@@ -380,7 +380,7 @@ Common for mobile robots.
 ]
 ```
 
-Example
+Ví dụ
 
 ```text
 [
@@ -390,34 +390,34 @@ Example
 ]
 ```
 
-Represents the next waypoint rather than wheel commands.
+Biểu diễn điểm tham chiếu tiếp theo thay vì các lệnh điều khiển bánh xe.
 
-### Advantages
+### Ưu điểm
 
-- High-level
-- Robot-independent
+- Cấp cao
+- Không phụ thuộc vào robot
 
-Used by
+Được sử dụng bởi
 
-- Mobile robots
-- Indoor navigation
-- Qwen-VLA navigation
+- Robot di động
+- Điều hướng trong nhà
+- Điều hướng Qwen-VLA
 
 ---
 
-# 9. Base Velocity Space
+# 9. Không gian vận tốc đế
 
-Lower-level mobile control.
+Điều khiển di động ở cấp thấp hơn.
 
 ```text
 [
- linear velocity,
+ vận tốc tuyến tính,
 
- angular velocity
+ vận tốc góc
 ]
 ```
 
-Usually
+Thông thường
 
 ```text
 [
@@ -426,89 +426,89 @@ v,
 ]
 ```
 
-The robot converts these into wheel speeds.
+Robot chuyển đổi các giá trị này thành tốc độ bánh xe.
 
-Typical robots
+Các robot điển hình
 
-- Differential drive
-- ROS navigation stack
-
----
-
-# 10. Driving Control Space
-
-Autonomous vehicles.
-
-```text
-[
- steering,
-
- throttle,
-
- brake
-]
-```
-
-or
-
-```text
-[
- steering,
-
- acceleration
-]
-```
-
-Examples
-
-- End-to-end driving
-- Autonomous cars
+- Truyền động vi sai
+- Ngăn xếp điều hướng ROS
 
 ---
 
-# 11. Human Trajectory Space
+# 10. Không gian điều khiển lái xe
 
-Instead of robot commands, predict future human motion.
+Xe tự hành.
 
 ```text
 [
- wrist pose,
+ đánh lái,
 
- hand pose,
+ ga,
 
- body pose
+ phanh
 ]
 ```
 
-Often represented as
+hoặc
 
-- wrist translation
-- wrist rotation
-- hand articulation
-- body joints
+```text
+[
+ đánh lái,
 
-Applications
+ gia tốc
+]
+```
 
-- Imitation learning
-- Human motion prediction
+Ví dụ
+
+- Lái xe đầu-cuối
+- Ô tô tự hành
+
+---
+
+# 11. Không gian quỹ đạo con người
+
+Thay vì các lệnh robot, dự đoán chuyển động tương lai của con người.
+
+```text
+[
+ tư thế cổ tay,
+
+ tư thế bàn tay,
+
+ tư thế cơ thể
+]
+```
+
+Thường được biểu diễn dưới dạng
+
+- phép tịnh tiến cổ tay
+- phép xoay cổ tay
+- cấu hình khớp bàn tay
+- các khớp cơ thể
+
+Ứng dụng
+
+- Học bắt chước
+- Dự đoán chuyển động con người
 - EgoVLA
 - Qwen-VLA
 
 ---
 
-# 12. Action Chunk Space
+# 12. Không gian đoạn hành động
 
-Instead of predicting one action,
+Thay vì dự đoán một hành động,
 
-predict multiple future actions simultaneously.
+hãy dự đoán đồng thời nhiều hành động tương lai.
 
-Instead of
+Thay vì
 
 ```text
 Action
 ```
 
-predict
+dự đoán
 
 ```text
 [
@@ -524,18 +524,18 @@ Action_t+15
 ]
 ```
 
-Mathematically
+Về mặt toán học
 
 $$
 A\in\mathbb{R}^{H\times D}
 $$
 
-where
+trong đó
 
-- H = prediction horizon
-- D = action dimension
+- H = chân trời dự đoán
+- D = chiều hành động
 
-Example
+Ví dụ
 
 ```text
 [
@@ -546,21 +546,21 @@ Example
 ]
 ```
 
-Advantages
+Ưu điểm
 
-- Lower inference frequency
-- Smoother motion
-- Better temporal consistency
+- Tần suất suy luận thấp hơn
+- Chuyển động mượt hơn
+- Tính nhất quán theo thời gian tốt hơn
 
-This is now the dominant output format for diffusion and flow-based VLAs.
+Đây hiện là định dạng đầu ra chủ đạo cho các VLA dựa trên diffusion và flow.
 
 ---
 
-# 13. Latent Action Space
+# 13. Không gian hành động ẩn
 
-Instead of predicting physical commands,
+Thay vì dự đoán các lệnh vật lý,
 
-the policy predicts a learned embedding.
+chính sách dự đoán một vector nhúng đã học được.
 
 ```text
 [
@@ -571,106 +571,106 @@ the policy predicts a learned embedding.
 ]
 ```
 
-A separate controller decodes
+Một bộ điều khiển riêng biệt giải mã
 
 ```text
-Latent
+Biểu diễn ẩn
 
 ↓
 
-Robot actions
+Hành động robot
 ```
 
-Advantages
+Ưu điểm
 
-- Compact
-- Robot-independent
-- Hierarchical control
+- Nhỏ gọn
+- Không phụ thuộc vào robot
+- Điều khiển phân cấp
 
-Disadvantages
+Nhược điểm
 
-- Hard to interpret
-- Requires decoder
-
----
-
-# Comparison
-
-| Action Space        | Typical Dimension | Controller Needed        | Cross-Robot Transfer     |
-| ------------------- | ----------------: | ------------------------ | ------------------------ |
-| Joint Position      |             6–40 | No                       | Poor                     |
-| Joint Velocity      |             6–40 | Small                    | Poor                     |
-| Joint Torque        |             6–40 | Minimal                  | Very Poor                |
-| End-Effector Pose   |              7–8 | IK                       | Good                     |
-| End-Effector Delta  |                 7 | IK                       | Excellent                |
-| Bimanual            |            14–20 | IK                       | Good                     |
-| Dexterous Hand      |            20–50 | IK                       | Moderate                 |
-| Navigation Waypoint |                 3 | Navigation Controller    | Excellent                |
-| Base Velocity       |              2–3 | Mobile Controller        | Moderate                 |
-| Driving Controls    |              2–3 | Vehicle Controller       | Moderate                 |
-| Human Trajectory    |            20–50 | Retargeting              | N/A                      |
-| Action Chunk        |              H×D | Same as underlying space | Same as underlying space |
-| Latent Action       |           32–512 | Decoder Policy           | Excellent                |
+- Khó diễn giải
+- Cần bộ giải mã
 
 ---
 
-# Which Action Spaces Do Popular VLAs Use?
+# So sánh
 
-| Model        | Primary Action Space                                                           |
-| ------------ | ------------------------------------------------------------------------------ |
-| RT-2         | Discretized End-Effector Delta                                                 |
-| OpenVLA      | Discretized End-Effector Delta                                                 |
-| π0          | Continuous End-Effector Delta Action Chunk                                     |
-| π0.5        | Continuous End-Effector Delta Action Chunk                                     |
-| DiffusionVLA | Continuous Action Chunk                                                        |
-| DexVLA       | Arm + Dexterous Hand Action Chunk                                              |
-| Qwen-VLA     | Unified Multi-Action Space (Joint, End-Effector, Navigation, Human Trajectory) |
-
-Notes on Continuous, Discretized:
-
-| Aspect         | Continuous Action                             | Discretized Action                                       |
-| -------------- | --------------------------------------------- | -------------------------------------------------------- |
-| Output         | Real numbers. Direct value of action control. | Discrete tokens/classes, each token is a defined action. |
-| .Example       | `[0.021, -0.14, 0.003, 0.8]`                | `[523, 112, 901, 45]`                                  |
-| Prediction     | Regression                                    | Classification / next-token prediction                   |
-| Loss           | MSE, L1, Flow Matching                        | Cross-Entropy                                            |
-| Typical models | π0, Diffusion Policy, ACT, OpenVLA           | RT-2, Qwen-VLA, RoboFlamingo variants                    |
-| Precision      | Very high                                     | Limited by quantization                                  |
-| Fits LLM       | Less naturally                                | Very naturally                                           |
+| Không gian hành động       | Chiều điển hình | Bộ điều khiển cần thiết             | Chuyển giao giữa các robot          |
+| -------------------------- | --------------: | ----------------------------------- | ----------------------------------- |
+| Vị trí khớp                |            6–40 | Không                               | Kém                                 |
+| Vận tốc khớp               |            6–40 | Nhỏ                                 | Kém                                 |
+| Mô-men xoắn khớp           |            6–40 | Tối thiểu                           | Rất kém                             |
+| Tư thế đầu công tác        |             7–8 | IK                                  | Tốt                                 |
+| Gia số đầu công tác        |               7 | IK                                  | Xuất sắc                             |
+| Hai tay                    |           14–20 | IK                                  | Tốt                                 |
+| Bàn tay khéo léo           |           20–50 | IK                                  | Trung bình                          |
+| Điểm tham chiếu điều hướng |               3 | Bộ điều khiển điều hướng            | Xuất sắc                             |
+| Vận tốc đế                 |             2–3 | Bộ điều khiển di động               | Trung bình                          |
+| Điều khiển lái xe          |             2–3 | Bộ điều khiển phương tiện           | Trung bình                          |
+| Quỹ đạo con người          |           20–50 | Ánh xạ lại                          | N/A                                 |
+| Đoạn hành động             |             H×D | Giống không gian hành động nền tảng | Giống không gian hành động nền tảng |
+| Hành động ẩn               |          32–512 | Chính sách giải mã                  | Xuất sắc                             |
 
 ---
 
-# Trends
+# Các VLA phổ biến sử dụng không gian hành động nào?
 
-## Early VLA (2022–2024)
+| Mô hình      | Không gian hành động chính                                                                             |
+| ------------ | ------------------------------------------------------------------------------------------------------- |
+| RT-2         | Gia số đầu công tác được rời rạc hóa                                                                    |
+| OpenVLA      | Gia số đầu công tác được rời rạc hóa                                                                    |
+| π0          | Đoạn hành động gia số đầu công tác liên tục                                                              |
+| π0.5        | Đoạn hành động gia số đầu công tác liên tục                                                              |
+| DiffusionVLA | Đoạn hành động liên tục                                                                                  |
+| DexVLA       | Đoạn hành động cánh tay + bàn tay khéo léo                                                               |
+| Qwen-VLA     | Không gian đa hành động hợp nhất (khớp, đầu công tác, điều hướng, quỹ đạo con người)                    |
 
-Mostly
+Ghi chú về Liên tục và Rời rạc hóa:
 
-- Joint Position
-- End-Effector Delta
-- Action Tokens
+| Khía cạnh        | Hành động liên tục                                  | Hành động được rời rạc hóa                                             |
+| ---------------- | --------------------------------------------------- | ---------------------------------------------------------------------- |
+| Đầu ra           | Số thực. Giá trị trực tiếp của điều khiển hành động. | Token/lớp rời rạc, mỗi token là một hành động được định nghĩa.          |
+| .Ví dụ           | `[0.021, -0.14, 0.003, 0.8]`                       | `[523, 112, 901, 45]`                                                  |
+| Dự đoán          | Hồi quy                                              | Phân loại / dự đoán token tiếp theo                                    |
+| Hàm mất mát      | MSE, L1, Flow Matching                              | Cross-Entropy                                                          |
+| Mô hình điển hình | π0, Diffusion Policy, ACT, OpenVLA                | RT-2, Qwen-VLA, các biến thể RoboFlamingo                              |
+| Độ chính xác     | Rất cao                                              | Bị giới hạn bởi lượng tử hóa                                            |
+| Phù hợp với LLM  | Ít tự nhiên hơn                                      | Rất tự nhiên                                                           |
 
 ---
 
-## Modern Foundation VLA (2025–2026)
+# Xu hướng
 
-Moving toward
+## VLA thời kỳ đầu (2022–2024)
 
-- Continuous Action Chunks
-- Multi-step prediction
+Chủ yếu là
+
+- Vị trí khớp
+- Gia số đầu công tác
+- Token hành động
+
+---
+
+## VLA nền tảng hiện đại (2025–2026)
+
+Đang chuyển dịch theo hướng
+
+- Các đoạn hành động liên tục
+- Dự đoán nhiều bước
 - Diffusion / Flow Matching
-- Multi-embodiment action spaces
+- Không gian hành động đa hiện thân
 
 ---
 
-## Future Direction
+## Hướng phát triển tương lai
 
-Research is increasingly exploring
+Nghiên cứu đang ngày càng khám phá
 
-- Latent action representations
-- Universal action spaces
-- Whole-body humanoid control
-- Unified robot + human trajectory prediction
-- Cross-embodiment transferable actions
+- Các biểu diễn hành động ẩn
+- Không gian hành động phổ quát
+- Điều khiển toàn thân cho robot hình người
+- Dự đoán hợp nhất quỹ đạo robot + con người
+- Các hành động có thể chuyển giao giữa những hiện thân
 
-The trend is moving away from robot-specific joint commands toward higher-level, transferable continuous action representations while preserving the ability to execute on many different robot embodiments.
+Xu hướng đang rời xa các lệnh khớp dành riêng cho từng robot để hướng tới các biểu diễn hành động liên tục, có cấp độ cao hơn và có thể chuyển giao, đồng thời vẫn duy trì khả năng thực thi trên nhiều hiện thân robot khác nhau.

@@ -1,166 +1,166 @@
-# Diffusion or Flow with a Compact Action Decoder
+# Diffusion hoặc flow với bộ giải mã hành động gọn
 
-> **Scope.** Architectures where a multimodal backbone computes context once
-> and a relatively small conditional network performs iterative continuous
-> action generation. Diffusion Policy supplies the base mechanism; Octo is the
-> clearest generalist robot-policy example of a compact diffusion head. Sources
-> checked 2026-07-21.
+> **Phạm vi.** Kiến trúc trong đó đường trục đa phương thức tính toán bối cảnh một lần
+> và một mạng có điều kiện tương đối nhỏ thực hiện lặp liên tục
+> thế hệ hành động. Chính sách phổ biến cung cấp cơ chế cơ bản; Octo là
+> ví dụ chính sách robot tổng quát rõ ràng nhất về đầu khuếch tán nhỏ gọn. Nguồn
+> đã kiểm tra 2026-07-21.
 
-## Core idea
+## Ý tưởng cốt lõi
 
-Instead of predicting one action estimate, the decoder models a conditional
-distribution over an entire real-valued action chunk. Inference starts with a
-random tensor and refines it over several steps:
+Thay vì dự đoán một ước tính hành động, bộ giải mã mô hình hóa một điều kiện
+phân phối trên toàn bộ đoạn hành động có giá trị thực. Suy luận bắt đầu bằng một
+tensor ngẫu nhiên và tinh chỉnh nó qua một số bước:
 
 ```text
-observation/task -> backbone -> compact context e  (computed once)
+quan sát/nhiệm vụ -> xương sống -> bối cảnh nhỏ gọn e (được tính một lần)
                                       |
-Gaussian action noise x_K ------------+
-        -> small denoiser(x_K, e, K)
-        -> small denoiser(x_K-1, e, K-1)
+Tiếng ồn hành động Gaussian x_K ------------+
+        -> bộ khử nhiễu nhỏ (x_K, e, K)
+        -> bộ khử nhiễu nhỏ (x_K-1, e, K-1)
         -> ...
-        -> continuous action chunk x_0
+        -> đoạn hành động liên tục x_0
 ```
 
-“Compact” describes where model capacity lives. The visual-language or policy
-backbone may be substantial, while the repeated denoising computation is a
-small MLP, U-Net, or modest time-series network. There is no standard parameter
-threshold that formally separates a compact head from a large DiT.
+“Nhỏ gọn” mô tả nơi năng lực của mô hình tồn tại. Ngôn ngữ trực quan hoặc chính sách
+xương sống có thể là đáng kể, trong khi tính toán khử nhiễu lặp đi lặp lại là một
+mạng MLP, U-Net nhỏ hoặc mạng chuỗi thời gian khiêm tốn. Không có tham số tiêu chuẩn
+ngưỡng chính thức phân tách đầu nhỏ gọn khỏi DiT lớn.
 
-## Diffusion Policy: the base action-diffusion mechanism
+## Chính sách phổ biến: cơ chế phổ biến hành động cơ bản
 
-Diffusion Policy represents the visuomotor policy as a conditional denoising
-diffusion process over action sequences. Its key design combines:
+Chính sách khuếch tán thể hiện chính sách thị giác như một phương pháp khử nhiễu có điều kiện
+quá trình khuếch tán qua các chuỗi hành động. Thiết kế chính của nó kết hợp:
 
-- visual conditioning;
-- a conditional U-Net or time-series diffusion Transformer;
-- prediction of a multi-step action horizon;
-- receding-horizon control, where only part of a predicted chunk is executed
-  before the next observation causes replanning.
+- điều hòa thị giác;
+- Máy biến áp khuếch tán chuỗi thời gian hoặc U-Net có điều kiện;
+- dự đoán về một chân trời hành động gồm nhiều bước;
+- điều khiển rút lui, trong đó chỉ một phần của đoạn dự đoán được thực thi
+  trước khi quan sát tiếp theo gây ra việc lập kế hoạch lại.
 
-Training perturbs demonstration actions with Gaussian noise and learns the
-conditional denoising/score field. Inference uses multiple denoising updates,
-so the sampled chunk is globally coherent rather than a set of independently
-regressed timesteps. The authors motivate this for multimodal demonstrations,
-high-dimensional action sequences, and stable training.
-[Diffusion Policy, §§3-4](https://arxiv.org/abs/2303.04137)
+Việc huấn luyện làm xáo trộn các hành động trình diễn với nhiễu Gaussian và học các
+trường khử nhiễu/điểm có điều kiện. Suy luận sử dụng nhiều cập nhật khử nhiễu,
+vì vậy đoạn được lấy mẫu có tính mạch lạc toàn cục chứ không phải là một tập hợp độc lập
+dấu thời gian hồi quy. Các tác giả thúc đẩy điều này cho các cuộc biểu tình đa phương thức,
+chuỗi hành động chiều cao và đào tạo ổn định.
+[Chính sách phổ biến, §§3-4](https://arxiv.org/abs/2303.04137)
 
-**Boundary.** Original Diffusion Policy is a visuomotor imitation-learning
-policy, not necessarily a VLA built on an Internet-pretrained language model.
-It belongs here because later VLA action heads reuse its conditional
-action-diffusion pattern.
+**Ranh giới.** Chính sách phổ biến ban đầu là một phương pháp học tập bắt chước vận động thị giác
+chính sách, không nhất thiết phải là VLA được xây dựng trên mô hình ngôn ngữ được đào tạo trước trên Internet.
+Nó thuộc về nơi này vì các đầu hành động VLA sau này sẽ sử dụng lại điều kiện của nó
+mô hình khuếch tán hành động.
 
-The word “compact” must be checked against the actual configuration. The
-paper's time-series Transformer denoiser is 9M parameters for most tasks and
-80M for Kitchen/real Push-T, but several published temporal-CNN denoisers are
-much larger. It would therefore be inaccurate to call every Diffusion Policy
-variant compact solely from the method name. [Diffusion Policy, Appendix A.4](https://arxiv.org/abs/2303.04137)
+Từ "nhỏ gọn" phải được kiểm tra dựa trên cấu hình thực tế. các
+Bộ khử nhiễu biến áp theo chuỗi thời gian của bài báo là 9M tham số cho hầu hết các tác vụ và
+80M cho Nhà bếp/Push-T thực, nhưng một số bộ khử nhiễu tạm thời-CNN đã được công bố
+lớn hơn nhiều. Do đó, sẽ không chính xác nếu gọi mọi Chính sách phổ biến là
+biến thể nhỏ gọn chỉ từ tên phương thức. [Chính sách phổ biến, Phụ lục A.4](https://arxiv.org/abs/2303.04137)
 
-## Octo: backbone once, small diffusion head repeatedly
+## Octo: xương sống một lần, đầu khuếch tán nhỏ liên tục
 
-Octo makes the compact-head separation explicit. A Transformer processes task
-and observation tokens and produces readout embeddings. A lightweight action
-head then generates a continuous action chunk with DDPM-style denoising. Only
-one Transformer-backbone pass is required for each action prediction; all
-iterative steps run inside the small head. [Octo, §III-A and §III-C](https://arxiv.org/abs/2405.12213)
+Octo làm cho việc phân tách đầu nén trở nên rõ ràng. Một tác vụ xử lý Transformer
+và mã thông báo quan sát và tạo ra các phần nhúng đọc được. Hành động nhẹ nhàng
+head sau đó tạo ra một đoạn hành động liên tục với chức năng khử nhiễu DDPM-style. Chỉ một
+cần có một đường truyền trục máy biến áp cho mỗi dự đoán hành động; tất cả
+các bước lặp đi lặp lại chạy bên trong phần đầu nhỏ. [Tháng 10, §III-A và §III-C](https://arxiv.org/abs/2405.12213)
 
-The published configuration uses a three-layer MLP with hidden dimension 256,
-residual connections, layer normalization, a cosine noise schedule, and 20
-diffusion steps. This is a sharper example of “compact decoder” than merely
-calling every diffusion policy small. [Octo, Appendix D](https://arxiv.org/abs/2405.12213)
+Cấu hình được công bố sử dụng MLP ba lớp với kích thước ẩn 256,
+kết nối dư, chuẩn hóa lớp, lịch trình nhiễu cosin và 20
+các bước khuếch tán Đây là một ví dụ sắc nét hơn về “bộ giải mã nhỏ gọn” hơn là chỉ đơn thuần
+gọi mọi chính sách phổ biến là nhỏ. [Tháng 10, Phụ lục D](https://arxiv.org/abs/2405.12213)
 
 ```text
-task/image history -> Octo Transformer -> readout embedding e
+lịch sử tác vụ/hình ảnh -> Octo Transformer -> nhúng phần đọc ra
                                              |
-                            noisy chunk -> 3-layer MLP denoiser x 20
+                            đoạn ồn ào -> Bộ khử nhiễu MLP 3 lớp x 20
                                              |
                                              v
-                                  continuous action chunk
+                                  đoạn hành động liên tục
 ```
 
-Because the readout interface is modular, a new action space can receive a new
-head while most pretrained backbone weights remain intact.
+Bởi vì giao diện đọc là mô-đun nên không gian hành động mới có thể nhận được một giao diện mới
+đầu trong khi hầu hết các trọng lượng xương sống được luyện trước vẫn còn nguyên.
 
-## Compact flow example: SmolVLA
+## Ví dụ về luồng nhỏ gọn: SmolVLA
 
-SmolVLA makes the flow version of this pattern concrete. A frozen SmolVLM-2
-backbone produces context features and an approximately 100M-parameter
-conditional flow-matching Transformer expert predicts 50-action chunks using
-ten flow steps. The complete policy is about 450M parameters. Cross-attention
-imports VLM features while causal self-attention processes action tokens, so the
-action network remains a distinct trainable module rather than a shared
-π0-style expert inside one Transformer. [SmolVLA, §3 and §4.3](https://arxiv.org/abs/2506.01844)
+SmolVLA làm cho phiên bản dòng chảy của mẫu này trở nên cụ thể. Một SmolVLM-2 đông lạnh
+xương sống tạo ra các tính năng ngữ cảnh và tham số khoảng 100M
+Chuyên gia về máy biến áp phù hợp với dòng chảy có điều kiện dự đoán các khối 50 hành động bằng cách sử dụng
+mười bước chảy. Chính sách hoàn chỉnh có khoảng 450M thông số. Sự chú ý chéo
+nhập các tính năng VLM trong khi tính năng tự chú ý nhân quả xử lý các mã thông báo hành động, do đó
+mạng hành động vẫn là một mô-đun có thể huấn luyện riêng biệt thay vì được chia sẻ
+Chuyên gia kiểu π0 bên trong một Transformer. [SmolVLA, §3 và §4.3](https://arxiv.org/abs/2506.01844)
 
-This is a useful scale example, not proof that 100M is a canonical cutoff. The
-paper also limits its evidence to relatively simple, short-horizon tasks and
-identifies long-horizon behavior as future work.
+Đây là một ví dụ về tỷ lệ hữu ích, không phải là bằng chứng cho thấy 100M là mức cắt chuẩn. các
+bài báo cũng giới hạn bằng chứng của nó ở những nhiệm vụ tương đối đơn giản, có thời gian ngắn và
+xác định hành vi dài hạn là công việc trong tương lai.
 
-## Diffusion versus flow matching
+## Kết hợp khuếch tán và dòng chảy
 
-These mechanisms are related but should not be used as exact synonyms.
+Các cơ chế này có liên quan nhưng không nên được sử dụng làm từ đồng nghĩa chính xác.
 
-| Property | DDPM-style diffusion head | Flow-matching head |
+| Bất động sản | Đầu khuếch tán DDPM-style | Đầu khớp dòng chảy |
 | --- | --- | --- |
-| Learned object | Noise, score, or denoising direction under a noise schedule | Velocity field along a chosen probability path |
-| Generation | Reverse diffusion/DDIM-style updates | Numerical integration of an ODE, often Euler steps |
-| Output | Continuous action sample or chunk | Continuous action sample or chunk |
-| Shared cost | Several calls to the action network | Several calls to the action network |
+| Đối tượng đã học | Tiếng ồn, điểm số hoặc hướng khử nhiễu theo lịch trình tiếng ồn | Trường vận tốc dọc theo đường xác suất đã chọn |
+| Thế hệ | Khuếch tán ngược/cập nhật DDIM-style | Tích hợp số của ODE, thường là các bước Euler |
+| Đầu ra | Mẫu hoặc đoạn hành động liên tục | Mẫu hoặc đoạn hành động liên tục |
+| Chi phí chia sẻ | Một số cuộc gọi đến mạng hành động | Một số cuộc gọi đến mạng hành động |
 
-A compact flow head fits this family when the velocity network is a small
-readout conditioned on backbone features. π0 is documented separately because
-its action network is a 300M-parameter Transformer expert interleaved with the
-VLM, not merely a shallow readout. See
-[flow-matching Transformer experts](04_flow_matching_transformer_expert.md).
+Đầu dòng nhỏ gọn phù hợp với họ này khi mạng vận tốc nhỏ
+đọc có điều kiện trên các tính năng xương sống. π0 được ghi lại riêng biệt vì
+mạng lưới hành động của nó là một chuyên gia Máy biến áp có tham số 300M xen kẽ với
+VLM, không chỉ đơn thuần là một kết quả đọc nông. Nhìn thấy
+[Chuyên gia về máy biến áp phù hợp với dòng chảy](04_flow_matching_transformer_expert.md).
 
-## Why use a compact generative head?
+## Tại sao nên sử dụng đầu phát điện nhỏ gọn?
 
-- Continuous outputs avoid per-bin quantization.
-- Joint chunk generation can express correlated temporal structure.
-- Sampling can represent several valid behaviors instead of collapsing them
-  into one point estimate.
-- Backbone context may be cached while the small head performs the repeated
-  steps.
-- The head can be replaced for a new embodiment without necessarily rebuilding
-  the whole multimodal backbone.
+- Đầu ra liên tục tránh lượng tử hóa trên mỗi thùng.
+- Việc tạo khối chung có thể thể hiện cấu trúc thời gian tương quan.
+- Việc lấy mẫu có thể thể hiện một số hành vi hợp lệ thay vì thu gọn chúng
+  thành ước lượng một điểm.
+- Bối cảnh xương sống có thể được lưu trữ trong khi phần đầu nhỏ thực hiện lặp lại
+  các bước.
+- Phần đầu có thể được thay thế bằng một phương án mới mà không nhất thiết phải xây dựng lại
+  toàn bộ đường trục đa phương thức.
 
-## Limits and failure modes
+## Giới hạn và chế độ thất bại
 
-- Iterative sampling adds latency compared with one-pass regression.
-- Too many sampling steps reduce the achievable replanning rate; too few may
-  hurt sample quality.
-- A compact context vector can become an information bottleneck. Dita was
-  proposed specifically around the hypothesis that a tiny head conditioned on
-  early-fused embeddings is insufficient for heterogeneous cross-embodiment
-  data. [Dita, §§1 and 3](https://arxiv.org/abs/2503.19757)
-- Action-horizon and execute-horizon choices trade temporal consistency against
-  responsiveness.
-- Multimodal modeling capacity does not guarantee safe or physically valid
-  commands; denormalization and control constraints remain external.
+- Lấy mẫu lặp lại tăng thêm độ trễ so với hồi quy một lần.
+- Quá nhiều bước lấy mẫu sẽ làm giảm tỷ lệ lập kế hoạch lại có thể đạt được; quá ít có thể
+  làm tổn thương chất lượng mẫu.
+- Một vectơ ngữ cảnh nhỏ gọn có thể trở thành nút cổ chai thông tin. Dita là
+  được đề xuất cụ thể xung quanh giả thuyết rằng một cái đầu nhỏ xíu phụ thuộc vào
+  các phần nhúng được hợp nhất sớm là không đủ cho phương án chéo không đồng nhất
+  dữ liệu. [Dita, §§1 và 3](https://arxiv.org/abs/2503.19757)
+- Các lựa chọn về chân trời hành động và chân trời thực thi đánh đổi tính nhất quán theo thời gian đối với
+  khả năng đáp ứng.
+- Năng lực mô hình hóa đa phương thức không đảm bảo an toàn hoặc có giá trị về mặt vật lý
+  lệnh; các ràng buộc không chuẩn hóa và kiểm soát vẫn ở bên ngoài.
 
-## What is verified versus inferred?
+## Những gì được xác minh so với suy luận?
 
-**Verified:** Diffusion Policy and Octo iteratively denoise continuous action
-chunks; Octo isolates this loop in a three-layer MLP action head after one
-backbone pass.
+**Đã xác minh:** Chính sách phổ biến và Octo khử nhiễu lặp đi lặp lại hành động liên tục
+khối; Octo cô lập vòng lặp này trong đầu hành động MLP ba lớp sau một
+đường xương sống.
 
-**Inferred engineering category:** “compact diffusion or flow decoder” is a
-useful taxonomy label, but neither paper defines a universal size boundary.
-Comparing compact and large decoders should therefore report actual parameter
-counts and conditioning topology rather than rely on the label alone.
+**Loại kỹ thuật được suy luận:** “bộ giải mã dòng hoặc khuếch tán nhỏ gọn” là một
+nhãn phân loại hữu ích, nhưng không có bài báo nào xác định ranh giới kích thước phổ quát.
+Do đó, việc so sánh bộ giải mã nhỏ gọn và lớn sẽ báo cáo tham số thực tế
+đếm và điều hòa cấu trúc liên kết thay vì chỉ dựa vào nhãn.
 
-## Sources
+## Nguồn
 
-- Chi et al. *Diffusion Policy: Visuomotor Policy Learning via Action
-  Diffusion*, arXiv:2303.04137v5, 2024.
-  [Paper](https://arxiv.org/abs/2303.04137) ·
-  [Official project](https://diffusion-policy.cs.columbia.edu/)
-- Octo Model Team et al. *Octo: An Open-Source Generalist Robot Policy*,
-  arXiv:2405.12213, 2024. [Paper](https://arxiv.org/abs/2405.12213) ·
-  [Official project](https://octo-models.github.io/)
-- Shukor et al. *SmolVLA: A Vision-Language-Action Model for Affordable and
-  Efficient Robotics*, arXiv:2506.01844, 2025.
-  [Paper](https://arxiv.org/abs/2506.01844) ·
-  [Official release](https://huggingface.co/blog/smolvla)
-- Hou et al. *Dita: Scaling Diffusion Transformer for Generalist
-  Vision-Language-Action Policy*, arXiv:2503.19757v2, 2025.
-  [Paper](https://arxiv.org/abs/2503.19757)
+- Chí và cộng sự. *Chính sách phổ biến: Học chính sách thị giác thông qua hành động
+  Khuếch tán*, arXiv:2303.04137v5, 2024.
+  [Giấy](https://arxiv.org/abs/2303.04137) ·
+  [Dự án chính thức](https://diffusion-policy.cs.columbia.edu/)
+- Nhóm người mẫu Octo và cộng sự. *Tháng 10: Chính sách về robot tổng quát nguồn mở*,
+  arXiv:2405.12213, 2024. [Giấy](https://arxiv.org/abs/2405.12213) ·
+  [Dự án chính thức](https://octo-models.github.io/)
+- Shukor và cộng sự. *SmolVLA: Mô hình Hành động-Ngôn ngữ-Tầm nhìn dành cho Giá cả phải chăng và
+  Robot hiệu quả*, arXiv:2506.01844, 2025.
+  [Giấy](https://arxiv.org/abs/2506.01844) ·
+  [Bản phát hành chính thức](https://huggingface.co/blog/smolvla)
+- Hou và cộng sự. *Dita: Máy biến áp khuếch tán tỷ lệ dành cho nhà tổng hợp
+  Chính sách Tầm nhìn-Ngôn ngữ-Hành động*, arXiv:2503.19757v2, 2025.
+  [Giấy](https://arxiv.org/abs/2503.19757)

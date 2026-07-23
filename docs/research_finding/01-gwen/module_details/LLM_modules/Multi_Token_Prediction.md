@@ -1,21 +1,21 @@
-# Multi-Token Prediction (MTP)
+# Dự đoán nhiều token (MTP)
 
-**Improves:** next-token-only language-model training and one-token-per-forward-
-pass autoregressive decoding.  
-**Primary goal:** supervise multiple future positions from each context and reuse
-the extra predictors as draft proposals for speculative decoding.
+**Cải thiện:** huấn luyện mô hình ngôn ngữ chỉ dự đoán token kế tiếp và giải mã tự
+hồi quy mỗi lần forward chỉ sinh một token.
+**Mục tiêu chính:** giám sát nhiều vị trí trong tương lai từ từng bối cảnh và tái sử dụng
+các yếu tố dự đoán bổ sung dưới dạng dự thảo đề xuất giải mã suy đoán.
 
-## Next-token prediction versus MTP
+## Dự đoán mã thông báo tiếp theo so với MTP
 
-Standard causal language modeling trains one target at position `t`:
+Mô hình ngôn ngữ nhân quả tiêu chuẩn huấn luyện một mục tiêu tại vị trí `t`:
 
 $$
 \mathcal{L}_{\mathrm{NTP}}
 = -\log p\!\left(x_{t+1}\mid x_{\le t}\right)
 $$
 
-An `n`-token predictor shares a Transformer trunk but adds future prediction
-heads:
+Công cụ dự đoán mã thông báo `n` chia sẻ đường trục Transformer nhưng bổ sung thêm dự đoán trong tương lai
+đầu:
 
 $$
 \begin{aligned}
@@ -28,16 +28,16 @@ p_j &= \operatorname{Head}_j(h_t),
 \end{aligned}
 $$
 
-The heads predict different future offsets in parallel. They do not make future
-tokens conditionally independent in the final autoregressive model; they are
-auxiliary training heads and draft mechanisms. The original MTP paper argues
-that this forces the trunk to represent less-local decisions and reports larger
-benefits at larger model scales, especially on code generation.
-([Gloeckle et al., 2024](https://arxiv.org/abs/2404.19737))
+Những người đứng đầu dự đoán song song các mức chênh lệch khác nhau trong tương lai. Họ không tạo nên tương lai
+mã thông báo độc lập có điều kiện trong mô hình tự hồi quy cuối cùng; họ là
+Trưởng ban đào tạo phụ trợ và dự thảo cơ chế. Bài báo MTP ban đầu lập luận
+rằng điều này buộc đường trục phải thể hiện các quyết định ít cục bộ hơn và báo cáo lớn hơn
+mang lại lợi ích ở quy mô mô hình lớn hơn, đặc biệt là về việc tạo mã.
+([Gloeckle và cộng sự, 2024](https://arxiv.org/abs/2404.19737))
 
-## Training dataflow
+## Luồng dữ liệu đào tạo
 
-For input tokens `[A, B, C, D, E]` and three prediction heads:
+Đối với mã thông báo đầu vào `[A, B, C, D, E]` và ba đầu dự đoán:
 
 ```mermaid
 flowchart LR
@@ -48,32 +48,32 @@ flowchart LR
     H1 --> L[Sum/weight cross-entropy losses]
     H2 --> L
     H3 --> L
-    L --> BP[Backpropagate into shared trunk]
+    L --> BP[Lan truyền ngược vào trunk dùng chung]
 ```
 
-Naively materializing logits for every head multiplies peak vocabulary-logit
-memory. The paper's implementation evaluates and backpropagates the heads
-sequentially while accumulating the trunk gradient, freeing one head's large
-logit tensor before evaluating the next.
+Việc cụ thể hóa các bản ghi một cách ngây thơ cho mỗi cái đầu nhân lên từ vựng-logit đỉnh cao
+ký ức. Việc thực hiện bài báo đánh giá và truyền lại các đầu
+tuần tự trong khi tích lũy độ dốc thân cây, giải phóng khối lượng lớn của một đầu
+logit tensor trước khi đánh giá tiếp theo.
 
-## Inference: proposal then verification
+## Suy luận: đề xuất rồi xác minh
 
-At inference, the ordinary `+1` head can still generate one token at a time. To
-gain speed, the additional heads propose a short block:
+Khi suy luận, đầu `+1` thông thường vẫn có thể tạo một mã thông báo mỗi lần. ĐẾN
+đạt được tốc độ, các đầu bổ sung đề xuất một khối ngắn:
 
 ```mermaid
 flowchart LR
     C[Accepted context] --> D[MTP heads draft t1,t2,t3]
-    D --> V[Main model verifies draft in parallel]
+    D --> V[Mô hình chính xác minh bản nháp song song]
     V --> A[Accept longest valid prefix]
     A --> C
 ```
 
-Verification is essential. Simply appending all independently predicted future
-tokens would change the model's output distribution and compound inconsistent
-guesses. Self-speculative/blockwise or tree-based decoding accepts only tokens
-that pass the main model's verification rule, then resumes from the first
-rejection. Speedup depends on:
+Việc xác minh là cần thiết. Đơn giản chỉ cần nối thêm tất cả tương lai được dự đoán độc lập
+mã thông báo sẽ thay đổi phân phối đầu ra của mô hình và kết hợp không nhất quán
+đoán. Giải mã tự suy đoán/theo khối hoặc dựa trên cây chỉ chấp nhận mã thông báo
+vượt qua quy tắc xác minh của mô hình chính, sau đó tiếp tục lại từ quy tắc xác minh đầu tiên
+sự từ chối. Tăng tốc phụ thuộc vào:
 
 $$
 \text{effective speedup}
@@ -82,35 +82,35 @@ $$
 {\text{draft cost}+\text{verification cost}}
 $$
 
-If most drafts are rejected, MTP can add overhead. If several are accepted, one
-expensive trunk pass advances multiple output positions. The original paper
-reports up to 3× inference speed in its tested 4-token-prediction models, not a
-universal guarantee.
+Nếu hầu hết các bản nháp bị từ chối, MTP có thể bổ sung thêm chi phí. Nếu một số được chấp nhận, một
+đường trục đắt tiền nâng cao nhiều vị trí đầu ra. Giấy gốc
+báo cáo tốc độ suy luận lên tới 3× trong các mô hình dự đoán 4 mã thông báo đã được thử nghiệm của nó, không phải
+bảo đảm phổ quát.
 
-## Capability and systems trade-offs
+## Sự cân bằng giữa năng lực và hệ thống
 
-- MTP supplies denser future supervision from the same text and may encourage
-  longer-horizon features.
-- Extra heads consume parameters and training work, though their cost is small
-  relative to a large shared trunk and can be memory-scheduled.
-- The best prediction horizon depends on model size and data. In the original
-  experiments, four-token prediction could regress on some small-model or
-  multiple-choice natural-language settings.
-- Inference acceleration requires an engine that understands the MTP checkpoint,
-  tree/block verification, and KV/state management.
-- MTP is complementary to MoE or Gated DeltaNet: it changes the training target
-  and decode procedure, not the token-mixer or FFN equation.
+- MTP cung cấp khả năng giám sát dày đặc hơn trong tương lai từ cùng một văn bản và có thể khuyến khích
+  các tính năng có tầm nhìn dài hơn.
+- Các đầu bổ sung tiêu tốn các tham số và công việc huấn luyện, mặc dù chi phí của chúng thấp
+  liên quan đến một đường trục chia sẻ lớn và có thể được sắp xếp theo lịch trình bộ nhớ.
+- Đường chân trời dự đoán tốt nhất phụ thuộc vào kích thước và dữ liệu của mô hình. Trong bản gốc
+  thử nghiệm, dự đoán bốn mã thông báo có thể hồi quy trên một số mô hình nhỏ hoặc
+  cài đặt ngôn ngữ tự nhiên nhiều lựa chọn.
+- Tăng tốc suy luận yêu cầu một công cụ hiểu được điểm kiểm tra MTP,
+  xác minh cây/khối và KV/quản lý trạng thái.
+- MTP bổ sung cho MoE hoặc Gated DeltaNet: nó thay đổi mục tiêu đào tạo
+  và quy trình giải mã, không phải trình trộn mã thông báo hoặc phương trình FFN.
 
-## How Qwen uses it
+## Qwen sử dụng nó như thế nào
 
-**Verified:** Qwen3-Next introduces native MTP both to improve pretraining and to
-provide high-acceptance proposals for speculative decoding. The official post
-also describes multi-step training intended to match multi-step inference and
-improve acceptance in real serving.
-([official Qwen3-Next post](https://qwen.ai/blog?id=e34c4305036ce60d55a0791b170337c2b70ae51d))
+**Đã xác minh:** Qwen3-Next giới thiệu MTP gốc để cải thiện quá trình đào tạo trước và
+cung cấp các đề xuất có tính chấp nhận cao cho việc giải mã đầu cơ. Bài đăng chính thức
+cũng mô tả quá trình đào tạo nhiều bước nhằm phù hợp với suy luận nhiều bước và
+cải thiện sự chấp nhận trong việc phục vụ thực sự.
+([bài đăng chính thức của Qwen3-Next](https://qwen.ai/blog?id=e34c4305036ce60d55a0791b170337c2b70ae51d))
 
-**Runtime caveat:** the official model card states that MTP is not generally
-available through plain Hugging Face Transformers and recommends dedicated
-inference frameworks such as SGLang or vLLM. Therefore, loading the base model
-successfully does not prove that an MTP speedup is active.
-([Qwen3-Next model card](https://huggingface.co/Qwen/Qwen3-Next-80B-A3B-Instruct))
+**Cảnh báo về thời gian chạy:** thẻ mẫu chính thức nêu rõ rằng MTP nói chung không được hỗ trợ
+có sẵn thông qua Máy biến áp ôm mặt đơn giản và khuyên dùng
+các khung suy luận như SGLang hoặc vLLM. Do đó, việc tải mô hình cơ sở
+thành công không chứng minh rằng tính năng tăng tốc MTP đang hoạt động.
+([Thẻ mẫu Qwen3-Next](https://huggingface.co/Qwen/Qwen3-Next-80B-A3B-Instruct))

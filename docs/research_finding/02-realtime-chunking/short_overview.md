@@ -1,122 +1,123 @@
-# Real-time action chunking: overview
+# Tổng quan về action chunking thời gian thực
 
-## Research problem
+## Bài toán nghiên cứu
 
-A robot controller may need a new action every 20 ms, while a large vision-language-action model can take tens or hundreds of milliseconds to generate an action chunk. The robot therefore cannot wait for inference after every chunk.
+Robot controller có thể cần một action mới mỗi 20 ms, trong khi một mô hình vision-language-action lớn có thể mất hàng chục hoặc hàng trăm mili giây để sinh một action chunk. Vì vậy, robot không thể chờ inference sau mỗi chunk.
 
-Existing execution strategies have two failure modes:
+Các chiến lược thực thi hiện có có hai kiểu thất bại:
 
-- **Synchronous execution:** finish the current chunk, stop, generate the next chunk, then move again. The pauses slow the task and change the robot's motion dynamics.
-- **Naive asynchronous execution:** generate the next chunk while the current one runs, then switch immediately. The two chunks may represent different strategies, so the switch can create a sudden jump, high acceleration, or unsafe motion.
+- **Thực thi đồng bộ:** hoàn tất chunk hiện tại, dừng lại, sinh chunk tiếp theo rồi mới di chuyển tiếp. Các khoảng dừng làm chậm tác vụ và thay đổi động lực chuyển động của robot.
+- **Thực thi bất đồng bộ đơn giản:** sinh chunk tiếp theo trong khi chunk hiện tại đang chạy, sau đó chuyển ngay lập tức. Hai chunk có thể đại diện cho các chiến lược khác nhau, nên việc chuyển đổi có thể tạo ra bước nhảy đột ngột, gia tốc lớn hoặc chuyển động không an toàn.
 
-The research question is:
+Câu hỏi nghiên cứu là:
 
-> How can a robot generate action chunks asynchronously without pausing, while keeping the next
-> chunk continuous with already committed actions and still reacting to the latest observation?
+> Làm thế nào để robot sinh action chunk bất đồng bộ mà không phải dừng, đồng thời giữ chunk
+> tiếp theo liên tục với các action đã cam kết và vẫn phản ứng được với quan sát mới nhất?
 
-## Simple explanation of the idea
+## Giải thích đơn giản về ý tưởng
 
-Imagine the robot is currently following this plan:
+Hãy tưởng tượng robot đang làm theo kế hoạch này:
 
 ```text
-old chunk:  [already executed | executing during inference | future plan]
-new chunk:                    [fixed prefix              | newly generated actions]
+chunk cũ:  [đã thực thi | thực thi trong lúc inference | kế hoạch tương lai]
+chunk mới:             [prefix cố định                | action mới được sinh]
 ```
 
-While the model computes, several actions from the old chunk must still be executed. Those actions
-cannot be changed anymore. RTC copies them into the beginning of the new chunk as a **committed
-prefix**, then generates the remaining **postfix** so that it connects smoothly to that prefix.
+Trong khi mô hình tính toán, một số action trong chunk cũ vẫn phải được thực thi. Những action
+đó không thể thay đổi nữa. RTC sao chép chúng vào đầu chunk mới làm **prefix đã cam kết**, sau đó
+sinh **postfix** còn lại sao cho nó nối mượt với prefix.
 
-This gives the model two objectives:
+Điều này đặt ra hai mục tiêu cho mô hình:
 
-1. preserve the actions the robot is already committed to executing;
-2. use the newest observation to correct the future part of the plan.
+1. giữ nguyên các action mà robot đã cam kết thực thi;
+2. dùng quan sát mới nhất để hiệu chỉnh phần tương lai của kế hoạch.
 
 ```mermaid
 flowchart TD
-    OLD[Robot executes current chunk] --> OBS[Capture latest observation]
-    OLD --> PREFIX[Keep committed actions as prefix]
-    OBS --> GENERATE[Generate compatible postfix]
+    OLD[Robot thực thi chunk hiện tại] --> OBS[Thu quan sát mới nhất]
+    OLD --> PREFIX[Giữ action đã cam kết làm prefix]
+    OBS --> GENERATE[Sinh postfix tương thích]
     PREFIX --> GENERATE
-    GENERATE --> NEXT[New complete action chunk]
-    NEXT --> SWAP[Swap chunks without stopping]
+    GENERATE --> NEXT[Action chunk mới hoàn chỉnh]
+    NEXT --> SWAP[Đổi chunk mà không dừng]
 ```
 
-## Timing condition
+## Điều kiện thời gian
 
-The two chunks must overlap long enough to cover inference latency:
+Hai chunk phải chồng lấn đủ lâu để bao phủ độ trễ inference:
 
 $$
 d \le s \le H-d,
 $$
 
-where:
+trong đó:
 
-- `H` is the number of actions predicted in one chunk;
-- `s` is the number of actions executed before starting the next chunk cycle;
-- `d` is model latency measured in controller steps.
+- `H` là số action được dự đoán trong một chunk;
+- `s` là số action được thực thi trước khi bắt đầu chu kỳ chunk tiếp theo;
+- `d` là độ trễ mô hình, đo bằng số bước controller.
 
-If this condition fails, the old chunk may run out of valid actions before the new chunk is ready.
+Nếu điều kiện này không thỏa mãn, chunk cũ có thể hết action hợp lệ trước khi chunk mới sẵn sàng.
 
-## Two ways to create the compatible postfix
+## Hai cách tạo postfix tương thích
 
-| Method                       | Simple idea                                                                                             | Main advantage                                                                                                     | Main cost                                                                                         |
+| Phương pháp | Ý tưởng đơn giản | Ưu điểm chính | Chi phí chính |
 | ---------------------------- | ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------- |
-| **Inference-time RTC** | During every flow-denoising step, guide the new chunk toward the overlapping actions from the old chunk | Works with an existing flow or diffusion policy without retraining; supports soft continuity over the full overlap | Requires backpropagation during sampling, increasing latency                                      |
-| **Training-time RTC**  | Train the policy with clean action prefixes so it learns to generate only the compatible postfix        | Uses normal forward sampling with no guidance overhead; stronger at larger simulated delays                        | Requires training or fine-tuning for the expected delay distribution; supports only a hard prefix |
+| **RTC tại inference** | Trong mỗi bước flow denoising, hướng chunk mới về các action chồng lấn từ chunk cũ | Hoạt động với flow hoặc diffusion policy hiện có mà không cần train lại; hỗ trợ tính liên tục mềm trên toàn bộ phần chồng lấn | Cần backpropagation khi lấy mẫu, làm tăng độ trễ |
+| **RTC tại training** | Train policy với action prefix sạch để nó học cách chỉ sinh postfix tương thích | Dùng forward sampling thông thường, không có overhead do guidance; mạnh hơn ở độ trễ mô phỏng lớn | Cần train hoặc fine-tune cho phân phối độ trễ dự kiến; chỉ hỗ trợ prefix cứng |
 
-Inference-time RTC is useful when only a pretrained policy is available. Training-time RTC is more
-efficient when the policy can be fine-tuned and deployment latency is known well enough to simulate
-during training.
+RTC tại inference hữu ích khi chỉ có policy pretrained. RTC tại training hiệu quả hơn khi có
+thể fine-tune policy và biết đủ rõ độ trễ triển khai để mô phỏng nó trong lúc training.
 
-## Why soft masking is needed
+## Vì sao cần soft masking
 
-Matching only the strictly committed prefix can still allow the new chunk to change strategy
-immediately afterward. Inference-time RTC therefore also considers the rest of the overlap:
+Chỉ khớp prefix đã cam kết nghiêm ngặt vẫn có thể cho phép chunk mới đổi chiến lược ngay sau
+đó. Vì vậy, RTC tại inference còn xét phần chồng lấn còn lại:
 
-- committed actions receive full guidance;
-- later overlapping actions receive gradually decreasing guidance;
-- actions beyond the overlap are generated freely.
+- action đã cam kết nhận guidance đầy đủ;
+- action chồng lấn ở phía sau nhận guidance giảm dần;
+- action nằm ngoài phần chồng lấn được sinh tự do.
 
-The paper uses exponential decay. It also clips the guidance strength because the theoretical weight
-becomes unstable near the first denoising step, especially when the controller uses only five flow
-steps.
+Paper dùng suy giảm theo hàm mũ. Nó cũng chặn cường độ guidance vì trọng số lý thuyết trở nên
+không ổn định gần bước denoising đầu tiên, đặc biệt khi controller chỉ dùng năm bước flow.
 
-## Main findings
+## Kết quả chính
 
-- On 12 dynamic Kinetix tasks, inference-time RTC is more robust to delay than naive asynchronous
-  execution, temporal ensembling, and BID.
-- Training-time RTC performs better than inference-time RTC at simulated delays of two controller
-  steps or more, while being marginally worse at delays zero and one.
-- In six reported real-robot tasks, inference-time RTC improves throughput and remains robust when
-  additional latency is injected.
-- In the follow-up two-task real-world evaluation, training-time and inference-time RTC have similar
-  success and execution duration, while both are faster than synchronous execution.
-- For the reported `π0.5` GPU profile, inference-time guidance raises model latency from 76 ms to
-  97 ms. These figures are hardware- and model-specific, not universal RTC costs.
+- Trên 12 tác vụ Kinetix động, RTC tại inference bền vững với độ trễ hơn thực thi bất đồng bộ
+  đơn giản, temporal ensembling và BID.
+- RTC tại training hoạt động tốt hơn RTC tại inference khi độ trễ mô phỏng từ hai bước controller
+  trở lên, nhưng kém hơn một chút ở độ trễ bằng 0 và 1.
+- Trong sáu tác vụ robot thực được báo cáo, RTC tại inference cải thiện throughput và vẫn bền
+  vững khi thêm độ trễ.
+- Trong đánh giá thế giới thực tiếp theo gồm hai tác vụ, RTC tại training và tại inference có
+  success rate và thời lượng thực thi tương tự, đồng thời đều nhanh hơn thực thi đồng bộ.
+- Với GPU profile `π0.5` được báo cáo, guidance tại inference làm độ trễ mô hình tăng từ 76 ms
+  lên 97 ms. Các con số này phụ thuộc phần cứng và mô hình, không phải chi phí RTC phổ quát.
 
-## Limitations and open questions
+## Giới hạn và câu hỏi mở
 
-- Inference-time RTC directly requires an iterative diffusion or flow action generator.
-- Training-time RTC depends on the delay distribution used during training and does not provide soft
-  overlap guidance.
-- The papers assume timing aligned to controller steps and do not fully specify recovery from missed
-  deadlines, packet loss, inference failure, or `d > H-s`.
-- The public repository contains the Kinetix simulation pipeline, not the complete real-robot runtime
-  or robot evaluation assets.
-- The experiments were not rerun in this workspace; numerical claims above come from the papers.
+- RTC tại inference trực tiếp yêu cầu action generator diffusion hoặc flow dạng lặp.
+- RTC tại training phụ thuộc vào phân phối độ trễ dùng khi training và không cung cấp guidance
+  mềm cho phần chồng lấn.
+- Các paper giả định timing được căn theo bước controller và không mô tả đầy đủ cách phục hồi
+  khi lỡ deadline, mất gói tin, inference thất bại hoặc `d > H-s`.
+- Repository công khai chứa pipeline mô phỏng Kinetix, không chứa runtime robot thực hoàn chỉnh
+  hoặc asset đánh giá robot.
+- Các thí nghiệm chưa được chạy lại trong workspace này; các claim định lượng ở trên đến từ paper.
 
-## Detailed reports
+## Báo cáo chi tiết
 
-| Report                                                                                  | Focus                                                         |
+| Báo cáo | Trọng tâm |
 | --------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
-| [Asynchronous runtime](module_details/asynchronous_runtime.md)                           | Timing, chunk alignment, and background execution             |
-| [Inference-time inpainting](module_details/inference_time_inpainting.md)                 | Guided flow sampling and computational cost                   |
-| [Soft masking and stability](module_details/soft_masking_and_stability.md)               | Cross-chunk continuity, weight schedules, and clipping        |
-| [Training-time prefix conditioning](module_details/training_time_prefix_conditioning.md) | Prefix-conditioned loss, sampling, and paper/code discrepancy |
-| [Kinetix evaluation stack](module_details/kinetix_evaluation_stack.md)                   | Public code structure and reproducibility boundary            |
+| [Kết nối giữa paper và code](paper_code_connection.md) | Paper dùng repository cho phần nào và giới hạn tái tạo |
+| [Chi tiết code repository](code_details/01_overview.md) | Từng module, call graph, artifact contract, CLI và bẫy runtime |
+| [Chi tiết dependency Kinetix](kinetix_details/01_overview.md) | Environment, UED/PCG, model, experiment, config và toàn bộ module |
+| [Runtime bất đồng bộ](module_details/inference/asynchronous_runtime.md) | Timing, căn chỉnh chunk và thực thi nền |
+| [Inpainting tại inference](module_details/inference/inference_time_inpainting.md) | Lấy mẫu flow có guidance và chi phí tính toán |
+| [Soft masking và độ ổn định](module_details/inference/soft_masking_and_stability.md) | Tính liên tục giữa các chunk, lịch trọng số và clipping |
+| [Điều kiện hóa prefix tại training](module_details/training/training_time_prefix_conditioning.md) | Loss điều kiện hóa theo prefix, lấy mẫu và khác biệt paper/code |
+| [Evaluation stack Kinetix](module_details/kinetix_evaluation_stack.md) | Cấu trúc code công khai và ranh giới khả năng tái lập |
 
-## Sources
+## Nguồn
 
 - Kevin Black, Manuel Y. Galliker, and Sergey Levine, *Real-Time Execution of Action Chunking Flow
   Policies*: [local PDF](<../../papers/02-realtime-chunking/Real-Time Execution of Action Chunking Flow Policies.pdf>),
@@ -126,4 +127,4 @@ steps.
   [arXiv](https://arxiv.org/abs/2512.05964).
 - Physical Intelligence,
   [real-time-chunking-kinetix](https://github.com/Physical-Intelligence/real-time-chunking-kinetix/tree/9296f31d62d5bfeb5779dcb2f9bcf71ca37f448b),
-  inspected at commit `9296f31` on 2026-07-22.
+  được kiểm tra tại commit `9296f31` ngày 2026-07-22.

@@ -1,79 +1,82 @@
-# Byte-Level Byte Pair Encoding (BBPE) Tokenizer
+# Bộ token hóa Byte-Level Byte Pair Encoding (BBPE)
 
-**Improves:** word tokenization, character tokenization, and character-level
-BPE when the model must cover many scripts, rare symbols, noisy text, and code
-with one fixed vocabulary.
-**Primary goal:** guarantee a small lossless base alphabet while learning
-frequent variable-length byte sequences so ordinary text does not pay the full
-sequence-length cost of one token per byte.
+**Cải thiện:** cách token hóa theo từ, theo ký tự và BPE cấp ký tự
+khi mô hình phải bao phủ nhiều hệ chữ viết, ký hiệu hiếm, văn bản nhiễu và mã nguồn
+với một từ vựng cố định.
+**Mục tiêu chính:** bảo đảm một bảng chữ cái cơ sở nhỏ, không mất dữ liệu, đồng thời
+học các chuỗi byte có độ dài biến đổi thường gặp để văn bản thông thường không phải
+chịu toàn bộ chi phí độ dài chuỗi của cách biểu diễn mỗi byte một token.
 
-**Simple Explanation:** BBPE converts normalized text to UTF-8 bytes, starts from a base vocabulary that can represent every byte, and learns ranked pair merges that compress frequent byte sequences into larger tokens, make this tokenizer easily adapt with every languages and words.
+**Giải thích đơn giản:** BBPE chuyển văn bản đã chuẩn hóa thành byte UTF-8, bắt đầu
+từ một từ vựng cơ sở biểu diễn được mọi byte, rồi học thứ hạng hợp nhất cặp để nén
+các chuỗi byte thường gặp thành token lớn hơn. Nhờ đó, tokenizer có thể thích ứng
+với nhiều ngôn ngữ và từ mới.
 
-**Research date:** 2026-07-20
-**Scope:** the tokenizer algorithm, its architecture and dataflow, alternatives,
-system trade-offs, and the exact tokenizer artifacts published for the Qwen
-lineage.
+**Ngày nghiên cứu:** 2026-07-20
+**Phạm vi:** thuật toán token, kiến ​​trúc và luồng dữ liệu của nó, các lựa chọn thay thế,
+sự đánh đổi của hệ thống và các artifact token chính xác được xuất bản cho Qwen
+dòng mô hình.
 
-## Why the earlier token units were insufficient
+## Tại sao đơn vị token trước đó không đủ
 
-| Original unit       | Strength                                                       | Structural problem addressed by BBPE                                                                                                                   |
+| Đơn vị ban đầu | Điểm mạnh | Vấn đề cấu trúc mà BBPE giải quyết |
 | ------------------- | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Word                | Short sequences for common words                               | An open vocabulary cannot fit in a fixed table; new names, inflections, typos, and code identifiers become unknown or require a separate fallback      |
-| Unicode character   | Usually interpretable boundaries                               | Unicode contains a very large and unevenly used character space; rare characters consume vocabulary slots, and every character remains a separate step |
-| Character-level BPE | Learns reusable subwords and whole frequent words              | The initial character alphabet still needs corpus coverage; an unseen character can become`<unk>` unless another fallback mechanism exists           |
-| Pure bytes          | Any byte stream is representable with at most 256 base symbols | UTF-8 uses one to four bytes per Unicode code point, so sequences become much longer and model compute rises                                           |
-| **BBPE**      | Universal byte base plus learned byte n-grams                  | It removes ordinary OOVs while recovering much of subword BPE's compression efficiency                                                                 |
+| Từ | Chuỗi ngắn cho các từ thông dụng | Không thể nhét từ vựng mở vào một bảng cố định; tên mới, biến tố, lỗi chính tả và định danh mã nguồn sẽ thành unknown hoặc cần cơ chế fallback riêng |
+| Ký tự Unicode | Ranh giới thường có thể giải thích được | Unicode chứa không gian ký tự rất lớn và được sử dụng không đồng đều; các ký tự hiếm sử dụng các khe từ vựng và mỗi ký tự vẫn là một bước riêng biệt |
+| BPE cấp ký tự | Học các subword có thể tái sử dụng và cả từ phổ biến | Bảng chữ cái ký tự ban đầu vẫn cần được corpus bao phủ; ký tự chưa thấy có thể trở thành `<unk>` nếu không có cơ chế fallback khác |
+| Byte thuần túy | Bất kỳ luồng byte nào cũng có thể được biểu thị bằng tối đa 256 ký hiệu cơ sở | UTF-8 sử dụng một đến bốn byte cho mỗi điểm mã Unicode, do đó các chuỗi trở nên dài hơn nhiều và tính toán mô hình tăng lên |
+| **BBPE** | Cơ sở byte phổ quát cộng với byte n-gram đã học | Nó loại bỏ OOVs thông thường trong khi khôi phục phần lớn hiệu quả nén của BPE từ phụ |
 
-Sennrich et al. adapted BPE from compression to open-vocabulary neural text
-segmentation: initialize a small symbol set, repeatedly merge the most frequent
-adjacent pair, and use the learned merges to represent rare words through
-smaller units. Their version operated on characters or character sequences,
-not necessarily raw bytes.
-([Sennrich et al., 2016, §3.2](https://aclanthology.org/P16-1162/))
+Sennrich và cộng sự đã chuyển BPE từ dạng nén sang văn bản thần kinh từ vựng mở
+phân đoạn: khởi tạo một bộ ký hiệu nhỏ, liên tục hợp nhất các ký hiệu thường xuyên nhất
+cặp liền kề và sử dụng các kết hợp đã học để biểu diễn các từ hiếm thông qua
+các đơn vị nhỏ hơn. Phiên bản của họ hoạt động trên các ký tự hoặc chuỗi ký tự,
+không nhất thiết phải là byte thô.
+([Sennrich và cộng sự, 2016, §3.2](https://aclanthology.org/P16-1162/))
 
-Wang et al. moved that initial alphabet down to UTF-8 bytes. Their motivation
-was that a fixed byte alphabet is compact and language-agnostic, whereas rare
-characters in noisy or character-rich languages can occupy disproportionate
-vocabulary capacity. Their NMT experiments found comparable quality to
-character-level BPE with much smaller BBPE vocabularies, but those experimental
-ratios are results for the paper's translation setups, not a universal law for
-decoder-only LLMs.
-([Wang et al., 2019](https://arxiv.org/abs/1909.03341))
+Wang và cộng sự đã chuyển bảng chữ cái ban đầu đó xuống byte UTF-8. Động lực của họ
+là bảng chữ cái byte cố định nhỏ gọn và không phụ thuộc vào ngôn ngữ, trong khi hiếm
+các ký tự trong các ngôn ngữ ồn ào hoặc giàu ký tự có thể chiếm tỷ lệ không cân xứng
+năng lực từ vựng. Các thử nghiệm NMT của họ cho thấy chất lượng tương đương với
+BPE cấp độ ký tự với các từ vựng BBPE nhỏ hơn nhiều, nhưng những từ vựng thử nghiệm đó
+tỷ lệ là kết quả cho việc thiết lập bản dịch của bài báo, không phải là quy luật chung cho
+LLMs chỉ dành cho bộ giải mã.
+([Wang và cộng sự, 2019](https://arxiv.org/abs/1909.03341))
 
-## From compression BPE to tokenizer BPE
+## Từ nén BPE đến token BPE
 
-The name is historical. Gage's 1994 compression algorithm finds the most
-frequent pair of adjacent bytes in a data block, replaces every occurrence with
-an unused byte, records the substitution table, and repeats until further
-compression is impossible. A neural tokenizer does not require an unused
-physical byte for every merge. It creates a new **symbol/token ID** whose value
-is the concatenation of two existing symbols, learns a reusable ordered merge
-table from a corpus, and leaves the language model to learn an embedding for
-each resulting ID.
+Tên gọi này có nguồn gốc lịch sử. Thuật toán nén năm 1994 của Gage tìm thấy nhiều nhất
+cặp byte liền kề thường xuyên trong một khối dữ liệu, thay thế mọi lần xuất hiện bằng
+một byte chưa được sử dụng, ghi lại bảng thay thế và lặp lại cho đến khi tiếp tục
+nén là không thể. Trình token thần kinh không yêu cầu một token chưa được sử dụng
+byte vật lý cho mỗi lần hợp nhất. Nó tạo ra một **biểu tượng/token ID** mới có giá trị
+là sự kết hợp của hai biểu tượng hiện có, học cách hợp nhất theo thứ tự có thể tái sử dụng
+bảng từ một kho văn bản và rời khỏi mô hình ngôn ngữ để học cách nhúng cho
+mỗi kết quả là ID.
 ([Gage, 1994](https://jacobfilipp.com/DrDobbs/articles/CUJ/1994/9402/gage/gage.htm))
 
-This distinction matters:
+Sự khác biệt này quan trọng:
 
-- the tokenizer vocabulary is a learned dictionary, not the compressed text;
-- a token can contain one byte, one complete Unicode character, several
-  characters, or even only part of a multi-byte character;
-- the merge order is part of the tokenizer specification and must be identical
-  in training and inference;
-- the tokenizer does not understand morphology or semantics directly—it learns
-  frequent adjacency patterns from its training distribution.
+- từ vựng của tokenizer là một từ điển đã học, không phải văn bản nén;
+- một token có thể chứa một byte, một ký tự Unicode hoàn chỉnh, một số ký tự
+  ký tự hoặc thậm chí chỉ là một phần của ký tự nhiều byte;
+- thứ tự hợp nhất là một phần của đặc tả token và phải giống hệt nhau
+  trong đào tạo và suy luận;
+- trình tạo token không hiểu trực tiếp về hình thái hoặc ngữ nghĩa—nó học
+  các mẫu kề cận thường xuyên từ phân bố huấn luyện của nó.
 
-## Training BBPE
+## Đào tạo BBPE
 
-Let the normalized training corpus be split into pre-tokenized spans, and let
-each span be converted to UTF-8 bytes. The minimum byte alphabet is
+Hãy để kho dữ liệu đào tạo chuẩn hóa được chia thành các khoảng được mã hóa trước và để
+mỗi nhịp được chuyển đổi thành byte UTF-8. Bảng chữ cái byte tối thiểu là
 
 $$
 V_0 = \{0,1,\ldots,255\}.
 $$
 
-Some implementations expose these bytes through printable Unicode surrogate
-characters, but the underlying alphabet still represents bytes. At merge step
-`t`, count adjacent symbol pairs inside the allowed spans:
+Một số triển khai hiển thị các byte này thông qua đại diện thay thế Unicode có thể in được
+ký tự, nhưng bảng chữ cái cơ bản vẫn đại diện cho byte. Ở bước hợp nhất
+`t`, đếm các cặp ký hiệu liền kề trong khoảng cho phép:
 
 $$
 C_t(a,b)
@@ -83,7 +86,7 @@ C_t(a,b)
 \mathbf{1}\!\left[s_i=a \land s_{i+1}=b\right].
 $$
 
-Classical frequency-based BPE selects
+Lựa chọn BPE dựa trên tần số cổ điển
 
 $$
 (a_t,b_t)
@@ -91,59 +94,59 @@ $$
 \underset{(a,b)}{\arg\max}\; C_t(a,b),
 $$
 
-creates the concatenated symbol `a_t b_t`, assigns it the next merge rank, and
-replaces occurrences of the pair in the training representation:
+tạo biểu tượng nối `a_t b_t`, gán cho nó thứ hạng hợp nhất tiếp theo và
+thay thế các lần xuất hiện của cặp trong biểu diễn huấn luyện:
 
 $$
 V_{t+1}=V_t\cup\{a_tb_t\}.
 $$
 
-The loop stops at a vocabulary/merge budget or another frequency threshold. In
-the simplified case with 256 initial byte symbols and no reserved tokens,
+Vòng lặp dừng ở ngân sách từ vựng/hợp nhất hoặc ngưỡng tần số khác. TRONG
+trường hợp đơn giản hóa với 256 ký hiệu byte ban đầu và không có token dành riêng,
 
 $$
 |V| = 256 + N_{\text{merges}}.
 $$
 
-Real tokenizer files can have a larger initial alphabet, unused IDs, added
-tokens, and padded embedding rows, so this identity should not be used to infer
-a checkpoint's exact `vocab_size` without inspecting its artifacts.
+Các tệp token thực có thể có bảng chữ cái ban đầu lớn hơn, IDs chưa được sử dụng, đã được thêm vào
+token và các hàng nhúng được đệm, vì vậy không nên sử dụng danh tính này để suy ra
+`vocab_size` chính xác của trạm kiểm soát mà không kiểm tra các artifact của nó.
 
-### Why pre-tokenization is part of the architecture
+### Tại sao token trước là một phần của kiến ​​trúc
 
-Most production BBPE tokenizers do not allow merges over an entire document.
-A regex or another pre-tokenizer first isolates spans such as words, numbers,
-punctuation, whitespace, and newlines. Pair counting and merge application stay
-inside those boundaries. Therefore, changing only the pre-tokenization regex
-can change:
+Hầu hết các token BBPE sản xuất không cho phép hợp nhất trên toàn bộ tài liệu.
+Trước tiên, một biểu thức chính quy hoặc một token trước khác sẽ tách biệt các khoảng như từ, số,
+dấu câu, khoảng trắng và dòng mới. Đếm cặp và hợp nhất ứng dụng ở lại
+bên trong những ranh giới đó. Do đó, chỉ thay đổi biểu thức chính quy trước token
+có thể thay đổi:
 
-- whether a leading space joins the following word;
-- whether `1234` can become one token or is forced into four digits;
-- how contractions, indentation, CR/LF, and code punctuation are grouped;
-- which candidate tokens can ever be learned, even with the same corpus and
-  vocabulary budget.
+- liệu khoảng trắng ở đầu có nối với từ sau hay không;
+- liệu `1234` có thể trở thành một token hay bị buộc thành bốn chữ số;
+- cách nhóm các từ viết tắt, thụt lề, CR/LF và dấu câu mã;
+- những token ứng cử viên nào có thể được học, ngay cả với cùng một kho ngữ liệu và
+  ngân sách từ vựng.
 
-This is why “uses BBPE” is not enough to reproduce a tokenizer. Its normalizer,
-pre-tokenizer, initial alphabet, merge ranks, special-token policy, and decoder
-are all part of the contract.
+Đây là lý do tại sao “sử dụng BBPE” là không đủ để tái tạo token. Bộ bình thường hóa của nó,
+token trước, bảng chữ cái ban đầu, xếp hạng hợp nhất, chính sách token đặc biệt và bộ giải mã
+đều là một phần của hợp đồng.
 
-## Encoding dataflow
+## Mã hóa luồng dữ liệu
 
 ```mermaid
 flowchart LR
-    T[Input text] --> N[Optional Unicode normalization]
-    N --> P[Regex / pre-tokenization spans]
-    P --> U[UTF-8 encode]
-    U --> B[Byte symbols]
-    B --> M[Apply learned BPE merges by rank]
-    M --> I[Token IDs]
-    I --> E[Embedding lookup]
+    T[Văn bản đầu vào] --> N[Chuẩn hóa Unicode tùy chọn]
+    N --> P[Các span regex / tiền token hóa]
+    P --> U[Mã hóa UTF-8]
+    U --> B[Ký hiệu byte]
+    B --> M[Áp dụng phép hợp nhất BPE đã học theo thứ hạng]
+    M --> I[ID token]
+    I --> E[Tra cứu embedding]
     E --> L[LLM]
 ```
 
-For every pre-tokenized span, inference starts from the byte symbols, repeatedly
-applies the available pair with the best learned rank, and stops when no learned
-pair remains. In rank notation,
+Đối với mỗi khoảng được mã hóa trước, suy luận bắt đầu từ các ký hiệu byte, lặp đi lặp lại
+áp dụng cặp có sẵn với thứ hạng đã học tốt nhất và dừng khi không học được
+cặp còn lại. Trong ký hiệu xếp hạng,
 
 $$
 (a^*,b^*)
@@ -152,71 +155,71 @@ $$
 r(a,b),
 $$
 
-where an unlearned pair has rank `+infinity`. This rank application is not a new
-frequency count over the user's prompt; frequencies were already converted to
-merge ranks during tokenizer training.
+trong đó một cặp chưa được học có thứ hạng `+infinity`. Ứng dụng xếp hạng này không phải là mới
+đếm tần số theo lời nhắc của người dùng; tần số đã được chuyển đổi thành
+hợp nhất các cấp bậc trong quá trình đào tạo tokenizer.
 
-### Concrete example
+### Ví dụ cụ thể
 
-Take the normalized string `café`. UTF-8 represents it as
-
-```text
-text:   c     a     f     é
-bytes:  63    61    66    C3 A9        (hexadecimal)
-```
-
-Suppose the learned merge table contains these rules in increasing rank order:
+Lấy chuỗi chuẩn hóa `café`. UTF-8 đại diện cho nó là
 
 ```text
-63 + 61       -> 6361          # "ca"
-C3 + A9       -> C3A9          # complete UTF-8 encoding of "é"
-6361 + 66     -> 636166        # "caf"
-636166 + C3A9 -> 636166C3A9    # "café"
+văn bản: c a f é
+byte: 63 61 66 C3 A9 (thập lục phân)
 ```
 
-Then `café` can be one token. If the last two rules were never learned, the same
-input could still be represented as `ca`, `f`, `é`; with only the 256-byte base
-it could still be represented as the five original bytes. **Coverage is
-guaranteed by the base alphabet, while compression depends on the learned
-merges and their corpus.**
-
-Tokens may cross Unicode character boundaries or end in the middle of one. For
-example, a token may hold `C3` without its continuation byte `A9`. This is valid
-inside a token sequence, but decoding that single token in isolation can show
-the Unicode replacement character. Qwen's tokenizer note demonstrates exactly
-this behavior: two individually incomplete token byte strings become a valid
-Chinese character after concatenation.
-([official Qwen tokenization note](https://github.com/QwenLM/Qwen/blob/main/tokenization_note.md#regular-tokens))
-
-## GPT-2-style byte-to-Unicode mapping
-
-Many implementations need BPE code that operates on strings rather than raw
-byte arrays. GPT-2 introduced a reversible lookup from all 256 byte values to
-printable Unicode characters, avoiding whitespace and control characters in
-the internal representation. Its encoder performs this order:
+Giả sử bảng hợp nhất đã học chứa các quy tắc này theo thứ tự tăng dần:
 
 ```text
-regex spans -> UTF-8 bytes -> byte-to-Unicode lookup -> ranked BPE -> IDs
+63 + 61 -> 6361 # "ca"
+C3 + A9 -> C3A9 # hoàn thành mã hóa UTF-8 của "é"
+6361+66 -> 636166#"caf"
+636166 + C3A9 -> 636166C3A9 # "café"
 ```
 
-and decoding reverses it:
+Sau đó `café` có thể là một token. Nếu hai quy tắc cuối cùng chưa bao giờ được học, thì tương tự
+đầu vào vẫn có thể được biểu diễn dưới dạng `ca`, `f`, `é`; chỉ với cơ sở 256 byte
+nó vẫn có thể được biểu diễn dưới dạng năm byte gốc. **Phạm vi bảo hiểm là
+được đảm bảo bởi bảng chữ cái cơ sở, trong khi việc nén phụ thuộc vào kiến ​​thức đã học
+hợp nhất và kho văn bản của họ.**
+
+Mã thông báo có thể vượt qua ranh giới ký tự Unicode hoặc kết thúc ở giữa một ký tự. Vì
+ví dụ: token có thể giữ `C3` mà không có byte tiếp theo `A9`. Điều này hợp lệ
+bên trong một chuỗi token, nhưng việc giải mã token đơn lẻ đó có thể hiển thị
+ký tự thay thế Unicode. Ghi chú tokenizer của Qwen thể hiện chính xác
+hành vi này: hai chuỗi byte token không hoàn chỉnh riêng lẻ trở thành hợp lệ
+Ký tự Trung Quốc sau khi nối.
+([ghi chú token Qwen chính thức](https://github.com/QwenLM/Qwen/blob/main/tokenization_note.md#regular-tokens))
+
+## Ánh xạ byte sang Unicode GPT-2-style
+
+Nhiều triển khai cần mã BPE hoạt động trên chuỗi thay vì thô
+mảng byte. GPT-2 đã giới thiệu tính năng tra cứu có thể đảo ngược từ tất cả các giá trị 256 byte sang
+các ký tự Unicode có thể in được, tránh khoảng trắng và các ký tự điều khiển trong
+sự đại diện bên trong. Bộ mã hóa của nó thực hiện thứ tự này:
 
 ```text
-IDs -> merged surrogate strings -> bytes -> UTF-8 text
+nhịp độ chính quy -> byte UTF-8 -> tra cứu byte-to-Unicode -> xếp hạng BPE -> IDs
 ```
 
-The familiar `Ġ` in GPT-2-family vocabulary displays the surrogate associated
-with a space byte; it is not a linguistic marker discovered in the original
-text. Likewise, surrogate-looking fragments should not be interpreted as the
-text's actual Unicode characters. The original GPT-2 implementation exposes
-the reversible lookup, regex, ranked merge loop, UTF-8 conversion, and inverse
-decoder directly.
+và giải mã đảo ngược nó:
+
+```text
+IDs -> chuỗi thay thế được hợp nhất -> byte -> văn bản UTF-8
+```
+
+`Ġ` quen thuộc trong từ vựng GPT-2-family hiển thị đại diện thay thế được liên kết
+với một byte khoảng trắng; nó không phải là một dấu hiệu ngôn ngữ được phát hiện trong nguyên bản
+chữ. Tương tự như vậy, các mảnh trông có vẻ thay thế không nên được hiểu là
+các ký tự Unicode thực tế của văn bản. Triển khai GPT-2 ban đầu cho thấy
+tra cứu có thể đảo ngược, biểu thức chính quy, vòng lặp hợp nhất được xếp hạng, chuyển đổi UTF-8 và nghịch đảo
+bộ giải mã trực tiếp.
 ([OpenAI GPT-2 `encoder.py`](https://github.com/openai/gpt-2/blob/master/src/encoder.py))
 
-## Decoding and reversibility
+## Giải mã và đảo ngược
 
-Ignoring normalization and special-token removal, decoding is the inverse of
-encoding:
+Bỏ qua việc chuẩn hóa và loại bỏ token đặc biệt, việc giải mã là nghịch đảo của
+mã hóa:
 
 $$
 \hat{b}
@@ -230,73 +233,73 @@ $$
 \hat{x}=\operatorname{UTF8Decode}(\hat{b}).
 $$
 
-For input text encoded by the tokenizer, the byte base prevents an ordinary
-unknown token. Generated token sequences are different: the model can stop
-after a token containing only part of a UTF-8 character, so a streaming decoder
-may need to buffer multiple tokens before it emits valid text. An arbitrary
-model-generated byte sequence can also be invalid UTF-8; the application must
-choose whether to buffer, replace, ignore, or surface decoding errors. Wang et
-al. explicitly noted that not every arbitrary byte sequence maps to valid text,
-although invalid sequences were rare in their completed NMT experiments.
-([Wang et al., 2019, decoding discussion](https://arxiv.org/pdf/1909.03341))
+Đối với văn bản đầu vào được mã hóa bởi bộ token, cơ sở byte sẽ ngăn chặn một thông thường
+token không xác định. Chuỗi token được tạo khác nhau: mô hình có thể dừng
+sau token chỉ chứa một phần ký tự UTF-8, do đó bộ giải mã trực tuyến
+có thể cần đệm nhiều token trước khi nó phát ra văn bản hợp lệ. Một cách tùy tiện
+Chuỗi byte do mô hình tạo cũng có thể là UTF-8 không hợp lệ; ứng dụng phải
+chọn đệm, thay thế, bỏ qua hoặc giải mã bề mặt các lỗi. Vương và
+al. lưu ý rõ ràng rằng không phải mọi chuỗi byte tùy ý đều ánh xạ tới văn bản hợp lệ,
+mặc dù trình tự không hợp lệ rất hiếm trong các thử nghiệm NMT đã hoàn thành của họ.
+([Wang và cộng sự, 2019, thảo luận giải mã](https://arxiv.org/pdf/1909.03341))
 
-There is another important boundary: **a normalizer can intentionally make the
-whole tokenizer non-lossless with respect to the original input bytes**. For
-example, NFC can replace a decomposed base-letter-plus-combining-mark sequence
-with a canonically composed code point before byte encoding. BBPE then preserves
-the normalized bytes, not the exact original spelling at the byte level.
+Có một ranh giới quan trọng khác: **bộ chuẩn hóa có thể cố tình tạo ra
+toàn bộ token không mất dữ liệu đối với các byte đầu vào ban đầu**. Vì
+ví dụ: NFC có thể thay thế chuỗi ký tự cơ sở-cộng-dấu kết hợp được phân tách
+với một điểm mã được soạn thảo chính tắc trước khi mã hóa byte. BBPE sau đó bảo quản
+các byte được chuẩn hóa, không phải cách viết chính xác ban đầu ở cấp độ byte.
 
-## BBPE is not byte fallback
+## BBPE không phải là dự phòng byte
 
-| Mechanism                                  | Normal path                                    | When raw-byte tokens appear                           | Ordinary OOV behavior                                           |
+| Cơ chế | Đường dẫn bình thường | Khi token byte thô xuất hiện | Hành vi OOV thông thường |
 | ------------------------------------------ | ---------------------------------------------- | ----------------------------------------------------- | --------------------------------------------------------------- |
-| True byte-level BPE                        | Convert**all** input to bytes before BPE | Always forms the base representation                  | None when all 256 bytes are covered                             |
-| Character/subword model with byte fallback | Run the normal character/subword model first   | Only when a character/span would otherwise be unknown | Unknowns are replaced by explicit byte tokens such as`<0xE2>` |
+| Cấp byte thực BPE | Chuyển đổi**tất cả** đầu vào thành byte trước BPE | Luôn hình thành biểu diễn cơ sở | Không có khi tất cả 256 byte được bao phủ |
+| Mô hình ký tự/từ phụ với dự phòng byte | Trước tiên hãy chạy mô hình ký tự/từ phụ thông thường | Chỉ khi một ký tự/khoảng không được biết đến | Những phần không xác định được thay thế bằng các token byte rõ ràng, chẳng hạn như`<0xE2>` |
 
-Hugging Face's official decoder documentation makes the implementation
-difference visible: `ByteLevel` reverses the GPT-2-style byte-to-Unicode mapping,
-whereas `ByteFallback` interprets explicit `<0xNN>` fallback tokens that stand
-in for unknown characters.
-([Hugging Face Tokenizers decoders](https://huggingface.co/docs/tokenizers/main/en/api/decoders))
+Tài liệu giải mã chính thức của Hugging Face khiến việc triển khai
+có thể nhìn thấy sự khác biệt: `ByteLevel` đảo ngược ánh xạ byte-to-Unicode GPT-2-style,
+trong khi `ByteFallback` diễn giải token dự phòng `<0xNN>` rõ ràng
+cho các ký tự chưa biết.
+([Bộ giải mã Tokenizers ôm mặt](https://huggingface.co/docs/tokenizers/main/en/api/decoders))
 
-SentencePiece is also not one segmentation algorithm. It is a framework that
-can train BPE, unigram, character, or word models directly from raw sentences;
-its standard operation treats input as Unicode characters and applies its own
-normalization and whitespace representation. A SentencePiece model can enable
-byte fallback, but that does not turn every SentencePiece configuration into
+SentencePiece cũng không phải là một thuật toán phân đoạn. Đó là một khuôn khổ mà
+có thể huấn luyện các mô hình BPE, unigram, ký tự hoặc từ trực tiếp từ các câu thô;
+Hoạt động tiêu chuẩn của nó xử lý đầu vào dưới dạng ký tự Unicode và áp dụng ký tự riêng của nó
+chuẩn hóa và biểu diễn khoảng trắng. Mô hình SentencePiece có thể kích hoạt
+dự phòng byte, nhưng điều đó không biến mọi cấu hình SentencePiece thành
 BBPE.
-([SentencePiece paper](https://arxiv.org/abs/1808.06226),
-[official implementation](https://github.com/google/sentencepiece))
+([Giấy câu](https://arxiv.org/abs/1808.06226),
+[triển khai chính thức](https://github.com/google/sentencepiece))
 
-## Comparison with neighboring tokenizers
+## So sánh với các token lân cận
 
-| Method         | Initial units                                   | Training/encoding rule                                                                              | OOV guarantee                                               | Characteristic trade-off                                                               |
+| Phương pháp | Đơn vị ban đầu | Quy tắc đào tạo/mã hóa | Bảo hành OOV | Sự đánh đổi đặc trưng |
 | -------------- | ----------------------------------------------- | --------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| Character BPE  | Covered Unicode characters                      | Merge most frequent adjacent units; apply learned ranks                                             | No, unless all needed characters or fallback are present    | More interpretable base symbols, but multilingual alphabets consume slots              |
-| **BBPE** | All bytes                                       | Merge frequent adjacent byte-derived units; apply learned ranks                                     | Yes for byte coverage                                       | Compact universal base; tokens may split characters and rare scripts can be byte-heavy |
-| WordPiece      | Character-like alphabet with continuation forms | Learn a likelihood-related vocabulary; encode by longest matching pieces                            | Usually uses`[UNK]` when a word cannot be fully segmented | Useful continuation convention, but not intrinsically open at the byte level           |
-| Unigram LM     | Large candidate subword set                     | Remove candidates to optimize a corpus likelihood objective; select a high-probability segmentation | Depends on character coverage/fallback                      | Supports probabilistic alternative segmentations rather than a fixed merge hierarchy   |
-| Pure bytes     | All bytes                                       | No learned merges                                                                                   | Yes                                                         | Smallest vocabulary but longest sequences                                              |
+| Nhân vật BPE | Ký tự Unicode được che phủ | Hợp nhất các đơn vị lân cận thường xuyên nhất; áp dụng cấp bậc đã học | Không, trừ khi có tất cả các ký tự cần thiết hoặc ký tự dự phòng | Các ký hiệu cơ sở dễ hiểu hơn, nhưng bảng chữ cái đa ngôn ngữ chiếm nhiều vị trí |
+| **BBPE** | Tất cả byte | Hợp nhất các đơn vị có nguồn gốc byte liền kề thường xuyên; áp dụng cấp bậc đã học | Có đối với phạm vi bảo hiểm byte | Đế phổ thông nhỏ gọn; token có thể phân tách các ký tự và các hệ chữ viết hiếm có thể nặng byte |
+| Từ ngữ | Bảng chữ cái giống ký tự với các dạng tiếp nối | Học từ vựng liên quan đến khả năng xảy ra; mã hóa bằng các phần khớp dài nhất | Thường sử dụng`[UNK]` khi một từ không thể được phân đoạn đầy đủ | Quy ước tiếp tục hữu ích, nhưng về bản chất không mở ở cấp byte |
+| Unigram LM | Bộ từ phụ ứng cử viên lớn | Loại bỏ các ứng cử viên để tối ưu hóa mục tiêu khả năng của kho dữ liệu; chọn phân khúc có xác suất cao | Phụ thuộc vào mức độ bao phủ/dự phòng của nhân vật | Hỗ trợ các phân đoạn thay thế theo xác suất thay vì phân cấp hợp nhất cố định |
+| Byte thuần túy | Tất cả byte | Không có sự hợp nhất đã học | Có | Từ vựng nhỏ nhất nhưng chuỗi dài nhất |
 
-The WordPiece training implementation was never officially released by Google,
-so exact descriptions of its pair-scoring rule are reconstructions from the
-literature. The robust distinction is at encoding time: common WordPiece
-implementations use longest-match-first over a final vocabulary, while BPE
-applies an ordered merge table.
-([Hugging Face WordPiece documentation](https://huggingface.co/docs/course/chapter6/6))
+Việc triển khai đào tạo WordPiece chưa bao giờ được Google phát hành chính thức,
+vì vậy những mô tả chính xác về quy tắc tính điểm theo cặp của nó là sự tái tạo lại từ
+văn học. Sự khác biệt rõ ràng nhất là ở thời điểm mã hóa: WordPiece phổ biến
+việc triển khai sử dụng từ vựng khớp đầu tiên dài nhất trên từ vựng cuối cùng, trong khi BPE
+áp dụng một bảng hợp nhất theo thứ tự.
+([Tài liệu Ôm mặt WordPiece](https://huggingface.co/docs/course/chapter6/6))
 
-## System-level trade-offs
+## Sự đánh đổi ở cấp độ hệ thống
 
-### Vocabulary size versus sequence length
+### Kích thước từ vựng so với độ dài chuỗi
 
-Let `V` be vocabulary size, `d` model width, and `L` the resulting number of
-tokens. The input embedding matrix costs
+Đặt `V` là kích thước từ vựng, chiều rộng mô hình `d` và `L` là số kết quả của
+token. Chi phí ma trận nhúng đầu vào
 
 $$
 P_{\text{embed}}=Vd.
 $$
 
-If the output LM head is separate, its weights add approximately another `Vd`:
+Nếu đầu LM đầu ra riêng biệt thì các trọng số của nó sẽ cộng thêm khoảng một `Vd` khác:
 
 $$
 P_{\text{vocab}}
@@ -307,111 +310,111 @@ Vd, & \text{tied input/output weights},\\
 \end{cases}
 $$
 
-A larger BBPE vocabulary therefore increases checkpoint memory, embedding
-bandwidth, and the final-logit computation. In return it can reduce `L` by
-storing more frequent strings as single tokens. This matters throughout the
-network: full-attention prefill scales approximately as
+Do đó, vốn từ vựng BBPE lớn hơn sẽ tăng bộ nhớ điểm kiểm tra, nhúng
+băng thông và tính toán log cuối cùng. Đổi lại nó có thể giảm `L` bằng
+lưu trữ các chuỗi thường xuyên hơn dưới dạng token đơn lẻ. Điều này quan trọng xuyên suốt
+mạng: tỷ lệ điền trước toàn bộ sự chú ý xấp xỉ bằng
 
 $$
 O(L^2d),
 $$
 
-while token-wise projections and MLPs scale linearly with `L`. If the same text
-uses a fraction `r` as many tokens, the attention portion can fall roughly to
-`r^2` of its former size, but the larger output vocabulary makes each decoding
-step more expensive. The best vocabulary size is consequently a hardware,
-language-mixture, model-width, and serving-workload trade-off—not simply “larger
-is better.”
+trong khi các phép chiếu thông minh về token và MLPs chia tỷ lệ tuyến tính với `L`. Nếu cùng một văn bản
+sử dụng một phần `r` làm nhiều token, phần chú ý có thể rơi vào khoảng
+`r^2` có kích thước trước đây, nhưng vốn từ vựng đầu ra lớn hơn khiến mỗi lần giải mã
+bước đắt hơn. Do đó, kích thước từ vựng tốt nhất là phần cứng,
+sự cân bằng giữa hỗn hợp ngôn ngữ, độ rộng mô hình và khối lượng công việc phục vụ—không chỉ đơn giản là “lớn hơn
+thì tốt hơn.”
 
-### Corpus allocation is policy
+### Phân bổ Corpus là chính sách
 
-Merge slots go to frequent patterns. If English and popular programming
-languages dominate tokenizer training, they obtain long reusable tokens while a
-low-resource script may remain close to raw bytes. BBPE ensures encodability,
-not equal token efficiency or equal model quality across languages. Vocabulary
-sharing can help cross-lingual transfer—the BBPE paper found this in its
-multilingual translation setup—but a single shared inventory still reflects
-the sampling weights used to train it.
+Hợp nhất các vị trí đi theo các mẫu thường xuyên. Nếu tiếng Anh và lập trình phổ biến
+ngôn ngữ chiếm ưu thế trong quá trình đào tạo token, chúng nhận được các token có thể tái sử dụng trong thời gian dài trong khi
+hệ chữ viết tài nguyên thấp có thể vẫn ở gần byte thô. BBPE đảm bảo khả năng mã hóa,
+Hiệu quả token không bằng nhau hoặc chất lượng mô hình bằng nhau giữa các ngôn ngữ. Từ vựng
+việc chia sẻ có thể giúp chuyển giao đa ngôn ngữ—bài báo BBPE đã tìm thấy điều này trong
+thiết lập bản dịch đa ngôn ngữ—nhưng một khoảng không quảng cáo được chia sẻ vẫn phản ánh
+trọng số lấy mẫu được sử dụng để huấn luyện nó.
 
-### Whitespace, code, and exact text
+### Khoảng trắng, mã và văn bản chính xác
 
-Byte-level processing is attractive for code because tabs, spaces, line endings,
-operators, and arbitrary identifiers remain representable. Yet the regex can
-prevent useful merges, Unicode normalization can rewrite source text, and
-different line-ending policies can change token counts. Any code model should
-therefore benchmark the **whole tokenizer pipeline**, not only confirm that its
-model type is `BPE`.
+Xử lý cấp byte rất hấp dẫn đối với mã vì các tab, dấu cách, kết thúc dòng,
+các toán tử và các mã định danh tùy ý vẫn có thể biểu diễn được. Tuy nhiên, biểu thức chính quy có thể
+ngăn chặn sự hợp nhất hữu ích, chuẩn hóa Unicode có thể viết lại văn bản nguồn và
+các chính sách kết thúc dòng khác nhau có thể thay đổi số lượng token. Bất kỳ mô hình mã nào cũng nên
+do đó, hãy đánh giá **toàn bộ đường dẫn token**, không chỉ xác nhận rằng nó
+loại mô hình là `BPE`.
 
-### Robustness and security are not automatic
+### Sự mạnh mẽ và bảo mật không phải là tự động
 
-BBPE removes the `<unk>` coverage failure but does not make visually equivalent
-strings identical. Homoglyphs, zero-width characters, bidirectional controls,
-NFC/NFD forms, and invalid byte handling are separate concerns. Normalization
-can reduce some variation but may also destroy distinctions that matter in code
-or security-sensitive text.
+BBPE loại bỏ lỗi phủ sóng `<unk>` nhưng không tương đương về mặt trực quan
+dây giống nhau. Homoglyphs, ký tự có độ rộng bằng 0, điều khiển hai chiều,
+Các biểu mẫu NFC/NFD và việc xử lý byte không hợp lệ là những mối quan tâm riêng biệt. Chuẩn hóa
+có thể giảm một số biến thể nhưng cũng có thể phá hủy sự khác biệt quan trọng trong mã
+hoặc văn bản nhạy cảm về bảo mật.
 
-## Exact Qwen adoption
+## Việc áp dụng Qwen chính xác
 
 ### Qwen → Qwen2 → Qwen3
 
-| Family | Verified tokenizer description                                                                                                       | Important count detail                                                                                                                |
+| Gia Đình | Mô tả token đã được xác minh | Chi tiết đếm quan trọng |
 | ------ | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------- |
-| Qwen   | Starts from`tiktoken`'s `cl100k_base`, adds frequent Chinese and other multilingual units, and splits numbers into single digits | Reported final vocabulary is approximately 152K                                                                                       |
-| Qwen2  | Reuses Qwen's byte-level BPE                                                                                                         | 151,643 regular tokens plus 3 control tokens; the report warns that the embedding size can be larger for distributed-training reasons |
-| Qwen3  | Explicitly identifies the tokenizer as BBPE                                                                                          | Vocabulary size 151,669                                                                                                               |
+| Qwen | Bắt đầu từ `tiktoken` của `tiktoken`, thêm các đơn vị tiếng Trung thường gặp và các đơn vị đa ngôn ngữ khác, đồng thời chia các số thành một chữ số | Từ vựng cuối cùng được báo cáo là khoảng 152K |
+| Qwen2 | Tái sử dụng cấp byte BPE của Qwen | 151.643 token thông thường cộng với 3 token kiểm soát; báo cáo cảnh báo rằng kích thước nhúng có thể lớn hơn vì lý do đào tạo phân tán |
+| Qwen3 | Xác định rõ ràng token là BBPE | Kích thước từ vựng 151.669 |
 
-Sources: [Qwen Technical Report, §2.2](https://arxiv.org/abs/2309.16609),
-[Qwen2 Technical Report, §2.1](https://arxiv.org/abs/2407.10671), and
-[Qwen3 Technical Report, §2](https://arxiv.org/abs/2505.09388).
+Nguồn: [Báo cáo kỹ thuật Qwen, §2.2](https://arxiv.org/abs/2309.16609),
+[Báo cáo kỹ thuật Qwen2, §2.1](https://arxiv.org/abs/2407.10671) và
+[Báo cáo kỹ thuật Qwen3, §2](https://arxiv.org/abs/2505.09388).
 
-This lineage also shows why `151,643`, `151,646`, and `151,669` are not
-contradictory. The first is Qwen2's regular BPE inventory, the second adds the
-three Qwen2 control tokens, and the third is the later Qwen3 tokenizer's stated
-full vocabulary.
+Dòng dõi này cũng cho thấy tại sao `151,643`, `151,646` và `151,669` lại không
+trái ngược nhau. Đầu tiên là kho BPE thông thường của Qwen2, thứ hai bổ sung thêm
+ba token kiểm soát Qwen2 và mã thứ ba là token Qwen3 sau này đã nêu
+từ vựng đầy đủ.
 
-### Qwen3.5: larger BBPE and the artifact-level dataflow
+### Qwen3.5: BBPE lớn hơn và luồng dữ liệu cấp độ tạo tác
 
-The Qwen3.5-Omni report and official release post describe a 250K byte-level BPE
-vocabulary, increased from about 150K, and report 10–60% better encoding and
-decoding efficiency across most languages. This is a Qwen-reported aggregate
-claim; the cited report sentence does not provide a per-language tokenizer
-benchmark table or enough methodology to reproduce the range.
-([Qwen3.5-Omni Technical Report, §2.3](https://arxiv.org/abs/2604.15804),
-[official Qwen3.5 release](https://www.alibabacloud.com/blog/602894))
+Báo cáo Qwen3.5-Omni và bài đăng phát hành chính thức mô tả BPE cấp 250K byte
+từ vựng, tăng từ khoảng 150K và báo cáo khả năng mã hóa và mã hóa tốt hơn 10–60%.
+hiệu quả giải mã trên hầu hết các ngôn ngữ. Đây là tổng hợp được báo cáo bởi Qwen
+khẳng định; câu báo cáo được trích dẫn không cung cấp token cho mỗi ngôn ngữ
+bảng điểm chuẩn hoặc phương pháp đủ để tái tạo phạm vi.
+([Báo cáo kỹ thuật Qwen3.5-Omni, §2.3](https://arxiv.org/abs/2604.15804),
+[Bản phát hành Qwen3.5 chính thức](https://www.alibabacloud.com/blog/602894))
 
-The published `Qwen3.5-27B` artifacts reveal the concrete pipeline:
+Các hiện vật `Qwen3.5-27B` được công bố tiết lộ đường ống bê tông:
 
 ```mermaid
 flowchart LR
-    X[Raw text] --> NFC[NFC normalizer]
-    NFC --> RX[Qwen regex Split]
-    RX --> BL[ByteLevel pre-tokenizer]
-    BL --> BPE[BPE model and 248,044 regular entries]
-    BPE --> ADD[Added/control tokens]
-    ADD --> IDS[Token IDs]
-    IDS --> EMB[248,320-row text embedding]
+    X[Văn bản thô] --> NFC[Bộ chuẩn hóa NFC]
+    NFC --> RX[Phép tách regex của Qwen]
+    RX --> BL[Bộ tiền token hóa ByteLevel]
+    BL --> BPE[Mô hình BPE và 248.044 mục thông thường]
+    BPE --> ADD[Token bổ sung/điều khiển]
+    ADD --> IDS[ID token]
+    IDS --> EMB[Embedding văn bản 248.320 hàng]
 ```
 
-Verified directly from the official artifacts:
+Được xác minh trực tiếp từ các hiện vật chính thức:
 
-- `tokenizer.json` uses an NFC normalizer, a regex `Split` followed by
-  `ByteLevel`, a `BPE` model, and a `ByteLevel` decoder;
-- its BPE model vocabulary has **248,044 entries**, IDs `0..248043`;
-- the same file appends 26 entries at IDs `248044..248069`, including chat,
-  vision, tool, fill-in-the-middle, repository, and thinking markers;
-- `tokenizer_config.json` declares `Qwen2Tokenizer` and lists 33 added-token
-  decoder entries through ID `248076`, including seven audio/TTS markers beyond
-  those serialized in `tokenizer.json`;
-- `config.json` reserves **248,320** rows for the text vocabulary and sets
+- `tokenizer.json` sử dụng bộ chuẩn hóa NFC, một biểu thức chính quy `Split` theo sau là
+  `ByteLevel`, mẫu `BPE` và bộ giải mã `ByteLevel`;
+- Từ vựng mô hình BPE của nó có **248.044 mục**, IDs `0..248043`;
+- cùng một tệp sẽ thêm 26 mục tại IDs `248044..248069`, bao gồm trò chuyện,
+  tầm nhìn, công cụ, phần điền vào giữa, kho lưu trữ và các điểm đánh dấu tư duy;
+- `tokenizer_config.json` khai báo `Qwen2Tokenizer` và liệt kê 33 token bổ sung
+  mục giải mã thông qua ID `248076`, bao gồm bảy điểm đánh dấu âm thanh/TTS ngoài
+  những thứ được đăng tuần tự trong `tokenizer.json`;
+- `config.json` dự trữ **248.320** hàng cho từ vựng và bộ văn bản
   `tie_word_embeddings: false`.
 
-Official artifacts:
+Hiện vật chính thức:
 [Qwen3.5-27B `tokenizer.json`](https://huggingface.co/Qwen/Qwen3.5-27B/blob/fc05daec18b0a78c049392ed2e771dde82bdf654/tokenizer.json),
-[`tokenizer_config.json`](https://huggingface.co/Qwen/Qwen3.5-27B/blob/fc05daec18b0a78c049392ed2e771dde82bdf654/tokenizer_config.json), and
+[`tokenizer_config.json`](https://huggingface.co/Qwen/Qwen3.5-27B/blob/fc05daec18b0a78c049392ed2e771dde82bdf654/tokenizer_config.json) và
 [`config.json`](https://huggingface.co/Qwen/Qwen3.5-27B/blob/fc05daec18b0a78c049392ed2e771dde82bdf654/config.json).
 
-The rounded “250K vocabulary” therefore should not be substituted blindly for
-every software field:
+Do đó, “từ vựng 250K” được làm tròn không nên được thay thế một cách mù quáng cho
+mọi lĩnh vực phần mềm:
 
 $$
 \underbrace{248{,}044}_{\text{BPE model entries}}
@@ -419,68 +422,68 @@ $$
 \underbrace{248{,}320}_{\text{reserved embedding rows}}.
 $$
 
-The gap is expected: added multimodal/control tokens and padded or reserved
-rows serve different purposes from learned BBPE entries. Because Qwen3.5-27B
-does not tie input and output embeddings, the padded text vocabulary affects
-both large matrices rather than one shared matrix.
+Khoảng cách dự kiến: đã thêm token đa phương thức/kiểm soát và được đệm hoặc dành riêng
+các hàng phục vụ các mục đích khác nhau từ các mục BBPE đã học. Bởi vì Qwen3.5-27B
+không ràng buộc các phần nhúng đầu vào và đầu ra, từ vựng văn bản được đệm ảnh hưởng đến
+cả hai ma trận lớn chứ không phải một ma trận chung.
 
-The current Qwen3.5 regex is:
+Biểu thức chính quy Qwen3.5 hiện tại là:
 
 ```regex
 (?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\r\n\p{L}\p{N}]?[\p{L}\p{M}]+|\p{N}| ?[^\s\p{L}\p{M}\p{N}]+[\r\n]*|\s*[\r\n]+|\s+(?!\S)|\s+
 ```
 
-It treats contractions case-insensitively, keeps Unicode combining marks
-(`\p{M}`) with letters, splits numbers one digit at a time, and has explicit
-branches for punctuation, horizontal whitespace, and newline runs. Those
-rules—not BBPE in isolation—partly determine its multilingual, code, and
-whitespace behavior.
+Nó xử lý các từ viết tắt không phân biệt chữ hoa chữ thường, giữ các dấu kết hợp Unicode
+(`\p{M}`) với các chữ cái, chia số một chữ số một lần và có rõ ràng
+các nhánh để chấm câu, khoảng trắng ngang và chạy dòng mới. Những thứ kia
+các quy tắc—không phải riêng BBPE—xác định một phần tính năng đa ngôn ngữ, mã và
+hành vi khoảng trắng.
 
-## What BBPE improves—and what it does not
+## BBPE cải thiện những gì—và những gì không
 
-**It directly improves:**
+**Nó trực tiếp cải thiện:**
 
-- coverage: every normalized UTF-8 input can be decomposed to base bytes;
-- compactness of the base alphabet across many scripts;
-- reuse of byte fragments and frequent strings across languages;
-- compression relative to a pure-byte model;
-- handling of rare symbols, noisy text, whitespace, and code without a normal
-  character-vocabulary OOV.
+- phạm vi bảo hiểm: mọi đầu vào UTF-8 được chuẩn hóa có thể được phân tách thành byte cơ sở;
+- sự cô đọng của bảng chữ cái cơ sở trên nhiều hệ thống chữ viết;
+- tái sử dụng các đoạn byte và chuỗi thường xuyên trên các ngôn ngữ;
+- nén tương ứng với mô hình byte thuần;
+- xử lý các ký hiệu hiếm, văn bản ồn ào, khoảng trắng và mã mà không cần thông thường
+  từ vựng ký tự OOV.
 
-**It does not guarantee:**
+**Nó không đảm bảo:**
 
-- one token per word or one token per Unicode character;
-- equal token efficiency across languages;
-- semantic or morphological token boundaries;
-- preservation of the original byte sequence when normalization runs first;
-- valid UTF-8 after every intermediate generated token;
-- shorter sequences than every character/subword tokenizer on every domain;
-- better end-task quality merely because the vocabulary is larger.
+- một token cho mỗi từ hoặc một token cho mỗi ký tự Unicode;
+- hiệu quả token như nhau giữa các ngôn ngữ;
+- ranh giới token ngữ nghĩa hoặc hình thái;
+- bảo toàn chuỗi byte gốc khi quá trình chuẩn hóa chạy trước;
+- UTF-8 hợp lệ sau mỗi token được tạo trung gian;
+- các chuỗi ngắn hơn mọi token ký tự/từ phụ trên mọi miền;
+- chất lượng nhiệm vụ cuối tốt hơn chỉ vì vốn từ vựng lớn hơn.
 
-## Practical inspection checklist
+## Danh sách kiểm tra thực tế
 
-Before comparing two “BBPE tokenizers,” inspect:
+Trước khi so sánh hai “token BBPE”, hãy kiểm tra:
 
-1. the normalizer and whether round-trip byte identity matters;
-2. the exact pre-tokenization regex and merge boundaries;
-3. regular BPE entries, merge count, added tokens, and maximum assigned ID;
-4. tokenizer length versus model `vocab_size` and embedding padding;
-5. input/output weight tying;
-6. tokens per byte, character, word, and document for each target language and
-   code/data domain;
-7. invalid UTF-8 and streaming decode policy;
-8. special-token injection and whether user text can collide with it;
-9. end-to-end latency, not only token count.
+1. bộ chuẩn hóa và liệu nhận dạng byte khứ hồi có quan trọng hay không;
+2. ranh giới hợp nhất và biểu thức chính quy trước token chính xác;
+3. các mục nhập BPE thông thường, số lượng hợp nhất, token được thêm và ID được chỉ định tối đa;
+4. chiều dài token so với mô hình `vocab_size` và phần đệm nhúng;
+5. ràng buộc trọng lượng đầu vào/đầu ra;
+6. token trên mỗi byte, ký tự, từ và tài liệu cho từng ngôn ngữ đích và
+   miền mã/dữ liệu;
+7. chính sách giải mã trực tuyến và UTF-8 không hợp lệ;
+8. việc chèn token đặc biệt và liệu văn bản của người dùng có thể xung đột với nó hay không;
+9. độ trễ từ đầu đến cuối, không chỉ số lượng token.
 
-## Sources
+## Nguồn
 
-All online sources were opened or downloaded and checked on 2026-07-20.
+Tất cả các nguồn trực tuyến đã được mở hoặc tải xuống và kiểm tra vào ngày 20-07-2026.
 
-- Philip Gage. [A New Algorithm for Data Compression](https://jacobfilipp.com/DrDobbs/articles/CUJ/1994/9402/gage/gage.htm), 1994.
-- Rico Sennrich, Barry Haddow, Alexandra Birch. [Neural Machine Translation of Rare Words with Subword Units](https://aclanthology.org/P16-1162/), ACL 2016.
-- Changhan Wang, Kyunghyun Cho, Jiatao Gu. [Neural Machine Translation with Byte-Level Subwords](https://arxiv.org/abs/1909.03341), AAAI 2020.
-- OpenAI. [GPT-2 byte-level BPE encoder implementation](https://github.com/openai/gpt-2/blob/master/src/encoder.py).
-- Taku Kudo, John Richardson. [SentencePiece](https://arxiv.org/abs/1808.06226), EMNLP 2018 demo paper.
-- Hugging Face. [Tokenizers components](https://huggingface.co/docs/tokenizers/main/components) and [decoders](https://huggingface.co/docs/tokenizers/main/en/api/decoders).
-- Qwen Team. [Qwen Technical Report](https://arxiv.org/abs/2309.16609), [Qwen2 Technical Report](https://arxiv.org/abs/2407.10671), [Qwen3 Technical Report](https://arxiv.org/abs/2505.09388), and [Qwen3.5-Omni Technical Report](https://arxiv.org/abs/2604.15804).
-- Qwen Team. [Qwen tokenization note](https://github.com/QwenLM/Qwen/blob/main/tokenization_note.md) and [Qwen3.5-27B tokenizer artifacts](https://huggingface.co/Qwen/Qwen3.5-27B/tree/main).
+- Philip Gage. [Thuật toán mới để nén dữ liệu](https://jacobfilipp.com/DrDobbs/articles/CUJ/1994/9402/gage/gage.htm), 1994.
+- Rico Sennrich, Barry Haddow, Alexandra Birch. [Dịch máy thần kinh các từ hiếm với đơn vị từ phụ](https://aclanthology.org/P16-1162/), ACL 2016.
+- Changhan Wang, Kyunghyun Cho, Jiatao Gu. [Dịch máy thần kinh với từ phụ cấp byte](https://arxiv.org/abs/1909.03341), AAAI 2020.
+- OpenAI. [Triển khai bộ mã hóa BPE cấp byte GPT-2](https://github.com/openai/gpt-2/blob/master/src/encoder.py).
+- Taku Kudo, John Richardson. [SentencePiece](https://arxiv.org/abs/1808.06226), giấy demo EMNLP 2018.
+- Ôm Mặt. [Thành phần token](https://huggingface.co/docs/tokenizers/main/components) và [bộ giải mã](https://huggingface.co/docs/tokenizers/main/en/api/decoders).
+- Đội Qwen. [Báo cáo kỹ thuật Qwen](https://arxiv.org/abs/2309.16609), [Báo cáo kỹ thuật Qwen2](https://arxiv.org/abs/2407.10671), [Báo cáo kỹ thuật Qwen3](https://arxiv.org/abs/2505.09388) và [Báo cáo kỹ thuật Qwen3.5-Omni](https://arxiv.org/abs/2604.15804).
+- Đội Qwen. [Ghi chú token Qwen](https://github.com/QwenLM/Qwen/blob/main/tokenization_note.md) và [Cấu tạo token Qwen3.5-27B](https://huggingface.co/Qwen/Qwen3.5-27B/tree/main).

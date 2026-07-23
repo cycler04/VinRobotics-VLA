@@ -1,38 +1,38 @@
-# Vision Transformer Architecture in Vision--Language Models
+# Kiến trúc biến đổi thị giác trong thị giác--Mô hình ngôn ngữ
 
-> **Note:** This version is formatted with display LaTeX (`$$ ... $$`)
-> for Markdown renderers.
+> **Lưu ý:** Phiên bản này được định dạng bằng màn hình LaTeX (`$$ ... $$`)
+> dành cho trình kết xuất Markdown.
 
-## 1. Executive Summary
+## 1. Tóm tắt điều hành
 
-A Vision Transformer (ViT) inside a Vision--Language Model (VLM) shares
-the same fundamental architecture as a conventional ViT:
+Chia sẻ Transformer Thị giác (ViT) bên trong Mô hình Ngôn ngữ-Thị giác (VLM)
+kiến trúc cơ bản giống như ViT thông thường:
 
-1. Split an image into patches.
-2. Convert each patch into an embedding.
-3. Add positional information.
-4. Process the patch sequence with Transformer encoder blocks.
+1. Chia hình ảnh thành các patch.
+2. Chuyển đổi từng patch thành một bản nhúng.
+3. Thêm thông tin vị trí.
+4. Xử lý chuỗi patch bằng các khối mã hóa Transformer.
 
-The major difference is **not the Transformer itself**, but **what
-happens before and after it**.
+Sự khác biệt chính là **không phải ở Transformer** mà là **cái gì
+xảy ra trước và sau nó**.
 
-A classification ViT compresses an image into a representation suitable
-for image recognition. A VLM instead preserves detailed spatial
-information so that an LLM can reason about objects, text, layouts,
-documents, user interfaces, and videos.
+Một phân loại ViT nén một hình ảnh thành một biểu diễn phù hợp
+để nhận dạng hình ảnh. Thay vào đó, VLM bảo tồn không gian chi tiết
+thông tin để LLM có thể suy luận về các đối tượng, văn bản, bố cục,
+tài liệu, giao diện người dùng và video.
 
-Typical modern VLM additions include:
+Các bổ sung VLM hiện đại điển hình bao gồm:
 
-- Dynamic or native-resolution image preprocessing
-- Language-aligned vision pretraining (CLIP, SigLIP, etc.)
-- Dense patch features instead of only a CLS token
-- Patch merging or token compression
-- Vision-language projector
-- 2D/3D positional encoding
-- Multi-level visual feature injection
-- Multimodal pretraining and instruction tuning
+- Xử lý trước hình ảnh có độ phân giải động hoặc gốc
+- Đào tạo trước thị giác phù hợp với ngôn ngữ (CLIP, SigLIP, v.v.)
+- Các đặc trưng vá lỗi dày đặc thay vì chỉ có token CLS
+- Hợp nhất patch hoặc nén token
+- Máy chiếu ngôn ngữ thị giác
+- Mã hóa vị trí 2D/3D
+- Tiêm đặc trưng hình ảnh đa cấp
+- Điều chỉnh hướng dẫn và huấn luyện trước đa phương thức
 
-## Overall Architecture
+## Kiến trúc tổng thể
 
 ```mermaid
 flowchart TD
@@ -64,47 +64,47 @@ flowchart TD
 
 ---
 
-# 2. Standard Vision Transformer
+# 2. Transformer thị giác tiêu chuẩn
 
-For an image of size $H\times W$ divided into square patches of size
+Đối với hình ảnh có kích thước $H\times W$ được chia thành các mảng kích thước hình vuông
 $P$:
 
 $$
 N=\frac{H}{P}\times\frac{W}{P}
 $$
 
-where $N$ is the number of image patches.
+trong đó $N$ là số lượng patch hình ảnh.
 
-Example:
+Ví dụ:
 
 $$
 224\times224,\quad P=16
 $$
 
-gives
+cho
 
 $$
 N=14\times14=196
 $$
 
-Each image patch contains
+Mỗi patch hình ảnh chứa
 
 $$
 P^2\times3
 $$
 
-RGB values.
+Giá trị RGB.
 
-Each patch is projected into the ViT hidden dimension:
+Mỗi patch được chiếu vào chiều ẩn ViT:
 
 $$
 z_i=x_iW_E+b_E
 $$
 
-Modern implementations perform this with a Conv2D whose kernel size and
-stride equal the patch size.
+Các triển khai hiện đại thực hiện việc này với Conv2D có kích thước hạt nhân và
+sải bước bằng kích thước miếng vá.
 
-The ViT input becomes
+Đầu vào ViT trở thành
 
 $$
 X_0=
@@ -113,58 +113,58 @@ X_0=
 E_{\mathrm{position}}
 $$
 
-The sequence is processed by repeated Transformer encoder blocks.
+Trình tự được xử lý bằng các khối mã hóa Transformer lặp đi lặp lại.
 
-Finally, only the CLS token is normally sent to a classifier.
+Cuối cùng, chỉ có token CLS thường được gửi đến bộ phân loại.
 
 ```text
-Image
+Hình ảnh
  ↓
-Patch Embedding
+Nhúng patch
  ↓
-CLS + Patch Tokens
+CLS + Token vá
  ↓
-ViT Encoder
+Bộ mã hóa ViT
  ↓
-CLS Representation
+Đại diện CLS
  ↓
-Classifier
+Trình phân loại
 ```
 
 ---
 
-# 3. Why VLMs Need More Than a Standard ViT
+# 3. Tại sao VLMs cần nhiều hơn ViT tiêu chuẩn
 
-Classification requires only a global prediction.
+Việc phân loại chỉ yêu cầu một dự đoán toàn cầu.
 
-A VLM must answer questions like:
+VLM phải trả lời các câu hỏi như:
 
-- Where is the object?
-- What text appears in the image?
-- Which object changed?
-- Which table cell contains the largest value?
+- Đối tượng ở đâu?
+- Văn bản nào xuất hiện trong hình ảnh?
+- Đối tượng nào đã thay đổi?
+- Ô bảng nào chứa giá trị lớn nhất?
 
-Instead of one vector, the LLM needs a **sequence of spatial features**.
+Thay vì một vectơ, LLM cần một **chuỗi các đặc điểm không gian**.
 
 ```text
-Top-left region
-Upper-middle
-Upper-right
+Vùng trên cùng bên trái
+Thượng-trung
+Phía trên bên phải
 ...
-Bottom-right
+Dưới cùng bên phải
 ```
 
-Those become **visual tokens** inside the language model.
+Chúng trở thành **token trực quan** bên trong mô hình ngôn ngữ.
 
 ---
 
-# 4. Major Modules
+# 4. Các mô-đun chính
 
-## 4.1 Visual Preprocessing
+## 4.1 Tiền xử lý trực quan
 
-Three common approaches exist.
+Có ba cách tiếp cận phổ biến.
 
-### Fixed Resolution
+### Độ phân giải cố định
 
 ```text
 1920×1080
@@ -172,95 +172,95 @@ Three common approaches exist.
 224×224
 ```
 
-Simple but loses detail.
+Đơn giản nhưng mất chi tiết.
 
-### Tiling
+### ốp lát
 
-Large images become several crops.
+Hình ảnh lớn trở thành một số cây trồng.
 
-Benefits:
+Những lợi ích:
 
-- Better OCR
-- Better small-object recognition
+- OCR tốt hơn
+- Nhận dạng đối tượng nhỏ tốt hơn
 
-Drawback:
+Nhược điểm:
 
-- More visual tokens.
+- Nhiều token trực quan hơn.
 
-### Dynamic Resolution
+### Độ phân giải động
 
-Image resolution is largely preserved.
+Độ phân giải hình ảnh phần lớn được bảo tồn.
 
 ```text
-Small image → Few patches
+Hình ảnh nhỏ → Ít patch
 
-Large image → Many patches
+Hình ảnh lớn → Nhiều patch
 ```
 
-Modern models such as Qwen-VL increasingly use this approach.
+Các mẫu máy hiện đại như Qwen-VL ngày càng sử dụng phương pháp này.
 
 ---
 
-## 4.2 Patch Embedding
+## 4.2 Nhúng patch
 
-Modern ViTs rarely flatten patches explicitly.
+ViT hiện đại hiếm khi làm phẳng các patch một cách rõ ràng.
 
-Instead they use
+Thay vào đó họ sử dụng
 
 ```text
 Conv2D
 
-Kernel = Patch Size
+Hạt nhân = Kích thước patch
 
-Stride = Patch Size
+Sải bước = Kích thước patch
 ```
 
-which is mathematically equivalent while being faster on GPUs.
+tương đương về mặt toán học nhưng lại nhanh hơn trên GPUs.
 
-Video models often use tubelets:
+Các mô hình video thường sử dụng ống nhỏ:
 
 ```text
-2 Frames
+2 khung
 ×
 
-14×14 Pixels
+Điểm ảnh 14×14
 ```
 
-rather than individual image patches.
+thay vì các patch hình ảnh riêng lẻ.
 
 ---
 
-## 4.3 Positional Encoding
+## 4.3 Mã hóa vị trí
 
-Language uses one-dimensional positions
+Ngôn ngữ sử dụng vị trí một chiều
 
 $$
 p=0,1,2,\ldots
 $$
 
-Images instead use
+Thay vào đó hãy sử dụng hình ảnh
 
 $$
 (h,w)
 $$
 
-Videos use
+Video sử dụng
 
 $$
 (t,h,w)
 $$
 
-Modern VLMs commonly adopt:
+VLMs hiện đại thường áp dụng:
 
-- 2D RoPE
-- Relative positions
-- Interpolated position embeddings
+- Dây 2D
+- Vị trí tương đối
+- Nhúng vị trí nội suy
 
 ---
 
-## 4.4 Vision Transformer Backbone
+## 4.4 Xương sống biến áp thị giác
 
-Self-attention is identical to ordinary Transformers.
+Sự tự chú ý giống hệt với Transformers thông thường.
 
 $$
 Q=XW_Q
@@ -274,7 +274,7 @@ $$
 V=XW_V
 $$
 
-Attention is
+Chú ý là
 
 $$
 \operatorname{Attention}(X)=
@@ -284,42 +284,42 @@ $$
 \right)V
 $$
 
-The main architectural improvements are not inside attention itself, but
-in training and preprocessing.
+Những cải tiến kiến ​​trúc chính không phải là sự chú ý bên trong mà là
+trong quá trình huấn luyện và tiền xử lý.
 
-Many VLMs initialize their vision tower from an image-text encoder such as
-CLIP or SigLIP, but the exact checkpoint and training policy differ by model;
-some VLMs instead train the tower from scratch. See the verified
-[pretrained encoder-to-VLM map](pretrained_vision_encoders.md).
-
----
-
-## 4.5 Multi-Level Features
-
-Instead of only using the final ViT layer,
-
-modern VLMs may combine
-
-- early layers (edges)
-- middle layers (parts)
-- late layers (objects)
-
-Some architectures inject these features into multiple LLM layers.
+Nhiều VLMs khởi tạo thị giác của họ từ bộ mã hóa hình ảnh-văn bản chẳng hạn như
+CLIP hoặc SigLIP, nhưng checkpoint chính xác và chính sách huấn luyện khác nhau tùy theo mẫu máy;
+thay vào đó, một số VLMs sẽ huấn luyện tháp từ đầu. Xem đã xác minh
+[Bản đồ bộ mã hóa được huấn luyện trước tới VLM](pretrained_vision_encoders.md).
 
 ---
 
-## 4.6 Patch Merger / Resampler
+## 4.5 Tính năng đa cấp
 
-High-resolution images may produce thousands of visual tokens.
+Thay vì chỉ sử dụng lớp ViT cuối cùng,
 
-Compression techniques include:
+VLMs hiện đại có thể kết hợp
 
-- Patch merger
-- Average pooling
-- Learned query resamplers
-- Perceiver resamplers
+- lớp đầu (cạnh)
+- lớp giữa (bộ phận)
+- lớp muộn (đối tượng)
 
-Example:
+Một số kiến ​​trúc đưa các đặc trưng này vào nhiều lớp LLM.
+
+---
+
+## 4.6 Sáp nhập patch/Bộ lấy mẫu lại
+
+Hình ảnh có độ phân giải cao có thể tạo ra hàng nghìn token trực quan.
+
+Kỹ thuật nén bao gồm:
+
+- Sáp nhập patch
+- Tổng hợp trung bình
+- Trình lấy mẫu lại truy vấn đã học
+- Bộ lấy mẫu lại cảm biến
+
+Ví dụ:
 
 ```text
 v1 v2
@@ -327,16 +327,16 @@ v3 v4
 
 ↓
 
-Merged Token
+Token đã hợp nhất
 ```
 
-This reduces LLM computation.
+Điều này làm giảm tính toán LLM.
 
 ---
 
-## 4.7 Vision-Language Projector
+## 4.7 Máy chiếu ngôn ngữ thị giác
 
-The projector maps
+Bản đồ máy chiếu
 
 $$
 d_{\text{vision}}
@@ -344,7 +344,7 @@ d_{\text{vision}}
 d_{\text{LLM}}
 $$
 
-For example
+Ví dụ
 
 $$
 1152
@@ -352,13 +352,13 @@ $$
 4096
 $$
 
-A simple projector is
+Một máy chiếu đơn giản là
 
 $$
 v'=Wv+b
 $$
 
-Modern projectors often use
+Máy chiếu hiện đại thường sử dụng
 
 $$
 v'
@@ -366,149 +366,149 @@ v'
 W_2\phi(W_1v+b_1)+b_2
 $$
 
-where $\phi$ is GELU or SwiGLU.
+trong đó $\phi$ là GELU hoặc SwiGLU.
 
-Its job is not merely changing dimensions.
+Công việc của nó không chỉ đơn thuần là thay đổi kích thước.
 
-It aligns the vision representation with the language model's embedding
-space.
+Nó căn chỉnh cách trình bày thị giác với việc nhúng mô hình ngôn ngữ
+không gian.
 
 ---
 
-## 4.8 Fusion
+## 4.8 Sự kết hợp
 
-Two major approaches exist.
+Có hai cách tiếp cận chính.
 
-### Token Insertion
+### Chèn token
 
-Visual tokens become part of the language sequence.
+Token trực quan trở thành một phần của chuỗi ngôn ngữ.
 
 ```text
 <vision_start>
 
-Visual Tokens
+Token trực quan
 
 <vision_end>
 
-Question
+Câu hỏi
 ```
 
-Used by models such as LLaVA and Qwen-VL.
+Được sử dụng bởi các mẫu như LLaVA và Qwen-VL.
 
-### Cross Attention
+### Chú ý chéo
 
-Visual features stay separate.
+Các đặc trưng trực quan vẫn tách biệt.
 
-Cross-attention layers retrieve visual information when needed.
+Các lớp chú ý chéo truy xuất thông tin trực quan khi cần thiết.
 
-Used by Flamingo.
-
----
-
-# 5. Training Pipeline
-
-1. Vision pretraining
-2. Projector alignment
-3. Joint multimodal pretraining
-4. Instruction tuning
-
-This staged approach stabilizes optimization while preserving language
-ability.
+Được sử dụng bởi Flamingo.
 
 ---
 
-# 6. Representative Models
+# 5. Quy trình huấn luyện
+
+1. Huấn luyện trước thị lực
+2. Căn chỉnh máy chiếu
+3. Huấn luyện trước đa phương thức chung
+4. Điều chỉnh hướng dẫn
+
+Cách tiếp cận theo giai đoạn này giúp ổn định việc tối ưu hóa trong khi vẫn bảo tồn ngôn ngữ
+khả năng.
+
+---
+
+# 6. Người mẫu đại diện
 
 ## LLaVA
 
-- CLIP vision encoder
-- Linear / MLP projector
-- Direct token insertion
+- Bộ mã hóa thị giác CLIP
+- Máy chiếu tuyến tính / MLP
+- Chèn token trực tiếp
 
-Simple and effective.
+Đơn giản và hiệu quả.
 
 ## BLIP-2
 
-- Frozen vision encoder
-- Q-Former
-- Frozen LLM
+- Bộ mã hóa thị giác đông lạnh
+- Q-Cựu
+- LLM đông lạnh
 
-Compresses thousands of patches into a few learned visual tokens.
+Nén hàng nghìn patch thành một vài token trực quan đã học được.
 
-## Flamingo
+## Chim hồng hạc
 
-- Vision encoder
-- Perceiver Resampler
-- Cross-attention inside the LLM
+- Bộ mã hóa thị giác
+- Bộ lấy mẫu lại nhận thức
+- Sự chú ý chéo bên trong LLM
 
-Better for interleaved image-text and video.
+Tốt hơn cho văn bản hình ảnh và video xen kẽ.
 
 ## Qwen-VL
 
-Recent Qwen models introduce:
+Các mẫu Qwen gần đây giới thiệu:
 
-- Native dynamic resolution
-- Window attention
-- 2×2 patch merger
-- MLP projector
-- Multi-level visual injection
-- Long-context multimodal RoPE
+- Độ phân giải động gốc
+- Cửa sổ chú ý
+- Sáp nhập patch 2×2
+- máy chiếu MLP
+- Tiêm trực quan đa cấp
+- RoPE đa phương thức theo ngữ cảnh dài
 
-These changes primarily improve OCR, grounding, GUI understanding,
-documents, and long videos.
+Những thay đổi này chủ yếu cải thiện OCR, nối đất, hiểu biết về GUI,
+tài liệu và video dài.
 
-## Gemini
+## Song Tử
 
-Public information indicates:
+Thông tin công khai chỉ ra:
 
-- Native multimodal training
-- Long multimodal context
+- Đào tạo đa phương thức bản địa
+- Bối cảnh đa phương thức dài
 
-The exact vision encoder and projector remain undisclosed.
+Bộ mã hóa thị giác và máy chiếu chính xác vẫn chưa được tiết lộ.
 
 ## GPT-4 / GPT-4o
 
-OpenAI has not published the detailed vision architecture.
+OpenAI chưa công bố kiến ​​trúc thị giác chi tiết.
 
-Publicly known:
+Được biết đến rộng rãi:
 
-- Native image understanding
-- End-to-end multimodal GPT-4o
+- Hiểu hình ảnh gốc
+- GPT-4o đa phương thức từ đầu đến cuối
 
-Specific ViT details are not public.
-
----
-
-# 7. Evolution of Modern VLMs
-
-  Earlier              Modern
+Chi tiết cụ thể về ViT không được công khai.
 
 ---
 
-  Fixed resize         Dynamic resolution
-  Classification ViT   Language-aligned ViT
-  Final layer only     Multi-level features
-  All patches          Patch merger
-  Absolute positions   2D/3D RoPE
-  Single image         Long multimodal context
-  Frozen modules       End-to-end training
+# 7. Sự phát triển của VLMs hiện đại
+
+  Trước đó Hiện đại
 
 ---
 
-# 8. Conclusion
+  Đã sửa lỗi thay đổi kích thước Độ phân giải động
+  Phân loại ViT ViT theo ngôn ngữ
+  Chỉ lớp cuối cùng
+  Tất cả các patch Hợp nhất patch
+  Vị trí tuyệt đối RoPE 2D/3D
+  Hình ảnh đơn Bối cảnh đa phương thức dài
+  Các mô-đun đông lạnh Đào tạo toàn diện
 
-Modern VLM performance is determined less by changing the Transformer
-itself and more by improving the entire **visual token generation
-pipeline**:
+---
 
-1. Better preprocessing
-2. Better vision encoders
-3. Better positional encoding
-4. Better token compression
-5. Better projector
-6. Better multimodal training
+# 8. Kết luận
 
-The Vision Transformer extracts semantic visual features, while the
-merger and projector determine how efficiently those features become
-language-model tokens. The LLM then performs multimodal reasoning using
-the same Transformer architecture originally designed for text.
+Hiệu suất VLM hiện đại được xác định ít hơn bằng cách thay đổi Transformer
+chính nó và hơn thế nữa bằng cách cải thiện toàn bộ **việc tạo token trực quan
+đường ống**:
+
+1. Tiền xử lý tốt hơn
+2. Bộ mã hóa thị giác tốt hơn
+3. Mã hóa vị trí tốt hơn
+4. Nén token tốt hơn
+5. Máy chiếu tốt hơn
+6. Đào tạo đa phương thức tốt hơn
+
+Vision Transformer trích xuất các đặc điểm ngữ nghĩa trực quan, trong khi
+sự hợp nhất và trình chiếu xác định mức độ hiệu quả của các đặc trưng đó
+token mô hình ngôn ngữ. LLM sau đó thực hiện lý luận đa phương thức bằng cách sử dụng
+kiến trúc Transformer tương tự được thiết kế ban đầu cho văn bản.

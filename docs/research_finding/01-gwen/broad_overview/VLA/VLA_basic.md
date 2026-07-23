@@ -1,479 +1,479 @@
-# VLA Basics: From Seeing and Language to Physical Action
+# Kiến thức cơ bản về VLA: Từ thị giác và ngôn ngữ đến hành động vật lý
 
-## 1. The main idea
+## 1. Ý tưởng chính
 
-A **Vision-Language-Action (VLA)** model is a VLM that does not stop at understanding or answering. It uses what the robot sees and what a person asks, then decides **how the robot should move**.
+Mô hình **Vision-Language-Action (VLA)** là một VLM không chỉ dừng lại ở việc hiểu hoặc trả lời. Mô hình sử dụng những gì robot nhìn thấy và yêu cầu của con người, rồi quyết định **robot nên di chuyển như thế nào**.
 
-The simplest comparison is:
+So sánh đơn giản nhất:
 
-| Model | Input                                         | Output       |
+| Mô hình | Đầu vào | Đầu ra |
 | ----- | --------------------------------------------- | ------------ |
-| VLM   | Image + text                                  | Text         |
-| VLA   | Image + instruction + current robot condition | Robot action |
+| VLM | Hình ảnh + văn bản | Văn bản |
+| VLA | Hình ảnh + chỉ dẫn + trạng thái hiện tại của robot | Hành động của robot |
 
-A useful one-line definition is:
+Một định nghĩa một câu hữu ích:
 
-> **VLA turns “I see the situation and understand the goal” into “this is the movement I should make next.”**
+> **VLA biến “tôi nhìn thấy tình huống và hiểu mục tiêu” thành “đây là chuyển động tôi nên thực hiện tiếp theo.”**
 
-## 2. Inputs
+## 2. Đầu vào
 
-At one moment, the model commonly receives:
+Tại một thời điểm, mô hình thường nhận:
 
-- **What the robot sees:** one or more camera images.
-- **What the human wants:** for example, “put the red cup in the sink.”
-- **The robot's current condition:** where its arm and gripper are, whether the gripper is open, and sometimes recent images or movements.
+- **Những gì robot nhìn thấy:** một hoặc nhiều hình ảnh từ camera.
+- **Điều con người muốn:** ví dụ: “đặt chiếc cốc màu đỏ vào bồn rửa.”
+- **Trạng thái hiện tại của robot:** vị trí của cánh tay và bộ kẹp, bộ kẹp đang mở hay không, đôi khi còn có các hình ảnh hoặc chuyển động gần đây.
 
-Some systems also use touch, depth, or sound, but these are additions rather than the core idea.
+Một số hệ thống còn sử dụng xúc giác, độ sâu hoặc âm thanh, nhưng đây là các thành phần bổ sung chứ không phải ý tưởng cốt lõi.
 
-## 3. Runtime dataflow
+## 3. Luồng dữ liệu khi chạy
 
-The robot repeatedly follows this loop:
+Robot liên tục lặp lại chu trình sau:
 
-1. **Observe:** look at the current scene.
-2. **Connect the request to the scene:** identify the relevant cup, sink, obstacles, and robot position.
-3. **Choose the next movement:** reach, grasp, lift, move, release, or another small step.
-4. **Act:** send the movement to the robot.
-5. **Look again:** check what changed and choose the next movement.
+1. **Quan sát:** nhìn vào cảnh hiện tại.
+2. **Liên hệ yêu cầu với cảnh:** xác định chiếc cốc, bồn rửa, chướng ngại vật và vị trí robot có liên quan.
+3. **Chọn chuyển động tiếp theo:** vươn tới, nắm, nâng, di chuyển, thả hoặc thực hiện một bước nhỏ khác.
+4. **Hành động:** gửi chuyển động đến robot.
+5. **Quan sát lại:** kiểm tra những gì đã thay đổi và chọn chuyển động tiếp theo.
 
-This repetition is essential. The model does not merely create one answer and finish. Its action changes the world, so it must observe the result and continue from the new situation.
+Sự lặp lại này là thiết yếu. Mô hình không chỉ tạo một câu trả lời rồi kết thúc. Hành động của mô hình làm thay đổi thế giới, vì vậy nó phải quan sát kết quả và tiếp tục từ tình huống mới.
 
-Some VLAs output one small movement at a time. Others output a short group of movements, execute part of it, then look again.
+Một số VLA xuất từng chuyển động nhỏ. Các VLA khác xuất một nhóm chuyển động ngắn, thực thi một phần rồi quan sát lại.
 
-## 4. Outputs
+## 4. Đầu ra
 
-The final output must be something the robot can execute. For a robot arm, it may describe:
+Đầu ra cuối cùng phải là thứ robot có thể thực thi. Đối với cánh tay robot, đầu ra có thể mô tả:
 
-- how the hand should move in 3D;
-- how the wrist should rotate;
-- whether the gripper should open or close.
+- bàn tay nên di chuyển trong không gian 3D như thế nào;
+- cổ tay nên xoay như thế nào;
+- bộ kẹp nên mở hay đóng.
 
-For a mobile robot, it may instead describe wheel movement, direction, or speed. Therefore, the exact output depends on the robot body.
+Đối với robot di động, đầu ra có thể mô tả chuyển động bánh xe, hướng hoặc tốc độ. Vì vậy, đầu ra chính xác phụ thuộc vào thân thể robot.
 
-Not every VLA goes directly from input to motor commands. A system may first produce an intermediate result such as:
+Không phải VLA nào cũng chuyển trực tiếp từ đầu vào sang lệnh động cơ. Trước tiên, hệ thống có thể tạo ra một kết quả trung gian như:
 
-- a short verbal plan: “grasp the cup, then move to the sink”;
-- a target point: “grasp here”;
-- a path or desired future image.
+- một kế hoạch ngắn bằng ngôn ngữ: “nắm chiếc cốc, sau đó di chuyển đến bồn rửa”;
+- một điểm đích: “nắm tại đây”;
+- một quỹ đạo hoặc hình ảnh tương lai mong muốn.
 
-That intermediate result is then converted into executable movement. The attached survey groups these different forms under the broad idea of **action tokens**: information that becomes progressively more useful for producing action.
+Sau đó, kết quả trung gian được chuyển thành chuyển động có thể thực thi. Bài khảo sát đính kèm nhóm các dạng khác nhau này dưới khái niệm rộng **action token**: thông tin ngày càng hữu ích hơn cho việc tạo hành động.
 
-## 5. How a VLA learns
+## 5. VLA học như thế nào
 
-The most direct training data is a collection of demonstrations. Each moment records:
+Dữ liệu huấn luyện trực tiếp nhất là một tập các lần thị phạm. Mỗi thời điểm ghi lại:
 
-| Instruction             | What the robot saw | Robot condition          | Movement performed       |
+| Chỉ dẫn | Những gì robot nhìn thấy | Trạng thái robot | Chuyển động đã thực hiện |
 | ----------------------- | ------------------ | ------------------------ | ------------------------ |
-| “Pick up the red cup” | Camera image       | Arm and gripper position | Move hand toward the cup |
+| “Nhấc chiếc cốc màu đỏ lên” | Hình ảnh camera | Vị trí cánh tay và bộ kẹp | Di chuyển bàn tay về phía chiếc cốc |
 
-Across many demonstrations, the model learns: **given this request and this situation, predict the movement that a successful operator made.**
+Qua nhiều lần thị phạm, mô hình học rằng: **với yêu cầu và tình huống này, hãy dự đoán chuyển động mà người vận hành thành công đã thực hiện.**
 
-The VLM foundation contributes broad visual and language knowledge. Robot demonstrations teach the missing connection between that knowledge and physical movement. This robot data is much harder and more expensive to collect than ordinary image-text data, which is one of the main limits of current VLA research.
+Nền tảng VLM cung cấp kiến thức rộng về thị giác và ngôn ngữ. Các lần thị phạm bằng robot dạy mối liên hệ còn thiếu giữa kiến thức đó và chuyển động vật lý. Dữ liệu robot này khó thu thập và đắt đỏ hơn nhiều so với dữ liệu hình ảnh-văn bản thông thường, đây là một trong những hạn chế chính của nghiên cứu VLA hiện nay.
 
-## 6. Concrete example
+## 6. Ví dụ cụ thể
 
-Task: **“Put the red cup in the sink.”**
+Nhiệm vụ: **“Đặt chiếc cốc màu đỏ vào bồn rửa.”**
 
-| Moment | Model sees               | Model outputs             |
+| Thời điểm | Mô hình nhìn thấy | Mô hình xuất ra |
 | ------ | ------------------------ | ------------------------- |
-| 1      | Cup is far from the hand | Move toward the cup       |
-| 2      | Hand is beside the cup   | Align fingers around it   |
-| 3      | Fingers surround the cup | Close gripper             |
-| 4      | Cup is held              | Lift and move toward sink |
-| 5      | Cup is above sink        | Open gripper              |
+| 1 | Cốc ở xa bàn tay | Di chuyển về phía cốc |
+| 2 | Bàn tay ở cạnh cốc | Căn chỉnh các ngón tay quanh cốc |
+| 3 | Các ngón tay bao quanh cốc | Đóng bộ kẹp |
+| 4 | Cốc đã được giữ | Nâng lên và di chuyển về phía bồn rửa |
+| 5 | Cốc ở phía trên bồn rửa | Mở bộ kẹp |
 
-The instruction remains the same, but the correct output changes after every observation.
+Chỉ dẫn vẫn giữ nguyên, nhưng đầu ra đúng thay đổi sau mỗi lần quan sát.
 
-## 7. The mental model to keep
+## 7. Mô hình tư duy cần ghi nhớ
 
-- A **VLM** answers: “What is here, and what does the request mean?”
-- A **VLA** answers: “Given that understanding, what should this body do next?”
-- A VLA is a **continuous observe-act-observe loop**, not a one-shot captioning task.
-- Its output is tied to a particular robot body. The same goal may require different movements on different robots.
-- Its key training example is the relationship between **instruction, observation, and successful action**.
+- **VLM** trả lời: “Ở đây có gì và yêu cầu có nghĩa là gì?”
+- **VLA** trả lời: “Dựa trên hiểu biết đó, cơ thể này nên làm gì tiếp theo?”
+- VLA là một **vòng lặp quan sát-hành động-quan sát liên tục**, không phải nhiệm vụ tạo chú thích một lần.
+- Đầu ra của VLA gắn với một thân thể robot cụ thể. Cùng một mục tiêu có thể cần những chuyển động khác nhau trên các robot khác nhau.
+- Ví dụ huấn luyện then chốt của VLA là mối quan hệ giữa **chỉ dẫn, quan sát và hành động thành công**.
 
-In Transformer terms, the easiest starting intuition is: a VLA keeps the visual-language understanding you already know, but extends prediction from words to actions that change the next input.
+Theo cách hiểu của Transformer, trực giác khởi đầu đơn giản nhất là: VLA giữ lại khả năng hiểu thị giác-ngôn ngữ quen thuộc, nhưng mở rộng việc dự đoán từ các từ sang các hành động làm thay đổi đầu vào tiếp theo.
 
-## 8. Core vocabulary used in VLA research
+## 8. Từ vựng cốt lõi trong nghiên cứu VLA
 
-These terms do not appear in literally every paper, but they form the common vocabulary of the field.
+Các thuật ngữ này không xuất hiện trong mọi bài báo, nhưng tạo thành vốn từ vựng chung của lĩnh vực.
 
-| Term                                            | Plain meaning                                                                                                                                                                     | Example                                                    |
+| Thuật ngữ | Nghĩa đơn giản | Ví dụ |
 | ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
-| **Observation**                           | Everything available to the model at the current moment. It commonly includes camera images and the robot's own condition.                                                        | Current image + arm position                               |
-| **Instruction**                           | The language description of the task or goal.                                                                                                                                     | “Put the cup in the sink.”                               |
-| **State**                                 | A description of the current situation. The full state of the real world is usually unknown, so the model acts from its limited observation.                                      | Cup position, arm position, gripper condition              |
-| **Proprioception**                        | The robot's sense of its own body, rather than the outside world.                                                                                                                 | Joint angles, hand position, gripper opening               |
-| **Action**                                | A command that the robot can execute.                                                                                                                                             | Move the hand 2 cm forward and close the gripper           |
-| **Action space**                          | The complete set and format of actions available to a robot.                                                                                                                      | Arm movement, wrist rotation, and gripper control          |
-| **Policy**                                | The learned decision-maker that maps the current observation and instruction to an action. In most VLA papers, “the policy” means the part that controls behavior.              | `(image, instruction, robot condition) → next movement` |
-| **Embodiment**                            | The particular body through which the model acts. Different arms, grippers, and mobile robots have different abilities and action spaces.                                         | A two-finger arm versus a humanoid robot                   |
-| **Timestep**                              | One moment in the repeated observe-and-act process.                                                                                                                               | Observe at time`t`, then predict action `t`            |
-| **Control frequency**                     | How often the system produces or updates robot commands, measured in times per second (Hz). Higher is not automatically better, but fine movement usually needs frequent updates. | 10 Hz means ten updates per second                         |
-| **Trajectory**                            | An ordered sequence of observations and actions through time. It describes how behavior unfolds, not only the final result.                                                       | Reach → grasp → lift → move → release                  |
-| **Episode**                               | One complete attempt at a task, from its initial situation until success, failure, or a time limit.                                                                               | One attempt to put the cup in the sink                     |
-| **Rollout**                               | An episode produced by running the policy. Researchers inspect rollouts to see what the model actually does.                                                                      | Run the trained model on a robot for one attempt           |
-| **Demonstration**                         | An example of successful or useful behavior, usually collected from a human controlling a robot or from another controller.                                                       | A human teleoperates the arm to pick up a cup              |
-| **Imitation learning / behavior cloning** | Training the model to predict the actions found in demonstrations. It is similar to supervised learning over observation-action examples.                                         | Learn to copy the operator's next movement                 |
-| **Action token**                          | A general unit of action-related output. Depending on the paper, it can be a direct motor command, a target point, a path, a goal image, or an internal representation.           | “Close gripper,” a 3D grasp point, or a movement value   |
-| **Action chunk**                          | Several future actions predicted together instead of one action at a time. This can make control faster and smoother, but later actions may become outdated if the world changes. | Predict the next 20 arm commands together                  |
-| **Closed-loop control**                   | The robot repeatedly observes the result of its actions and adjusts.                                                                                                              | Move toward cup, look again, then correct alignment        |
-| **Open-loop control**                     | The robot executes a prepared action sequence without using new observations to correct it during execution.                                                                      | Execute all 20 predicted commands without looking again    |
-| **Generalization**                        | The ability to succeed beyond the exact demonstrations used for training.                                                                                                         | Pick up a new cup in a new kitchen                         |
-| **Success rate**                          | The fraction of task attempts completed successfully. This is the most common top-level evaluation measure.                                                                       | 82 successful episodes out of 100 = 82%                    |
+| **Observation** | Mọi thông tin mô hình có thể sử dụng tại thời điểm hiện tại. Thường gồm hình ảnh camera và trạng thái của chính robot. | Hình ảnh hiện tại + vị trí cánh tay |
+| **Instruction** | Mô tả bằng ngôn ngữ về nhiệm vụ hoặc mục tiêu. | “Đặt chiếc cốc vào bồn rửa.” |
+| **State** | Mô tả tình huống hiện tại. Trạng thái đầy đủ của thế giới thực thường không thể biết được, vì vậy mô hình hành động dựa trên quan sát hạn chế của nó. | Vị trí cốc, vị trí cánh tay, trạng thái bộ kẹp |
+| **Proprioception** | Khả năng robot cảm nhận cơ thể của chính nó, thay vì thế giới bên ngoài. | Góc khớp, vị trí bàn tay, độ mở bộ kẹp |
+| **Action** | Một lệnh robot có thể thực thi. | Di chuyển bàn tay về phía trước 2 cm và đóng bộ kẹp |
+| **Action space** | Toàn bộ tập hợp và định dạng các hành động mà robot có thể thực hiện. | Chuyển động cánh tay, xoay cổ tay và điều khiển bộ kẹp |
+| **Policy** | Bộ ra quyết định đã học, ánh xạ quan sát và chỉ dẫn hiện tại thành hành động. Trong hầu hết các bài báo VLA, “policy” chỉ thành phần điều khiển hành vi. | `(image, instruction, robot condition) → next movement` |
+| **Embodiment** | Thân thể cụ thể mà thông qua đó mô hình hành động. Các cánh tay, bộ kẹp và robot di động khác nhau có năng lực và action space khác nhau. | Cánh tay có bộ kẹp hai ngón so với robot hình người |
+| **Timestep** | Một thời điểm trong quá trình quan sát và hành động lặp lại. | Quan sát tại thời điểm `t`, sau đó dự đoán hành động `t` |
+| **Control frequency** | Tần suất hệ thống tạo hoặc cập nhật lệnh robot, đo bằng số lần mỗi giây (Hz). Cao hơn không tự động tốt hơn, nhưng chuyển động tinh thường cần cập nhật thường xuyên. | 10 Hz nghĩa là mười lần cập nhật mỗi giây |
+| **Trajectory** | Chuỗi quan sát và hành động có thứ tự theo thời gian. Nó mô tả diễn tiến của hành vi, không chỉ kết quả cuối cùng. | Vươn tới → nắm → nâng → di chuyển → thả |
+| **Episode** | Một lần thử hoàn chỉnh cho một nhiệm vụ, từ tình huống ban đầu đến khi thành công, thất bại hoặc hết thời gian. | Một lần thử đặt chiếc cốc vào bồn rửa |
+| **Rollout** | Một episode được tạo ra khi chạy policy. Các nhà nghiên cứu kiểm tra rollout để xem mô hình thực sự làm gì. | Chạy mô hình đã huấn luyện trên robot trong một lần thử |
+| **Demonstration** | Một ví dụ về hành vi thành công hoặc hữu ích, thường được thu thập từ người điều khiển robot hoặc một bộ điều khiển khác. | Con người điều khiển từ xa cánh tay để nhấc một chiếc cốc |
+| **Imitation learning / behavior cloning** | Huấn luyện mô hình dự đoán các hành động có trong demonstration. Cách này tương tự học có giám sát trên các cặp quan sát-hành động. | Học cách sao chép chuyển động tiếp theo của người vận hành |
+| **Action token** | Một đơn vị đầu ra tổng quát liên quan đến hành động. Tùy bài báo, nó có thể là lệnh động cơ trực tiếp, điểm đích, quỹ đạo, hình ảnh mục tiêu hoặc biểu diễn nội bộ. | “Đóng bộ kẹp”, một điểm nắm 3D hoặc một giá trị chuyển động |
+| **Action chunk** | Nhiều hành động tương lai được dự đoán cùng lúc thay vì từng hành động một. Cách này có thể giúp điều khiển nhanh và mượt hơn, nhưng các hành động về sau có thể trở nên lỗi thời nếu thế giới thay đổi. | Dự đoán cùng lúc 20 lệnh cánh tay tiếp theo |
+| **Closed-loop control** | Robot liên tục quan sát kết quả hành động và điều chỉnh. | Di chuyển về phía cốc, quan sát lại, rồi hiệu chỉnh căn chỉnh |
+| **Open-loop control** | Robot thực thi một chuỗi hành động đã chuẩn bị mà không dùng quan sát mới để hiệu chỉnh trong khi thực thi. | Thực thi cả 20 lệnh dự đoán mà không quan sát lại |
+| **Generalization** | Khả năng thành công ngoài đúng những demonstration đã dùng để huấn luyện. | Nhấc một chiếc cốc mới trong một căn bếp mới |
+| **Success rate** | Tỷ lệ số lần thử nhiệm vụ hoàn thành thành công. Đây là thước đo đánh giá cấp cao phổ biến nhất. | 82 episode thành công trên 100 = 82% |
 
-### 8.1. Robot-arm terms
+### 8.1. Thuật ngữ về cánh tay robot
 
-| Term                               | Plain meaning                                                                                                                              |
+| Thuật ngữ | Nghĩa đơn giản |
 | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Joint**                    | A movable connection in the robot arm. Joint-based control directly specifies how these joints should move.                                |
-| **End effector**             | The working part at the end of the arm, usually a hand, gripper, or tool.                                                                  |
-| **Pose**                     | Position plus orientation. An end-effector pose says both where the hand is and which way it points.                                       |
-| **Degrees of freedom (DoF)** | The number of independently controllable movement dimensions. A 6-DoF hand pose normally has three position and three rotation dimensions. |
-| **Gripper action**           | A command controlling the robot's grasping tool, commonly open/close or a continuous opening value.                                        |
+| **Joint** | Một khớp nối có thể chuyển động trong cánh tay robot. Điều khiển theo khớp chỉ định trực tiếp cách các khớp này nên chuyển động. |
+| **End effector** | Bộ phận làm việc ở đầu cánh tay, thường là bàn tay, bộ kẹp hoặc công cụ. |
+| **Pose** | Vị trí cộng với hướng. Pose của end effector cho biết cả vị trí của bàn tay lẫn hướng nó đang trỏ tới. |
+| **Degrees of freedom (DoF)** | Số chiều chuyển động có thể điều khiển độc lập. Pose bàn tay 6-DoF thường có ba chiều vị trí và ba chiều xoay. |
+| **Gripper action** | Lệnh điều khiển công cụ gắp của robot, thường là mở/đóng hoặc một giá trị độ mở liên tục. |
 
-### 8.2. The vocabulary in one sentence
+### 8.2. Tóm tắt vốn từ vựng trong một câu
 
-> At every **timestep**, the VLA **policy** receives an **observation**, language **instruction**, and **proprioception**, then predicts an **action** or **action chunk** within the robot's **action space**; running this repeatedly produces a **rollout trajectory**, whose result is measured by **success rate**.
+> Tại mỗi **timestep**, **policy** VLA nhận một **observation**, **instruction** bằng ngôn ngữ và **proprioception**, sau đó dự đoán một **action** hoặc **action chunk** trong **action space** của robot; việc lặp lại quá trình này tạo ra một **rollout trajectory**, với kết quả được đo bằng **success rate**.
 
-## 9. Core challenges and constraints
+## 9. Những thách thức và ràng buộc cốt lõi
 
-A VLA must combine semantic understanding with precise, timely, and safe physical control. A model can understand the instruction correctly and still fail because its movement is late, imprecise, unsafe, incompatible with the robot, or unable to recover from a small mistake.
+VLA phải kết hợp hiểu biết ngữ nghĩa với khả năng điều khiển vật lý chính xác, kịp thời và an toàn. Mô hình có thể hiểu đúng chỉ dẫn nhưng vẫn thất bại vì chuyển động quá trễ, thiếu chính xác, không an toàn, không tương thích với robot hoặc không thể phục hồi sau một lỗi nhỏ.
 
-The main challenge groups are:
+Các nhóm thách thức chính:
 
-| Area                  | Central question                                                              |
+| Lĩnh vực | Câu hỏi trọng tâm |
 | --------------------- | ----------------------------------------------------------------------------- |
-| Data                  | Does the training data cover the tasks, scenes, mistakes, and robot body?     |
-| Perception            | Can the model identify the correct object and its usable 3D location?         |
-| Language grounding    | Does it connect the instruction to the right object, relation, and behavior?  |
-| Action generation     | Are the commands smooth, precise, and valid for this robot?                   |
-| Real-time control     | Are actions produced before the observation becomes outdated?                 |
-| Long-horizon behavior | Can the model track progress, sequence subtasks, and recover from errors?     |
-| Generalization        | Does it work outside the exact conditions represented in training?            |
-| Safety                | Can failures be detected and contained before causing damage?                 |
-| Evaluation            | Are we measuring real task success rather than only offline prediction error? |
+| Dữ liệu | Dữ liệu huấn luyện có bao phủ nhiệm vụ, cảnh, lỗi và thân thể robot không? |
+| Nhận thức | Mô hình có thể xác định đúng vật thể và vị trí 3D có thể thao tác của nó không? |
+| Grounding ngôn ngữ | Mô hình có liên hệ chỉ dẫn với đúng vật thể, mối quan hệ và hành vi không? |
+| Sinh hành động | Các lệnh có mượt, chính xác và hợp lệ với robot này không? |
+| Điều khiển thời gian thực | Hành động có được tạo ra trước khi quan sát trở nên lỗi thời không? |
+| Hành vi dài hạn | Mô hình có thể theo dõi tiến độ, sắp xếp các nhiệm vụ con và phục hồi sau lỗi không? |
+| Khái quát hóa | Mô hình có hoạt động ngoài đúng những điều kiện có trong dữ liệu huấn luyện không? |
+| An toàn | Có thể phát hiện và khống chế lỗi trước khi gây thiệt hại không? |
+| Đánh giá | Chúng ta có đang đo thành công thực tế của nhiệm vụ thay vì chỉ đo lỗi dự đoán offline không? |
 
-### 9.1. Data and learning constraints
+### 9.1. Ràng buộc về dữ liệu và học
 
-#### 9.1.1. Robot data is scarce and expensive
+#### 9.1.1. Dữ liệu robot khan hiếm và đắt đỏ
 
-Image-text data can be collected from the internet, but useful robot training data normally requires a real robot, a simulator, or a human operator. Real-world demonstrations are slow to collect and may include hardware wear, operator inconsistency, sensor errors, and failed episodes.
+Dữ liệu hình ảnh-văn bản có thể được thu thập từ Internet, nhưng dữ liệu huấn luyện robot hữu ích thường cần robot thật, trình mô phỏng hoặc người vận hành. Việc thu thập demonstration trong thế giới thực chậm và có thể gặp hao mòn phần cứng, sự thiếu nhất quán giữa người vận hành, lỗi cảm biến và các episode thất bại.
 
-The important constraint is that a VLA cannot learn physical skills from VLM knowledge alone. A VLM may know that a mug has a handle, but robot data must teach how this embodiment should approach, grasp, lift, and recover if the mug slips.
+Ràng buộc quan trọng là VLA không thể học kỹ năng vật lý chỉ từ kiến thức VLM. VLM có thể biết cốc có quai, nhưng dữ liệu robot phải dạy thân thể robot này cách tiếp cận, nắm, nâng và phục hồi nếu cốc bị trượt.
 
-Common responses include:
+Các cách xử lý phổ biến gồm:
 
-- pooling data from multiple robots;
-- generating simulation or synthetic data;
-- learning from human videos;
-- pretraining broadly, then fine-tuning on a smaller robot-specific dataset;
-- collecting corrective and recovery behavior, not only perfect demonstrations.
+- gộp dữ liệu từ nhiều robot;
+- tạo dữ liệu mô phỏng hoặc tổng hợp;
+- học từ video con người;
+- pretrain trên dữ liệu rộng, sau đó fine-tune bằng một tập dữ liệu nhỏ hơn dành riêng cho robot;
+- thu thập hành vi hiệu chỉnh và phục hồi, không chỉ các demonstration hoàn hảo.
 
-#### 9.1.2. Data quality and coverage matter as much as volume
+#### 9.1.2. Chất lượng và độ bao phủ dữ liệu quan trọng không kém dung lượng
 
-A dataset containing only successful, clean demonstrations teaches the policy what ideal behavior looks like, but not how to recover after drifting away from that behavior. At deployment time, small errors move the robot into situations that may not exist in the demonstrations. This is called **distribution shift**.
+Một dataset chỉ chứa các demonstration thành công và sạch sẽ dạy policy hành vi lý tưởng trông như thế nào, nhưng không dạy cách phục hồi sau khi lệch khỏi hành vi đó. Khi triển khai, các lỗi nhỏ đưa robot vào những tình huống có thể không tồn tại trong demonstration. Hiện tượng này được gọi là **distribution shift**.
 
-Training data should cover:
+Dữ liệu huấn luyện nên bao phủ:
 
-- different object positions, appearances, and backgrounds;
-- variations in lighting, camera view, and clutter;
-- multiple valid ways of completing the task;
-- partial failures and corrective movements;
-- task beginnings, transitions, and endings;
-- safe stopping behavior when the task becomes impossible.
+- các vị trí, diện mạo và phông nền khác nhau của vật thể;
+- sự thay đổi về ánh sáng, góc nhìn camera và độ lộn xộn;
+- nhiều cách hợp lệ để hoàn thành nhiệm vụ;
+- các lỗi một phần và chuyển động hiệu chỉnh;
+- phần bắt đầu, chuyển tiếp và kết thúc nhiệm vụ;
+- hành vi dừng an toàn khi nhiệm vụ trở nên bất khả thi.
 
-#### 9.1.3. Cross-embodiment data is not automatically compatible
+#### 9.1.3. Dữ liệu đa thân thể không tự động tương thích
 
-Different robots have different cameras, joint counts, grippers, coordinate systems, and action meanings. Combining their data requires a shared representation or robot-specific adapters.
+Các robot khác nhau có camera, số lượng khớp, bộ kẹp, hệ tọa độ và ý nghĩa hành động khác nhau. Việc kết hợp dữ liệu của chúng cần một biểu diễn chung hoặc các adapter dành riêng cho robot.
 
-For example, the numeric action `[0.1, 0, 0]` might mean a 10 cm Cartesian movement in one dataset, a normalized joint command in another, and a velocity in a third. Mixing them without correct metadata and conversion makes the training target meaningless.
+Ví dụ, hành động số `[0.1, 0, 0]` có thể mang nghĩa là chuyển động Descartes 10 cm trong một dataset, lệnh khớp đã chuẩn hóa trong dataset khác và vận tốc trong dataset thứ ba. Trộn chúng mà không có metadata và phép chuyển đổi đúng sẽ khiến mục tiêu huấn luyện trở nên vô nghĩa.
 
-#### 9.1.4. VLM knowledge can be forgotten
+#### 9.1.4. Kiến thức VLM có thể bị lãng quên
 
-Fine-tuning heavily on robot trajectories can damage the general visual-language capabilities inherited from the original VLM. The model may improve on one robot benchmark while becoming worse at recognizing unusual objects, reading labels, or interpreting new instructions.
+Fine-tune mạnh trên các trajectory robot có thể làm suy giảm năng lực thị giác-ngôn ngữ tổng quát kế thừa từ VLM ban đầu. Mô hình có thể cải thiện trên một benchmark robot nhưng lại nhận diện vật thể hiếm, đọc nhãn hoặc diễn giải chỉ dẫn mới kém đi.
 
-Recent training recipes therefore mix vision-language data with robot data, freeze or isolate parts of the VLM, or use a separate action expert so that motor learning does not overwrite all semantic knowledge.
+Do đó, các công thức huấn luyện gần đây trộn dữ liệu thị giác-ngôn ngữ với dữ liệu robot, đóng băng hoặc tách biệt một phần VLM, hoặc dùng một action expert riêng để việc học vận động không ghi đè toàn bộ kiến thức ngữ nghĩa.
 
-### 9.2. Perception and grounding challenges
+### 9.2. Thách thức về nhận thức và grounding
 
-#### 9.2.1. 2D understanding is not enough for precise manipulation
+#### 9.2.1. Hiểu biết 2D không đủ cho thao tác chính xác
 
-An RGB image provides strong semantic information but does not directly provide exact depth, contact geometry, or object mass. A VLA must infer where to touch, how far to move, and whether the gripper can reach without collision.
+Hình ảnh RGB cung cấp nhiều thông tin ngữ nghĩa nhưng không trực tiếp cho biết độ sâu chính xác, hình học tiếp xúc hoặc khối lượng vật thể. VLA phải suy ra vị trí tiếp xúc, khoảng cách di chuyển và liệu bộ kẹp có thể vươn tới mà không va chạm hay không.
 
-This becomes difficult with:
+Điều này trở nên khó khăn với:
 
-- transparent, reflective, deformable, or very small objects;
-- clutter and occlusion;
-- similar-looking objects;
-- poor lighting or motion blur;
-- tasks requiring millimetre-level alignment;
-- camera views that do not show the contact area.
+- vật thể trong suốt, phản chiếu, biến dạng hoặc rất nhỏ;
+- cảnh lộn xộn và che khuất;
+- các vật thể có vẻ ngoài giống nhau;
+- ánh sáng kém hoặc nhòe chuyển động;
+- nhiệm vụ cần căn chỉnh ở cấp milimét;
+- góc nhìn camera không hiển thị vùng tiếp xúc.
 
-Depth cameras, wrist cameras, point clouds, force sensing, and calibrated geometry can help, but each adds hardware and synchronization constraints.
+Camera độ sâu, camera cổ tay, point cloud, cảm biến lực và hình học đã hiệu chuẩn có thể hỗ trợ, nhưng mỗi thành phần đều làm phát sinh ràng buộc về phần cứng và đồng bộ hóa.
 
-#### 9.2.2. Language must be grounded to the current scene
+#### 9.2.2. Ngôn ngữ phải được grounding vào cảnh hiện tại
 
-The model must resolve which physical object and relation an instruction refers to. “Put it there,” “use the clean cup,” or “move the nearest block” require context, memory, comparison, or clarification.
+Mô hình phải xác định chỉ dẫn đang đề cập đến vật thể vật lý và mối quan hệ nào. “Đặt nó ở đó”, “dùng chiếc cốc sạch” hoặc “di chuyển khối gần nhất” đòi hỏi ngữ cảnh, bộ nhớ, so sánh hoặc làm rõ.
 
-A VLA can fail even when it recognizes every object if it selects the wrong instance, misunderstands left/right from the user's viewpoint, or interprets “on” differently from the task evaluator.
+VLA có thể thất bại ngay cả khi nhận diện được mọi vật thể nếu chọn sai cá thể, hiểu sai trái/phải theo góc nhìn người dùng hoặc diễn giải từ “trên” khác với bộ đánh giá nhiệm vụ.
 
-Instructions used during deployment should match the capabilities and language diversity represented during training. Safety-critical ambiguity should trigger clarification or refusal rather than a confident movement.
+Chỉ dẫn dùng khi triển khai nên phù hợp với năng lực và mức độ đa dạng ngôn ngữ có trong dữ liệu huấn luyện. Sự mơ hồ ảnh hưởng đến an toàn nên kích hoạt yêu cầu làm rõ hoặc từ chối thay vì một chuyển động đầy tự tin.
 
-#### 9.2.3. Partial observability and temporal memory
+#### 9.2.3. Quan sát một phần và bộ nhớ theo thời gian
 
-The current camera image may not reveal everything needed for the task. An object can move behind the arm, a drawer can hide its contents, or the robot may need to remember which items were already handled.
+Hình ảnh camera hiện tại có thể không tiết lộ mọi thông tin cần thiết cho nhiệm vụ. Vật thể có thể di chuyển ra sau cánh tay, ngăn kéo có thể che giấu đồ bên trong hoặc robot có thể cần nhớ những vật đã xử lý.
 
-A single-frame VLA can repeatedly open the same drawer or forget that it has already completed a subtask. Longer image history, explicit memory, object tracking, and high-level state tracking can help, but increase computation and context length.
+VLA chỉ dùng một frame có thể liên tục mở cùng một ngăn kéo hoặc quên rằng nó đã hoàn thành một nhiệm vụ con. Lịch sử hình ảnh dài hơn, bộ nhớ tường minh, theo dõi vật thể và theo dõi trạng thái cấp cao có thể hỗ trợ, nhưng làm tăng tính toán và độ dài ngữ cảnh.
 
-### 9.3. Action-generation and control constraints
+### 9.3. Ràng buộc về sinh hành động và điều khiển
 
-#### 9.3.1. Action representation must match the controller
+#### 9.3.1. Biểu diễn hành động phải khớp với bộ điều khiển
 
-Before training or deployment, the action interface must be defined exactly:
+Trước khi huấn luyện hoặc triển khai, giao diện hành động phải được định nghĩa chính xác:
 
-| Choice          | Examples                                                                    |
+| Lựa chọn | Ví dụ |
 | --------------- | --------------------------------------------------------------------------- |
-| Control target  | Joint position, joint velocity, end-effector pose, or end-effector movement |
-| Reference frame | Robot base, world, camera, or end-effector frame                            |
-| Time meaning    | Absolute target, change from current value, or velocity per second          |
-| Rotation format | Euler angles, quaternion, axis-angle, or 6D rotation                        |
-| Gripper format  | Binary open/close, continuous width, force, or velocity                     |
-| Units           | Metres versus millimetres; radians versus degrees                           |
+| Mục tiêu điều khiển | Vị trí khớp, vận tốc khớp, pose của end effector hoặc chuyển động của end effector |
+| Hệ quy chiếu | Đế robot, thế giới, camera hoặc hệ quy chiếu end effector |
+| Ý nghĩa thời gian | Mục tiêu tuyệt đối, thay đổi so với giá trị hiện tại hoặc vận tốc mỗi giây |
+| Định dạng phép xoay | Góc Euler, quaternion, axis-angle hoặc phép xoay 6D |
+| Định dạng bộ kẹp | Mở/đóng nhị phân, độ rộng liên tục, lực hoặc vận tốc |
+| Đơn vị | Mét so với milimét; radian so với độ |
 
-A mismatch can make a good model appear completely broken and can also damage hardware. Action normalization statistics must come from the correct dataset and must be reversed correctly before sending commands to the robot.
+Sự không khớp có thể khiến một mô hình tốt trông như hoàn toàn hỏng và cũng có thể làm hư hại phần cứng. Thống kê chuẩn hóa hành động phải lấy từ đúng dataset và phải được đảo ngược chính xác trước khi gửi lệnh đến robot.
 
-#### 9.3.2. Smoothness versus responsiveness
+#### 9.3.2. Độ mượt so với khả năng phản ứng
 
-Predicting an action chunk produces smoother motion and reduces how often a large VLA must run. However, a long chunk may continue toward an old target after the object or robot has moved.
+Dự đoán một action chunk tạo ra chuyển động mượt hơn và giảm tần suất phải chạy VLA lớn. Tuy nhiên, một chunk dài có thể tiếp tục di chuyển về phía mục tiêu cũ sau khi vật thể hoặc robot đã thay đổi vị trí.
 
-The trade-off is:
+Sự đánh đổi:
 
-- **long chunks:** faster average execution and smoother trajectories, but less reactive;
-- **short chunks:** more reactive, but require more frequent inference and may produce discontinuities between chunks.
+- **chunk dài:** tốc độ thực thi trung bình nhanh hơn và trajectory mượt hơn, nhưng phản ứng kém hơn;
+- **chunk ngắn:** phản ứng tốt hơn, nhưng cần inference thường xuyên hơn và có thể tạo ra sự gián đoạn giữa các chunk.
 
-Most systems predict a chunk, execute only part of it, observe again, and replace the unexecuted remainder.
+Hầu hết hệ thống dự đoán một chunk, chỉ thực thi một phần, quan sát lại rồi thay thế phần còn lại chưa thực thi.
 
-#### 9.3.3. Several actions may all be correct
+#### 9.3.3. Nhiều hành động đều có thể đúng
 
-There may be multiple valid grasps and paths for the same observation. A simple average of those demonstrations can create an invalid movement between them. For example, averaging a left-side approach and a right-side approach may drive the hand directly into the object.
+Có thể tồn tại nhiều cách nắm và quỹ đạo hợp lệ cho cùng một observation. Lấy trung bình đơn giản các demonstration đó có thể tạo ra một chuyển động không hợp lệ nằm giữa chúng. Ví dụ, lấy trung bình một cách tiếp cận từ bên trái và một cách tiếp cận từ bên phải có thể khiến bàn tay đâm thẳng vào vật thể.
 
-Diffusion and flow-matching action generators are popular partly because they can represent complex continuous action distributions. Even then, generated chunks must remain consistent across time.
+Các bộ sinh hành động dựa trên diffusion và flow matching phổ biến một phần vì chúng có thể biểu diễn các phân phối hành động liên tục phức tạp. Dù vậy, các chunk được sinh ra vẫn phải nhất quán theo thời gian.
 
-#### 9.3.4. Small errors accumulate
+#### 9.3.4. Lỗi nhỏ tích lũy
 
-A 2 mm error may be harmless during an approach but critical when inserting a plug or closing a zipper. Repeating slightly incorrect predictions can gradually move the robot far outside the training distribution.
+Sai số 2 mm có thể vô hại khi tiếp cận nhưng mang tính quyết định khi cắm phích cắm hoặc kéo khóa. Việc lặp lại các dự đoán hơi sai có thể dần đưa robot ra xa khỏi phân phối huấn luyện.
 
-Closed-loop observation, visual correction, force feedback, precise calibration, and recovery data are therefore as important as the initial action prediction.
+Do đó, quan sát closed-loop, hiệu chỉnh thị giác, phản hồi lực, hiệu chuẩn chính xác và dữ liệu phục hồi cũng quan trọng như dự đoán hành động ban đầu.
 
-### 9.4. Real-time performance
+### 9.4. Hiệu năng thời gian thực
 
-Real-time performance is not simply “high GPU utilization” or a large number of generated actions per second. The complete delay from sensing to useful robot command matters:
+Hiệu năng thời gian thực không đơn giản là “mức sử dụng GPU cao” hoặc số lượng lớn hành động được sinh ra mỗi giây. Điều quan trọng là tổng độ trễ từ cảm nhận đến lệnh robot hữu ích:
 
 ```text
-camera exposure and transfer
-  + image preprocessing
-  + VLM inference
-  + planning, if used
-  + action generation
-  + network or process communication
-  + controller delay
-  = end-to-end control latency
+phơi sáng và truyền dữ liệu camera
+  + tiền xử lý hình ảnh
+  + inference VLM
+  + lập kế hoạch, nếu có
+  + sinh hành động
+  + giao tiếp qua mạng hoặc giữa các tiến trình
+  + độ trễ bộ điều khiển
+  = độ trễ điều khiển end-to-end
 ```
 
-The control period gives the available time budget:
+Chu kỳ điều khiển xác định quỹ thời gian sẵn có:
 
-| Desired update rate | Maximum period per update |
+| Tần suất cập nhật mong muốn | Chu kỳ tối đa mỗi lần cập nhật |
 | ------------------: | ------------------------: |
-|               10 Hz |                    100 ms |
-|               20 Hz |                     50 ms |
-|               50 Hz |                     20 ms |
-|              120 Hz |              about 8.3 ms |
+| 10 Hz | 100 ms |
+| 20 Hz | 50 ms |
+| 50 Hz | 20 ms |
+| 120 Hz | khoảng 8,3 ms |
 
-These are timing budgets, not universal VLA requirements. A large VLA may run at a lower rate while a lightweight low-level controller interpolates or executes a predicted action chunk at a higher rate.
+Đây là các quỹ thời gian, không phải yêu cầu chung cho mọi VLA. VLA lớn có thể chạy ở tần suất thấp hơn trong khi bộ điều khiển cấp thấp gọn nhẹ nội suy hoặc thực thi một action chunk dự đoán ở tần suất cao hơn.
 
-#### 9.4.1. Why latency causes physical failure
+#### 9.4.1. Vì sao độ trễ gây ra lỗi vật lý
 
-If the camera image was captured at time `t` but the command reaches the robot much later, it is based on a stale observation. Meanwhile, the arm, target object, or human may have moved. This can cause oscillation, overshoot, collisions, jerky transitions, or repeated corrections.
+Nếu hình ảnh camera được chụp tại thời điểm `t` nhưng lệnh đến robot muộn hơn nhiều, lệnh đó dựa trên một quan sát đã lỗi thời. Trong khi đó, cánh tay, vật thể mục tiêu hoặc con người có thể đã di chuyển. Điều này có thể gây dao động, vượt quá mục tiêu, va chạm, chuyển tiếp giật cục hoặc hiệu chỉnh lặp đi lặp lại.
 
-Important measurements include:
+Các phép đo quan trọng gồm:
 
-- median and worst-case sensing-to-action latency;
-- VLM and action-head latency separately;
-- effective control frequency on the actual robot;
-- missed deadlines and latency variation, also called jitter;
-- time spent transferring images and tensors;
-- how old the observation is when its action is executed.
+- độ trễ trung vị và trường hợp xấu nhất từ cảm nhận đến hành động;
+- độ trễ VLM và action head riêng biệt;
+- control frequency thực tế trên robot thật;
+- số lần lỡ deadline và độ biến thiên độ trễ, còn gọi là jitter;
+- thời gian truyền hình ảnh và tensor;
+- observation đã cũ bao lâu tại thời điểm hành động tương ứng được thực thi.
 
-#### 9.4.2. Common real-time strategies
+#### 9.4.2. Các chiến lược thời gian thực phổ biến
 
-- Cache instruction and image features that do not need recomputation.
-- Predict several actions in parallel as a chunk.
-- Use a smaller action expert after a larger VLM context pass.
-- Quantize or compile the model when validation shows acceptable behavior.
-- Reduce image count or resolution carefully.
-- Run inference asynchronously while the robot executes the current chunk.
-- Reuse part of the previous chunk to preserve continuity.
-- Keep fast safety and motor-control loops outside the large VLA.
+- Cache đặc trưng chỉ dẫn và hình ảnh không cần tính toán lại.
+- Dự đoán song song nhiều hành động dưới dạng một chunk.
+- Sử dụng action expert nhỏ hơn sau một lượt xử lý ngữ cảnh bằng VLM lớn.
+- Lượng tử hóa hoặc biên dịch mô hình khi validation cho thấy hành vi chấp nhận được.
+- Giảm số lượng hoặc độ phân giải hình ảnh một cách thận trọng.
+- Chạy inference bất đồng bộ trong khi robot thực thi chunk hiện tại.
+- Tái sử dụng một phần chunk trước để duy trì tính liên tục.
+- Đặt các vòng lặp an toàn và điều khiển động cơ nhanh bên ngoài VLA lớn.
 
-Asynchronous execution improves throughput but makes timing alignment harder. The system must know which predicted timestep corresponds to the robot's actual state when the new chunk begins.
+Thực thi bất đồng bộ cải thiện throughput nhưng khiến việc căn chỉnh thời gian khó hơn. Hệ thống phải biết timestep được dự đoán nào tương ứng với trạng thái thực tế của robot khi chunk mới bắt đầu.
 
-### 9.5. Long-horizon planning and recovery
+### 9.5. Lập kế hoạch dài hạn và phục hồi
 
-#### 9.5.1. Long tasks amplify every weakness
+#### 9.5.1. Nhiệm vụ dài khuếch đại mọi điểm yếu
 
-If an individual subtask succeeds 95% of the time, a task requiring 20 independent successful subtasks would have an idealized total success probability of approximately:
+Nếu mỗi nhiệm vụ con thành công trong 95% số lần, một nhiệm vụ cần 20 nhiệm vụ con độc lập đều thành công sẽ có xác suất thành công tổng thể lý tưởng hóa xấp xỉ:
 
 $$
 0.95^{20} \approx 0.36
 $$
 
-Real subtasks are not independent, but the example shows why a strong short-horizon policy can still perform poorly on room cleaning or meal preparation.
+Các nhiệm vụ con thực tế không độc lập, nhưng ví dụ cho thấy vì sao một policy ngắn hạn mạnh vẫn có thể hoạt động kém khi dọn phòng hoặc chuẩn bị bữa ăn.
 
-Long-horizon systems need to determine:
+Hệ thống dài hạn cần xác định:
 
-- which subtask should happen next;
-- whether the current subtask is complete;
-- what has already been completed;
-- when to retry, choose another strategy, ask for help, or stop.
+- nhiệm vụ con nào nên diễn ra tiếp theo;
+- nhiệm vụ con hiện tại đã hoàn thành hay chưa;
+- những gì đã hoàn thành;
+- khi nào nên thử lại, chọn chiến lược khác, yêu cầu trợ giúp hoặc dừng.
 
-An explicit planner can improve progress tracking but adds another source of errors and latency. An implicit end-to-end policy is simpler but harder to inspect and may repeat behavior.
+Planner tường minh có thể cải thiện khả năng theo dõi tiến độ nhưng bổ sung một nguồn lỗi và độ trễ khác. Policy end-to-end ngầm định đơn giản hơn nhưng khó kiểm tra và có thể lặp lại hành vi.
 
-#### 9.5.2. Recovery must be learned or designed
+#### 9.5.2. Khả năng phục hồi phải được học hoặc thiết kế
 
-Robots should detect and recover from cases such as:
+Robot nên phát hiện và phục hồi trong những trường hợp như:
 
-- failed grasp;
-- dropped or moved object;
-- blocked path;
-- drawer that did not open;
-- object hidden by the robot's arm;
-- controller timeout;
-- unexpected human interaction.
+- nắm thất bại;
+- vật thể bị rơi hoặc di chuyển;
+- quỹ đạo bị chặn;
+- ngăn kéo không mở;
+- vật thể bị cánh tay robot che khuất;
+- bộ điều khiển hết thời gian chờ;
+- tương tác bất ngờ với con người.
 
-A model trained only on successful trajectories often continues as though the failed action succeeded. Recovery data, success detectors, retry limits, progress checks, and safe fallback behavior should be part of the system design.
+Mô hình chỉ được huấn luyện trên trajectory thành công thường tiếp tục như thể hành động thất bại đã thành công. Dữ liệu phục hồi, bộ phát hiện thành công, giới hạn số lần thử lại, kiểm tra tiến độ và hành vi fallback an toàn nên là một phần của thiết kế hệ thống.
 
-### 9.6. Generalization and deployment constraints
+### 9.6. Ràng buộc về khái quát hóa và triển khai
 
-#### 9.6.1. Generalization has several levels
+#### 9.6.1. Khái quát hóa có nhiều cấp độ
 
-A model may generalize to a new position but not a new object, or to a new object but not a new robot. Papers should specify which variation is unseen:
+Mô hình có thể khái quát sang vị trí mới nhưng không phải vật thể mới, hoặc sang vật thể mới nhưng không phải robot mới. Bài báo nên nêu rõ biến thể nào chưa từng xuất hiện:
 
-- new object instances;
-- new object categories;
-- new backgrounds or lighting;
-- new camera positions;
-- new instruction wording;
-- new task combinations;
-- new environments;
-- new robot embodiments.
+- cá thể vật thể mới;
+- loại vật thể mới;
+- phông nền hoặc ánh sáng mới;
+- vị trí camera mới;
+- cách diễn đạt chỉ dẫn mới;
+- tổ hợp nhiệm vụ mới;
+- môi trường mới;
+- thân thể robot mới.
 
-Randomly splitting nearby frames from the same trajectory between training and evaluation can give an unrealistically high estimate of generalization. Evaluation should separate entire scenes, tasks, objects, or robot runs.
+Việc chia ngẫu nhiên các frame gần nhau từ cùng một trajectory vào tập huấn luyện và đánh giá có thể tạo ra ước tính khái quát hóa cao một cách phi thực tế. Quá trình đánh giá nên tách biệt toàn bộ cảnh, nhiệm vụ, vật thể hoặc lượt chạy robot.
 
-#### 9.6.2. Simulation does not perfectly transfer to reality
+#### 9.6.2. Mô phỏng không chuyển hoàn hảo sang thực tế
 
-Simulation may have different textures, lighting, friction, contact behavior, camera noise, and actuator delay. A policy can score highly in simulation yet fail on real hardware.
+Mô phỏng có thể khác về texture, ánh sáng, ma sát, hành vi tiếp xúc, nhiễu camera và độ trễ actuator. Policy có thể đạt điểm cao trong mô phỏng nhưng thất bại trên phần cứng thật.
 
-Domain randomization, real-world fine-tuning, accurate sensor models, and conservative controllers reduce this gap but do not eliminate it.
+Domain randomization, fine-tune trong thế giới thực, mô hình cảm biến chính xác và bộ điều khiển thận trọng làm giảm khoảng cách này nhưng không loại bỏ hoàn toàn.
 
-#### 9.6.3. Hardware and calibration are part of the model system
+#### 9.6.3. Phần cứng và hiệu chuẩn là một phần của hệ thống mô hình
 
-VLA performance depends on factors outside the neural network:
+Hiệu năng VLA phụ thuộc vào các yếu tố bên ngoài mạng neural:
 
-- camera calibration and mounting stability;
-- timestamp synchronization;
-- robot kinematics and controller tuning;
-- gripper force and mechanical wear;
-- network reliability;
-- available GPU memory and thermal limits;
-- emergency stop and collision detection.
+- hiệu chuẩn camera và độ ổn định khi lắp đặt;
+- đồng bộ timestamp;
+- động học robot và tinh chỉnh bộ điều khiển;
+- lực bộ kẹp và độ mòn cơ học;
+- độ tin cậy của mạng;
+- bộ nhớ GPU sẵn có và giới hạn nhiệt;
+- dừng khẩn cấp và phát hiện va chạm.
 
-A camera moved after calibration or a different gripper can invalidate the relationship learned between pixels and actions.
+Camera bị dịch chuyển sau khi hiệu chuẩn hoặc một bộ kẹp khác có thể làm mất hiệu lực mối quan hệ đã học giữa pixel và hành động.
 
-### 9.7. Safety and reliability
+### 9.7. An toàn và độ tin cậy
 
-A VLA is probabilistic and may produce an unexpected command even for a familiar input. A deployed system should not send unconstrained predictions directly to motors.
+VLA có tính xác suất và có thể tạo ra lệnh không mong muốn ngay cả với đầu vào quen thuộc. Hệ thống đã triển khai không nên gửi trực tiếp các dự đoán không bị ràng buộc đến động cơ.
 
-Common safety layers include:
+Các lớp an toàn phổ biến gồm:
 
-- joint, velocity, acceleration, and force limits;
-- workspace and self-collision constraints;
-- human detection and protected zones;
-- action validity checks;
-- watchdog timeouts;
-- emergency stop;
-- confidence or uncertainty checks;
-- human approval for high-risk actions;
-- logs that connect observations, predictions, and executed commands.
+- giới hạn khớp, vận tốc, gia tốc và lực;
+- ràng buộc workspace và tự va chạm;
+- phát hiện con người và vùng được bảo vệ;
+- kiểm tra tính hợp lệ của hành động;
+- watchdog timeout;
+- dừng khẩn cấp;
+- kiểm tra độ tin cậy hoặc bất định;
+- con người phê duyệt các hành động rủi ro cao;
+- log liên kết observation, dự đoán và lệnh đã thực thi.
 
-The safety layer should run independently and faster than the VLA. Language instructions must not be allowed to override physical safety limits.
+Lớp an toàn nên chạy độc lập và nhanh hơn VLA. Không được cho phép chỉ dẫn bằng ngôn ngữ ghi đè các giới hạn an toàn vật lý.
 
-### 9.8. What does “accuracy” mean for a VLA?
+### 9.8. “Độ chính xác” có nghĩa là gì đối với VLA?
 
-There is no single VLA accuracy number comparable to image-classification accuracy.
+Không tồn tại một con số độ chính xác VLA duy nhất tương tự độ chính xác phân loại hình ảnh.
 
-#### 9.8.1. Offline action-prediction error
+#### 9.8.1. Lỗi dự đoán hành động offline
 
-During training, researchers can measure how closely a predicted action matches a recorded demonstration using L1, L2, or token accuracy. This is useful for optimization but is not sufficient for judging the robot.
+Trong quá trình huấn luyện, nhà nghiên cứu có thể đo mức độ gần nhau giữa hành động dự đoán và demonstration đã ghi bằng L1, L2 hoặc token accuracy. Phép đo này hữu ích cho việc tối ưu hóa nhưng không đủ để đánh giá robot.
 
-Low offline error may still give poor rollouts because:
+Lỗi offline thấp vẫn có thể tạo ra rollout kém vì:
 
-- several different actions may all be valid;
-- a small error can compound after many steps;
-- the model is evaluated on demonstration states rather than states created by its own mistakes;
-- an action close to the operator's action may still cross a contact or safety boundary.
+- nhiều hành động khác nhau đều có thể hợp lệ;
+- một lỗi nhỏ có thể tích lũy sau nhiều bước;
+- mô hình được đánh giá trên trạng thái demonstration thay vì trạng thái do chính lỗi của nó tạo ra;
+- hành động gần với hành động của người vận hành vẫn có thể vượt qua ranh giới tiếp xúc hoặc an toàn.
 
-#### 9.8.2. Task success rate
+#### 9.8.2. Tỷ lệ thành công của nhiệm vụ
 
-The main top-level metric is normally:
+Metric cấp cao chính thường là:
 
 $$
 \text{Success rate} = \frac{\text{successful episodes}}{\text{total evaluated episodes}}
 $$
 
-Success criteria must be defined precisely. “Place the mug on the tray” may require the mug to be fully inside a marked area, upright, released, and stable for several seconds.
+Tiêu chí thành công phải được định nghĩa chính xác. “Đặt chiếc cốc lên khay” có thể yêu cầu cốc nằm hoàn toàn trong vùng được đánh dấu, đứng thẳng, đã được thả và ổn định trong vài giây.
 
-Success rate alone can also hide important differences. A complete evaluation should include:
+Chỉ riêng success rate cũng có thể che giấu những khác biệt quan trọng. Một đánh giá đầy đủ nên gồm:
 
-| Metric                                   | What it reveals                             |
+| Metric | Điều nó cho biết |
 | ---------------------------------------- | ------------------------------------------- |
-| Full-task success                        | Whether the final goal was completed        |
-| Subtask or stage completion              | Where long tasks fail                       |
-| Position and rotation error              | Physical precision at the goal              |
-| Completion time                          | Efficiency                                  |
-| Path length or motion smoothness         | Wasteful or jerky behavior                  |
-| Collision and safety-violation rate      | Risk                                        |
-| Intervention rate                        | How often a human must rescue the robot     |
-| Recovery success                         | Whether the model can correct a failed step |
-| Unseen-condition success                 | Generalization                              |
-| End-to-end latency and control frequency | Real-time feasibility                       |
+| Thành công toàn bộ nhiệm vụ | Mục tiêu cuối cùng đã hoàn thành hay chưa |
+| Hoàn thành nhiệm vụ con hoặc giai đoạn | Nhiệm vụ dài thất bại ở đâu |
+| Sai số vị trí và phép xoay | Độ chính xác vật lý tại mục tiêu |
+| Thời gian hoàn thành | Hiệu quả |
+| Độ dài quỹ đạo hoặc độ mượt chuyển động | Hành vi lãng phí hoặc giật cục |
+| Tỷ lệ va chạm và vi phạm an toàn | Rủi ro |
+| Tỷ lệ can thiệp | Tần suất con người phải giải cứu robot |
+| Thành công khi phục hồi | Mô hình có thể hiệu chỉnh một bước thất bại hay không |
+| Thành công trong điều kiện chưa từng thấy | Khả năng khái quát hóa |
+| Độ trễ end-to-end và control frequency | Tính khả thi trong thời gian thực |
 
-#### 9.8.3. Precision is task-dependent
+#### 9.8.3. Độ chính xác phụ thuộc vào nhiệm vụ
 
-The required spatial accuracy differs greatly by task. Moving a towel into a basket may tolerate centimetres of error. Inserting a connector may require millimetre-level position accuracy and tight rotation alignment.
+Độ chính xác không gian cần thiết thay đổi đáng kể theo nhiệm vụ. Di chuyển khăn vào giỏ có thể chấp nhận sai số hàng centimet. Cắm đầu nối có thể cần độ chính xác vị trí ở cấp milimét và căn chỉnh phép xoay chặt chẽ.
 
-Therefore, a paper's success rate should always be interpreted together with:
+Vì vậy, success rate trong một bài báo luôn phải được diễn giải cùng với:
 
-- the difficulty and tolerance of the task;
-- whether evaluation is in simulation or on a real robot;
-- how many episodes and random seeds were used;
-- whether scenes, objects, and instructions were truly unseen;
-- whether humans reset, assist, or select favorable trials.
+- độ khó và dung sai của nhiệm vụ;
+- việc đánh giá diễn ra trong mô phỏng hay trên robot thật;
+- số episode và random seed được sử dụng;
+- cảnh, vật thể và chỉ dẫn có thực sự chưa từng xuất hiện hay không;
+- con người có reset, hỗ trợ hoặc chọn các lượt thử thuận lợi hay không.
 
-### 9.9. Practical constraints checklist
+### 9.9. Danh sách kiểm tra các ràng buộc thực tế
 
-Before training or running a VLA, verify:
+Trước khi huấn luyện hoặc chạy VLA, hãy xác minh:
 
-- **Input contract:** camera count, order, resolution, color format, crop, and history length.
-- **Timing contract:** camera timestamps, model rate, controller rate, chunk length, and execution delay.
-- **State contract:** joint ordering, missing sensors, units, normalization, and coordinate frames.
-- **Action contract:** absolute versus relative commands, control mode, rotation format, units, and gripper semantics.
-- **Embodiment contract:** robot ID, kinematics, workspace, and embodiment-specific adapters.
-- **Language contract:** prompt template, supported tasks, ambiguity handling, and stop commands.
-- **Compute contract:** GPU memory, worst-case latency, numerical precision, and thermal stability.
-- **Safety contract:** limits, collision checking, watchdog, emergency stop, and human supervision.
-- **Evaluation contract:** exact success definition, unseen split, number of rollouts, failure categories, and latency measurement.
-- **Logging contract:** save the input observation, model output, decoded command, executed command, timestamps, and outcome for every failure analysis.
+- **Hợp đồng đầu vào:** số lượng và thứ tự camera, độ phân giải, định dạng màu, crop và độ dài lịch sử.
+- **Hợp đồng thời gian:** timestamp camera, tần suất mô hình, tần suất bộ điều khiển, độ dài chunk và độ trễ thực thi.
+- **Hợp đồng trạng thái:** thứ tự khớp, cảm biến bị thiếu, đơn vị, chuẩn hóa và hệ tọa độ.
+- **Hợp đồng hành động:** lệnh tuyệt đối hay tương đối, chế độ điều khiển, định dạng phép xoay, đơn vị và ngữ nghĩa bộ kẹp.
+- **Hợp đồng thân thể:** ID robot, động học, workspace và adapter dành riêng cho embodiment.
+- **Hợp đồng ngôn ngữ:** prompt template, nhiệm vụ được hỗ trợ, cách xử lý mơ hồ và lệnh dừng.
+- **Hợp đồng tính toán:** bộ nhớ GPU, độ trễ trong trường hợp xấu nhất, độ chính xác số và độ ổn định nhiệt.
+- **Hợp đồng an toàn:** giới hạn, kiểm tra va chạm, watchdog, dừng khẩn cấp và giám sát của con người.
+- **Hợp đồng đánh giá:** định nghĩa chính xác về thành công, phép chia dữ liệu chưa từng thấy, số rollout, loại lỗi và phép đo độ trễ.
+- **Hợp đồng ghi log:** lưu observation đầu vào, đầu ra mô hình, lệnh đã giải mã, lệnh đã thực thi, timestamp và kết quả cho mọi phân tích lỗi.
 
-## 10. Sources
+## 10. Nguồn
 
-Based primarily on *A Survey on Vision-Language-Action Models: An Action Tokenization Perspective*, especially the unified framework on page 1, the overview of action tokens on page 12, and the discussion of direct robot actions on pages 31-36. The real-time and modern action-generation discussion is also informed by the original [π0](https://arxiv.org/abs/2410.24164), [GR00T N1](https://arxiv.org/abs/2503.14734), [OpenVLA-OFT](https://arxiv.org/abs/2502.19645), and [Xiaomi-Robotics-0](https://arxiv.org/abs/2602.12684) reports.
+Chủ yếu dựa trên *A Survey on Vision-Language-Action Models: An Action Tokenization Perspective*, đặc biệt là khung thống nhất ở trang 1, phần tổng quan về action token ở trang 12 và phần thảo luận về hành động robot trực tiếp ở trang 31-36. Phần thảo luận về thời gian thực và phương pháp sinh hành động hiện đại cũng tham khảo các báo cáo gốc [π0](https://arxiv.org/abs/2410.24164), [GR00T N1](https://arxiv.org/abs/2503.14734), [OpenVLA-OFT](https://arxiv.org/abs/2502.19645) và [Xiaomi-Robotics-0](https://arxiv.org/abs/2602.12684).

@@ -1,156 +1,156 @@
-# Evaluation Datasets for Qwen Models
+# Bộ dữ liệu đánh giá cho mô hình Qwen
 
-> **Question:** What kinds of data sit behind the main Qwen evaluation suites,
-> how large are they, and what does each example contain?
+> **Câu hỏi:** Những loại dữ liệu nào nằm sau bộ đánh giá Qwen chính,
+> chúng lớn đến mức nào và mỗi ví dụ chứa gì?
 >
-> **Scope:** Public evaluation data for language and vision-language Qwen
-> checkpoints. This is not a reconstruction of Qwen's proprietary training
-> corpus. Dataset facts were checked on 2026-07-22.
+> **Phạm vi:** Dữ liệu đánh giá công khai về ngôn ngữ và ngôn ngữ tầm nhìn Qwen
+> các điểm kiểm tra. Đây không phải là bản dựng lại chương trình đào tạo độc quyền của Qwen
+> tử thi. Thông tin thực tế về bộ dữ liệu đã được kiểm tra vào ngày 22-07-2026.
 
-## Scope boundary
+## Phạm vi ranh giới
 
-This file describes only the examples, modalities, annotations, splits, scale,
-access and licenses. Prompts, preprocessing, evaluators and reported Qwen
-results belong in [benchmarks.md](benchmarks.md); score definitions belong in
-[metrics.md](metrics.md); training objectives belong in [loss.md](loss.md).
+Tệp này chỉ mô tả các ví dụ, phương thức, chú thích, phần tách, tỷ lệ,
+quyền truy cập và giấy phép. Lời nhắc, tiền xử lý, người đánh giá và báo cáo Qwen
+kết quả thuộc về [benchmarks.md](benchmarks.md); định nghĩa điểm thuộc về
+[metrics.md](metrics.md); mục tiêu đào tạo thuộc về [loss.md](loss.md).
 
-## Dataset map
+## Bản đồ tập dữ liệu
 
-| Dataset | Type and modalities | Published scale | Principal splits/configurations | What one example contains |
+| Bộ dữ liệu | Loại và phương thức | Thang đo được xuất bản | Phân chia/cấu hình chính | Ví dụ nào chứa |
 |---|---|---:|---|---|
-| MMLU-Pro | Text, difficult multiple-choice knowledge/reasoning | 12,032 test + 70 validation questions | 14 subject domains; 10 answer choices | Question, options, answer and subject |
-| GPQA | Text, graduate-level science multiple choice | 448 questions total; Diamond has 198 | Biology, physics and chemistry; Diamond is the strictest subset | Expert-written question, choices and answer |
-| IFEval | Text instruction-following constraints | 541 prompts, 25 verifiable instruction types | Public evaluation collection; each prompt has 1–3 constraints | Prompt plus machine-checkable instruction IDs |
-| MMMU-Pro | Image-plus-text expert reasoning | 1,730 examples in each released configuration | Standard 10-choice, standard 4-choice and vision-only | Question, one or more images, options, subject metadata |
-| MathVista | Visual mathematical reasoning | 6,141 examples from 31 sources | `testmini` 1,000; full `test` 5,141 | Image, question, answer type and source/task metadata |
-| OCRBench | OCR and text-rich visual QA | 1,000 manually verified QA pairs | Five task families; original OCRBench | Image, text-related question and reference answer |
-| RefCOCO | Referring-expression grounding in COCO images | 19,994 images, 50,000 objects, 142,210 expressions | Train 120,624; val 10,834; testA 5,657; testB 5,095 expressions | Image, phrase and referred object box/region |
-| Video-MME | Video question answering | 900 videos, 254 hours, 2,700 QA pairs | Short, medium and long; 6 domains/30 subfields | Video, three multiple-choice questions, optional subtitles |
+| MMLU-Pro | Văn bản, kiến ​​thức/lý luận trắc nghiệm khó | 12.032 bài kiểm tra + 70 câu hỏi kiểm chứng | 14 lĩnh vực chủ đề; 10 lựa chọn trả lời | Câu hỏi, lựa chọn, câu trả lời và chủ đề |
+| GPQA | Văn bản, trắc nghiệm khoa học trình độ sau đại học | Tổng cộng 448 câu hỏi; Kim cương có 198 | Sinh học, vật lý và hóa học; Diamond là tập con chặt chẽ nhất | Câu hỏi, lựa chọn và câu trả lời do chuyên gia viết |
+| IFEval | Các ràng buộc tuân theo hướng dẫn văn bản | 541 lời nhắc, 25 loại hướng dẫn có thể kiểm chứng | Thu thập đánh giá công khai; mỗi lời nhắc có 1–3 ràng buộc | Lời nhắc cộng với hướng dẫn có thể kiểm tra bằng máy IDs |
+| MMMU-Pro | Lý luận của chuyên gia về hình ảnh cộng với văn bản | 1.730 ví dụ trong mỗi cấu hình được phát hành | Tiêu chuẩn 10 lựa chọn, tiêu chuẩn 4 lựa chọn và chỉ tầm nhìn | Câu hỏi, một hoặc nhiều hình ảnh, tùy chọn, siêu dữ liệu chủ đề |
+| MathVista | Lý luận toán học trực quan | 6.141 ví dụ từ 31 nguồn | `testmini` 1.000; đầy đủ `test` 5.141 | Hình ảnh, câu hỏi, loại câu trả lời và siêu dữ liệu nguồn/tác vụ |
+| OCRBench | OCR và hình ảnh giàu văn bản QA | 1.000 cặp QA được xác minh thủ công | Năm nhóm nhiệm vụ; OCRBench gốc | Hình ảnh, câu hỏi liên quan đến văn bản và câu trả lời tham khảo |
+| Tham chiếuCOCO | Nền tảng biểu thức giới thiệu trong hình ảnh COCO | 19.994 hình ảnh, 50.000 đối tượng, 142.210 biểu thức | Tàu 120.624; giá trị 10.834; thử nghiệmA 5.657; testB 5.095 biểu thức | Hộp/khu vực hình ảnh, cụm từ và đối tượng được giới thiệu |
+| Video-MME | Video trả lời câu hỏi | 900 video, 254 giờ, 2.700 cặp QA | Ngắn, trung bình và dài; 6 miền/30 trường con | Video, ba câu hỏi trắc nghiệm, phụ đề tùy chọn |
 
-Counts are version-specific. In particular, original OCRBench is not OCRBench
-v2, and original Video-MME is not Video-MME v2. A local dataset manifest must
-pin the named release and configuration.
+Số lượng tùy thuộc vào phiên bản cụ thể. Đặc biệt, OCRBench nguyên bản không phải là OCRBench
+v2 và Video-MME gốc không phải là Video-MME v2. Một bảng kê khai tập dữ liệu cục bộ phải
+ghim bản phát hành và cấu hình được đặt tên.
 
-## Text datasets
+## Bộ dữ liệu văn bản
 
 ### MMLU-Pro
 
-MMLU-Pro is a harder revision of broad academic multiple-choice evaluation. It
-expands the choice set from four to ten, removes many noisy or trivial items,
-and emphasizes questions that require reasoning rather than direct recall. Its
-14 domains include mathematics, physics, chemistry, law, engineering, health,
-history, psychology and business. The public release exposes 12,032 test rows
-and a small 70-row validation set.
+MMLU-Pro là phiên bản sửa đổi khó hơn của đánh giá trắc nghiệm học thuật rộng rãi. Nó
+mở rộng tập lựa chọn từ bốn lên mười, loại bỏ nhiều mục ồn ào hoặc tầm thường,
+và nhấn mạnh những câu hỏi đòi hỏi phải suy luận hơn là nhớ lại trực tiếp. Của nó
+14 lĩnh vực bao gồm toán học, vật lý, hóa học, luật, kỹ thuật, y tế,
+lịch sử, tâm lý học và kinh doanh. Bản phát hành công khai cho thấy 12.032 hàng thử nghiệm
+và một bộ xác nhận nhỏ gồm 70 hàng.
 
-It is useful as a broad regression set, but it remains text-only and public. It
-does not test whether a visual reference is correct or whether a robot action is
-safe. [MMLU-Pro paper][mmlu-pro] [Official repository][mmlu-pro-repo]
+Nó hữu ích như một tập hợp hồi quy rộng, nhưng nó vẫn chỉ ở dạng văn bản và công khai. Nó
+không kiểm tra xem tham chiếu trực quan có chính xác hay không hoặc liệu hành động của robot có
+an toàn. [Giấy MMLU-Pro][mmlu-pro] [Kho lưu trữ chính thức][mmlu-pro-repo]
 
-### GPQA and GPQA-Diamond
+### GPQA và GPQA-Diamond
 
-GPQA contains 448 multiple-choice questions written and validated by domain
-experts in biology, physics and chemistry. The authors designed them to resist
-answers obtained by ordinary web search. `GPQA-Diamond` is a 198-question subset
-selected for the highest agreement and quality; it is not a separate large
-corpus.
+GPQA chứa 448 câu hỏi trắc nghiệm được viết và xác thực theo tên miền
+chuyên gia về sinh học, vật lý và hóa học. Các tác giả đã thiết kế chúng để chống lại
+câu trả lời thu được bằng cách tìm kiếm trên web thông thường. `GPQA-Diamond` là tập hợp con gồm 198 câu hỏi
+được lựa chọn để có sự đồng thuận và chất lượng cao nhất; nó không phải là một cái lớn riêng biệt
+tử thi.
 
-It is a small, high-difficulty science collection rather than a broad-coverage
-knowledge dataset.
-[GPQA paper][gpqa]
+Đây là một bộ sưu tập khoa học nhỏ, có độ khó cao hơn là một bộ sưu tập có phạm vi bao quát rộng.
+tập dữ liệu kiến ​​thức.
+[Giấy GPQA] [gpqa]
 
 ### IFEval
 
-IFEval has 541 prompts carrying one to three constraints drawn from 25
-machine-verifiable instruction types. Examples request properties such as exact
-formatting, word occurrence, casing, list structure or the presence/absence of
-specified content. The annotation is therefore a set of constraint checkers,
-not a free-form human preference label.
+IFEval có 541 lời nhắc mang từ một đến ba ràng buộc được rút ra từ 25
+các loại hướng dẫn có thể kiểm chứng bằng máy. Ví dụ yêu cầu các thuộc tính như chính xác
+định dạng, sự xuất hiện của từ, cách viết hoa, cấu trúc danh sách hoặc sự hiện diện/vắng mặt của
+nội dung quy định. Do đó, chú thích là một tập hợp các trình kiểm tra ràng buộc,
+không phải là một nhãn ưu tiên hình thức tự do của con người.
 
-This construction makes the annotations machine-verifiable, but it
-covers only instructions with deterministic checks. [IFEval paper][ifeval]
-[Official implementation][ifeval-repo]
+Cấu trúc này làm cho các chú thích có thể được kiểm chứng bằng máy, nhưng nó
+chỉ bao gồm các hướng dẫn có kiểm tra xác định. [Giấy IFEval] [ifeval]
+[Triển khai chính thức][ifeval-repo]
 
-## Vision-language datasets
+## Bộ dữ liệu ngôn ngữ tầm nhìn
 
 ### MMMU-Pro
 
-MMMU-Pro revises expert multimodal questions to reduce shortcuts. The release
-has three 1,730-example configurations:
+MMMU-Pro sửa đổi các câu hỏi đa phương thức của chuyên gia để giảm bớt các phím tắt. Việc phát hành
+có ba cấu hình 1.730 ví dụ:
 
-- `standard (10 options)`, the primary harder multiple-choice form;
-- `standard (4 options)`, retained for comparison with older protocols;
-- `vision`, where question and options are rendered into the image so that the
-  input cannot be solved through a text-only path.
+- `standard (10 options)`, dạng trắc nghiệm khó hơn chính;
+- `standard (4 options)`, được giữ lại để so sánh với các giao thức cũ hơn;
+- `vision`, nơi câu hỏi và các tùy chọn được hiển thị vào hình ảnh để
+  đầu vào không thể được giải quyết thông qua đường dẫn chỉ có văn bản.
 
-It spans many university and professional subjects and may attach one or more
-figures to a question. The three configurations are alternative renderings of
-the task, not 5,190 independent semantic questions. [MMMU-Pro paper][mmmu-pro]
-[Dataset card][mmmu-pro-data]
+Nó bao gồm nhiều môn học đại học và chuyên nghiệp và có thể đính kèm một hoặc nhiều
+đưa ra một câu hỏi. Ba cấu hình là kết xuất thay thế của
+nhiệm vụ chứ không phải 5.190 câu hỏi ngữ nghĩa độc lập. [Giấy MMMU-Pro][mmmu-pro]
+[Thẻ tập dữ liệu][mmmu-pro-data]
 
 ### MathVista
 
-MathVista combines 28 existing sources with three newly created sources:
-IQTest, FunctionQA and PaperQA. Its 6,141 questions cover figures, charts,
-geometry, scientific plots, documents and puzzle-like images. The compact
-`testmini` split has 1,000 examples; the remaining 5,141 form the full test set.
-Test answers are withheld for server evaluation, so local files may not contain
-everything needed for standalone scoring. [MathVista paper][mathvista-paper]
-[Project][mathvista]
+MathVista kết hợp 28 nguồn hiện có với ba nguồn mới được tạo:
+IQTest, FunctionQA và PaperQA. 6.141 câu hỏi của nó bao gồm các số liệu, biểu đồ,
+hình học, sơ đồ khoa học, tài liệu và hình ảnh giống như câu đố. nhỏ gọn
+Phần chia `testmini` có 1.000 ví dụ; 5.141 còn lại tạo thành bộ kiểm tra đầy đủ.
+Câu trả lời kiểm tra được giữ lại để đánh giá máy chủ, vì vậy các tệp cục bộ có thể không chứa
+mọi thứ cần thiết để ghi điểm độc lập. [Bài báo MathVista] [Bài báo Mathvista]
+[Dự án][mathvista]
 
 ### OCRBench
 
-Original OCRBench is a compact, manually verified set of 1,000 image-question
-pairs organized into five groups:
+OCRBench gốc là bộ 1.000 câu hỏi hình ảnh nhỏ gọn, được xác minh thủ công
+các cặp được tổ chức thành năm nhóm:
 
-1. text recognition;
-2. scene-text visual question answering;
-3. document visual question answering;
-4. key-information extraction;
-5. handwritten mathematical expression recognition.
+1. nhận dạng văn bản;
+2. trả lời câu hỏi trực quan bằng văn bản cảnh;
+3. tài liệu trả lời câu hỏi trực quan;
+4. trích xuất thông tin quan trọng;
+5. nhận dạng biểu thức toán học viết tay.
 
-It mixes natural scenes, documents and handwriting, so a single aggregate can
-hide camera-domain failures. OCRBench v2 is a separate, much larger bilingual
-benchmark with 10,000 QA pairs and 31 scenarios; results from the two versions
-must not share a column. [OCRBench paper][ocrbench-paper]
-[Official repository][ocrbench]
+Nó kết hợp các cảnh thiên nhiên, tài liệu và chữ viết tay nên một tập hợp duy nhất có thể
+ẩn lỗi miền máy ảnh. OCRBench v2 là một phiên bản song ngữ riêng biệt, lớn hơn nhiều
+điểm chuẩn với 10.000 cặp QA và 31 kịch bản; kết quả của hai phiên bản
+không được chia sẻ một cột. [Giấy OCRBench][ocrbench-giấy]
+[Kho lưu trữ chính thức][ocrbench]
 
-### RefCOCO
+### giới thiệuCOCO
 
-RefCOCO is built on MS-COCO images and crowd-written referring expressions. It
-contains 142,210 expressions for 50,000 object instances in 19,994 images.
-`testA` is dominated by people, while `testB` contains other objects.
+RefCOCO được xây dựng trên hình ảnh MS-COCO và các biểu thức giới thiệu được cộng đồng viết. Nó
+chứa 142.210 biểu thức cho 50.000 trường hợp đối tượng trong 19.994 hình ảnh.
+`testA` bị chi phối bởi con người, trong khi `testB` chứa các đối tượng khác.
 
-The target is an object region, so the dataset tests whether a phrase such as
-“the cup to the left of the plate” resolves to the intended object. It is a
-static 2D grounding dataset, not a 3D pose or action dataset.
-[RefCOCO paper][refcoco]
+Mục tiêu là một vùng đối tượng, do đó tập dữ liệu sẽ kiểm tra xem một cụm từ như
+“Chiếc cốc bên trái đĩa” giải quyết được đối tượng đã định. Đó là một
+tập dữ liệu nối đất 2D tĩnh, không phải tập dữ liệu hành động hoặc tư thế 3D.
+[Giấy RefCOCO][refCOco]
 
 ### Video-MME
 
-Original Video-MME contains 900 videos totaling about 254 hours and 2,700
-question-answer pairs. Durations range from roughly 11 seconds to one hour. The
-collection covers six top-level domains and 30 subfields and is stratified into
-short, medium and long video groups. Audio and subtitle tracks are retained so
-that protocols can evaluate with or without subtitle information.
+Video gốc-MME chứa 900 video với tổng thời lượng khoảng 254 giờ và 2.700
+các cặp hỏi đáp. Thời lượng dao động từ khoảng 11 giây đến một giờ. các
+bộ sưu tập bao gồm sáu tên miền cấp cao nhất và 30 trường con và được phân tầng thành
+nhóm video ngắn, trung bình và dài. Các bản âm thanh và phụ đề được giữ lại để
+các giao thức đó có thể đánh giá có hoặc không có thông tin phụ đề.
 
-The raw dataset contract is richer than a sampled-frame tensor. A local copy
-should preserve the original video, timestamps, duration class, subtitles and
-question IDs before a model-specific frame sampler is applied. Video-MME v2 is
-a later dataset and must be versioned separately. [Video-MME paper][video-mme-paper]
-[Project][video-mme]
+Hợp đồng tập dữ liệu thô phong phú hơn một tenxơ khung lấy mẫu. Một bản sao cục bộ
+nên giữ nguyên video gốc, dấu thời gian, loại thời lượng, phụ đề và
+đặt câu hỏi IDs trước khi áp dụng bộ lấy mẫu khung dành riêng cho từng mẫu máy. Video-MME v2 là
+một tập dữ liệu sau này và phải được phiên bản riêng. [Giấy Video-MME][video-mme-giấy]
+[Dự án][video-mme]
 
-## Access and reproduction details
+## Chi tiết truy cập và sao chép
 
-Most datasets above have public code or data entry points, but “public” does not
-mean every evaluation is fully local:
+Hầu hết các tập dữ liệu ở trên đều có mã công khai hoặc điểm nhập dữ liệu, nhưng “công khai” thì không.
+có nghĩa là mọi đánh giá đều hoàn toàn cục bộ:
 
-- MathVista keeps full-test labels behind an evaluation service.
-- GPQA distribution has access and license conditions that must be checked at
-  download time.
-- image/video datasets may inherit licenses or access terms from COCO, source
-  videos, or component datasets;
+- MathVista giữ các nhãn kiểm tra đầy đủ đằng sau một dịch vụ đánh giá.
+- Bản phân phối GPQA có các điều kiện cấp phép và quyền truy cập phải được kiểm tra tại
+  thời gian tải xuống.
+- bộ dữ liệu hình ảnh/video có thể kế thừa giấy phép hoặc điều khoản truy cập từ COCO, nguồn
+  video hoặc bộ dữ liệu thành phần;
 
-Record at least the following in a local dataset manifest:
+Ghi lại ít nhất những thông tin sau vào bảng kê khai tập dữ liệu cục bộ:
 
 ```yaml
 name: Video-MME
@@ -164,43 +164,43 @@ native_media_metadata: <timestamps-duration-audio-subtitle-tracks>
 license_or_terms: <checked-url-and-date>
 ```
 
-For every dataset, preserve example IDs, native media metadata, split, source
-revision and any filtered/excluded rows. Prompting and metric settings belong in
-the run manifest, not in the dataset description.
+Đối với mọi tập dữ liệu, hãy giữ nguyên ví dụ IDs, siêu dữ liệu phương tiện gốc, phần tách, nguồn
+bản sửa đổi và mọi hàng được lọc/loại trừ. Cài đặt nhắc nhở và số liệu thuộc về
+tệp kê khai đang chạy, không có trong phần mô tả tập dữ liệu.
 
-## Training overlap and local status
+## Sự chồng chéo đào tạo và tình trạng địa phương
 
-Qwen reports broad text, image, OCR, grounding and video training mixtures, but
-not a sample-level manifest sufficient to rule out overlap with every public
-evaluation set. Contamination should therefore be recorded as **unknown**, not
-assumed absent.
+Qwen báo cáo các hỗn hợp đào tạo văn bản, hình ảnh, OCR, nối đất và video, nhưng
+không phải là một bảng kê khai cấp độ mẫu đủ để loại trừ sự trùng lặp với mọi
+bộ đánh giá. Do đó, sự nhiễm bẩn phải được ghi là **không xác định**, không phải
+được cho là vắng mặt.
 
-No dataset in this report was downloaded or ingested into this workspace during
-this research. The current repository has canonical dataset inspection and
-conversion tools, but no Qwen evaluation runner.
+Không có tập dữ liệu nào trong báo cáo này được tải xuống hoặc nhập vào không gian làm việc này trong suốt thời gian
+nghiên cứu này. Kho lưu trữ hiện tại có tính năng kiểm tra tập dữ liệu chuẩn và
+công cụ chuyển đổi, nhưng không có Á hậu đánh giá Qwen.
 
-## Sources
+## Nguồn
 
-- Wang et al. *MMLU-Pro*. [Paper][mmlu-pro] · [Repository][mmlu-pro-repo]
-- Rein et al. *GPQA*. [Paper][gpqa]
-- Zhou et al. *IFEval*. [Paper][ifeval] · [Implementation][ifeval-repo]
-- Yue et al. *MMMU-Pro*. [Paper][mmmu-pro] · [Dataset][mmmu-pro-data]
-- Lu et al. *MathVista*. [Paper][mathvista-paper] · [Project][mathvista]
-- Liu et al. *OCRBench*. [Paper][ocrbench-paper] · [Repository][ocrbench]
-- Yu et al. *Modeling Context in Referring Expressions*. [Paper][refcoco]
-- Fu et al. *Video-MME*. [Paper][video-mme-paper] · [Project][video-mme]
+- Vương và cộng sự. *MMLU-Pro*. [Giấy][mmlu-pro] · [Kho lưu trữ][mmlu-pro-repo]
+- Rein và cộng sự. *GPQA*. [Giấy][gpqa]
+- Chu và cộng sự. *IFEval*. [Giấy][ifeval] · [Triển khai][ifeval-repo]
+- Yue và cộng sự. *MMMU-Pro*. [Giấy][mmmu-pro] · [Bộ dữ liệu][mmmu-pro-data]
+- Lu và cộng sự. *ToánVista*. [Giấy] [mathvista-paper] · [Dự án] [mathvista]
+- Lưu và cộng sự. *OCRBench*. [Giấy][ocrbench-giấy] · [Kho lưu trữ][ocrbench]
+- Yu và cộng sự. *Mô hình hóa bối cảnh trong các biểu thức giới thiệu*. [Giấy][refcoco]
+- Fu và cộng sự. *Video-MME*. [Giấy][video-mme-paper] · [Dự án][video-mme]
 
 [mmlu-pro]: https://arxiv.org/abs/2406.01574
 [mmlu-pro-repo]: https://github.com/TIGER-AI-Lab/MMLU-Pro
 [gpqa]: https://arxiv.org/abs/2311.12022
-[ifeval]: https://arxiv.org/abs/2311.07911
+[nếu có]: https://arxiv.org/abs/2311.07911
 [ifeval-repo]: https://github.com/google-research/google-research/tree/master/instruction_following_eval
 [mmmu-pro]: https://arxiv.org/abs/2409.02813
-[mmmu-pro-data]: https://huggingface.co/datasets/MMMU/MMMU_Pro
-[mathvista-paper]: https://arxiv.org/abs/2310.02255
-[mathvista]: https://mathvista.github.io/
-[ocrbench-paper]: https://arxiv.org/abs/2305.07895
-[ocrbench]: https://github.com/qywh2023/OCRbench
+[mmmu-pro-dữ liệu]: https://huggingface.co/datasets/MMMU/MMMU_Pro
+[bài toán]: https://arxiv.org/abs/2310.02255
+[toán học]: https://mathvista.github.io/
+[ocrbench-giấy]: https://arxiv.org/abs/2305.07895
+[điểm chuẩn]: https://github.com/qywh2023/OCRbench
 [refcoco]: https://openaccess.thecvf.com/content_cvpr_2016/html/Yu_Modeling_Context_in_CVPR_2016_paper.html
-[video-mme-paper]: https://arxiv.org/abs/2405.21075
+[video-mme-giấy]: https://arxiv.org/abs/2405.21075
 [video-mme]: https://video-mme.github.io/home_page.html

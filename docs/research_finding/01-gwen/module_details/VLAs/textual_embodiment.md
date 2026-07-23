@@ -1,50 +1,55 @@
-# Textual Embodiment in Vision-Language-Action Models
+# Hiện thân được biểu diễn bằng văn bản trong mô hình Vision-Language-Action
 
-## Research question and scope
+## Câu hỏi và phạm vi nghiên cứu
 
-**Question.** What does it mean to represent a robot embodiment in text inside a
-Vision-Language-Action (VLA) model, how does that conditioning affect action generation, and
-which other VLAs use the same idea?
+**Câu hỏi.** Biểu diễn hiện thân robot bằng văn bản trong mô hình
+Vision-Language-Action (VLA) nghĩa là gì, điều kiện đó ảnh hưởng thế nào đến quá trình
+sinh hành động, và những VLA nào khác sử dụng ý tưởng tương tự?
 
-**Scope.** This report uses *textual embodiment* as a narrow operational term: a readable text or
-structured-text prompt that describes the acting platform and its control context, and whose tokens
-condition the VLA policy. It does not mean task language, a learned soft prompt, a proprioceptive
-state vector, or a URDF encoded as numerical/graph tokens. The phrase is not yet a standardized VLA
-taxonomy; the clearest implementation examined here is Qwen-VLA's *embodiment-aware prompt
-conditioning*.
+**Phạm vi.** Báo cáo dùng *hiện thân bằng văn bản* theo nghĩa hẹp: văn bản đọc được
+hoặc prompt có cấu trúc mô tả nền tảng tác động và bối cảnh điều khiển, rồi dùng các
+token đó để điều kiện hóa chính sách VLA. Khái niệm này không đồng nghĩa với ngôn ngữ
+tác vụ, soft prompt đã học, vectơ trạng thái proprioception hay URDF được mã hóa thành
+token số/đồ thị. Cụm từ này chưa phải một phân loại VLA chuẩn hóa; triển khai rõ nhất
+được xem xét ở đây là *điều kiện hóa bằng prompt nhận biết hiện thân* của Qwen-VLA.
 
-Research performed on **2026-07-21**. The starting local analysis was
-[Qwen-VLA Architecture, Training, and End-to-End Dataflow](../../qwen_models/Qwen-VLA/qwen_vla_details.md).
-Claims below were then checked against primary papers and official repositories.
+Nghiên cứu được thực hiện vào **2026-07-21**. Việc phân tích cục bộ ban đầu là
+[Quy trình kiến ​​trúc, đào tạo và dữ liệu đầu cuối Qwen-VLA](../../qwen_models/Qwen-VLA/qwen_vla_details.md).
+Các tuyên bố dưới đây sau đó đã được kiểm tra dựa trên các giấy tờ chính và các kho chính thức.
 
-## Short answer
+## Câu trả lời ngắn
 
-Textual embodiment is best understood as a **routing and conditioning interface** , a **System Prompt** for the Robot. It tells a shared policy which robot/control distribution is active: for example, the platform identity, single- or dual-arm configuration, mobile base, control frequency, action horizon, and sometimes the action parameterization. The text is tokenized by the VLM, and its contextual hidden states condition the action generator.
+Hiện thân bằng văn bản được hiểu rõ nhất là **giao diện định tuyến và điều kiện hóa**,
+tương tự **system prompt cho robot**. Nó cho chính sách dùng chung biết phân phối
+robot/điều khiển nào đang hoạt động, chẳng hạn danh tính nền tảng, cấu hình một hay hai
+tay máy, đế di động, tần số điều khiển, chân trời hành động và đôi khi cả cách tham số
+hóa hành động. VLM mã hóa văn bản và dùng trạng thái ẩn theo ngữ cảnh để điều kiện hóa
+bộ sinh hành động.
 
-It is **not a complete physical specification**. Text alone does not define channel order, units, coordinate frames, normalization statistics, kinematics, joint limits, controller behavior, or safety constraints. Those semantics still live in the dataset schema and robot adapter.
+Nó **không phải là một thông số kỹ thuật vật lý hoàn chỉnh**. Riêng văn bản không xác định thứ tự kênh, đơn vị, khung tọa độ, thống kê chuẩn hóa, động học, giới hạn khớp, hành vi của bộ điều khiển hoặc các ràng buộc an toàn. Những ngữ nghĩa đó vẫn tồn tại trong lược đồ tập dữ liệu và bộ điều hợp robot.
 
-**Verified:** other VLAs do use closely matching implementations. The clearest full/strong matches found are **Green-VLA**, which uses a structured embodiment/control-type prompt, and **Qwen-RobotManip**, which uses explicit structured-text fields for robot identity and temporal execution context. 
+**Đã xác minh:** VLAs khác sử dụng các cách triển khai phù hợp chặt chẽ. Các kết quả trùng khớp đầy đủ/mạnh rõ ràng nhất được tìm thấy là **Green-VLA**, sử dụng prompt hiện thân/loại điều khiển có cấu trúc và **Qwen-RobotManip**, sử dụng các trường văn bản có cấu trúc rõ ràng để nhận dạng robot và bối cảnh thực thi theo thời gian.
 
-Two partial matches are also informative: **X-VLA's language-prompt baseline** uses readable hardware/camera/frequency text, while **CHORUS** prepends a robot identity and role toone shared VLA.
+Hai phần trùng khớp cũng mang lại nhiều thông tin: **Đường cơ sở nhắc ngôn ngữ của X-VLA** sử dụng văn bản tần số/máy ảnh/phần cứng có thể đọc được, trong khi **CHORUS** thêm vào danh tính robot và nhóm vai trò được chia sẻ VLA.
 
-Qwen-RobotManip is from a related Qwen research lineage; Green-VLA, X-VLA, and CHORUS provide independent evidence. Several other models use *adjacent* mechanisms—learned soft prompts, state vectors, dataset IDs, or kinematic tokens—but these should not be mislabeled as textual embodiment.
+Qwen-RobotManip đến từ dòng nghiên cứu Qwen có liên quan; Green-VLA, X-VLA và CHORUS cung cấp bằng chứng độc lập. Một số mô hình khác sử dụng cơ chế *liền kề*—prompt mềm đã học, vectơ trạng thái, tập dữ liệu IDs hoặc token động—nhưng những thứ này không được gắn nhãn sai thành hiện thân văn bản.
 
-## The interface being modeled
+## Giao diện đang được mô hình hóa
 
-A normal task-conditioned policy can be written as
+Một chính sách có điều kiện nhiệm vụ thông thường có thể được viết dưới dạng
 
 $$
 \hat{A} \sim p_\theta(A \mid O, I),
 $$
 
-where $O$ is the visual observation and $I$ is the task instruction. Textual embodiment adds an
-explicit condition $E_{\text{text}}$:
+trong đó $O$ là quan sát trực quan và $I$ là hướng dẫn nhiệm vụ. Phương án văn bản bổ sung thêm một
+điều kiện rõ ràng $E_{\text{text}}$:
 
 $$
 \hat{A} \sim p_\theta(A \mid O, I, E_{\text{text}}).
 $$
 
-For an action-expert VLA, the logical dataflow is:
+Đối với VLA chuyên gia hành động, luồng dữ liệu logic là:
 
 ```mermaid
 flowchart LR
@@ -59,186 +64,186 @@ flowchart LR
     ADAPTER --> ROBOT["Physical robot"]
 ```
 
-The text affects the learned distribution selected by the model. The adapter still gives the output
-numbers their executable physical meaning.
+Văn bản ảnh hưởng đến phân phối đã học được lựa chọn bởi mô hình. Bộ chuyển đổi vẫn cho đầu ra
+các con số có ý nghĩa vật lý thực thi được của chúng.
 
-## Qwen-VLA as the clearest case
+## Qwen-VLA là trường hợp rõ ràng nhất
 
-The [Qwen-VLA paper](https://arxiv.org/abs/2605.30280) prepends every training example with a
-natural-language template containing:
+[Bài viết Qwen-VLA](https://arxiv.org/abs/2605.30280) thêm vào trước mỗi ví dụ đào tạo một
+mẫu ngôn ngữ tự nhiên có chứa:
 
-- a robot/platform tag;
-- single- or dual-arm configuration;
-- optional waist and mobile base;
-- control frequency;
-- predicted action-chunk length;
-- the task instruction.
+- thẻ robot/nền tảng;
+- cấu hình một cánh tay hoặc hai cánh tay;
+- tùy chọn thắt lưng và đế di động;
+- tần số điều khiển;
+- độ dài đoạn hành động dự đoán;
+- hướng dẫn nhiệm vụ.
 
-The prompt tokens are processed by the VLM. Their hidden states are supplied to the DiT action
-expert together with a noisy action chunk and flow timestep. This makes textual embodiment an
-input-side condition, not a generated explanation and not a robot command by itself.
+Mã thông báo nhắc nhở được xử lý bởi VLM. Trạng thái ẩn của chúng được cung cấp cho hoạt động DiT
+chuyên gia cùng với một đoạn hành động ồn ào và dòng thời gian. Điều này làm cho việc thể hiện văn bản trở thành một
+điều kiện phía đầu vào, không phải là lời giải thích được tạo ra và không phải là lệnh của robot.
 
-Qwen-VLA shares a fixed $H \times K$ tensor interface and a masked loss across datasets, but it does
-**not** convert every dataset into one physical action space. Each source retains its native action
-convention, uses per-dataset quantile normalization, and occupies only its valid output channels. The
-prompt helps the shared network distinguish these learned conventions; the dataset metadata and
-deployment adapter remain the authoritative definitions of them.
+Qwen-VLA chia sẻ giao diện tensor $H \times K$ cố định và mất mát ẩn trên các tập dữ liệu, nhưng thực tế thì có
+**không** chuyển đổi mọi tập dữ liệu thành một không gian hành động vật lý. Mỗi nguồn giữ lại hành động gốc của nó
+quy ước, sử dụng chuẩn hóa lượng tử cho mỗi tập dữ liệu và chỉ chiếm các kênh đầu ra hợp lệ của nó. các
+nhắc nhở giúp mạng chia sẻ phân biệt được các quy ước đã học này; siêu dữ liệu của tập dữ liệu và
+bộ điều hợp triển khai vẫn là định nghĩa chính thức về chúng.
 
-This is why the most accurate mental model is:
+Đây là lý do tại sao mô hình tinh thần chính xác nhất là:
 
-> One network learns multiple embodiment-specific action languages; the text selects which learned
-> language is active, while the robot adapter interprets and executes it.
+> Một mạng học nhiều ngôn ngữ hành động theo hiện thân cụ thể; văn bản chọn cái đã học
+> ngôn ngữ đang hoạt động, trong khi bộ điều hợp robot diễn giải và thực thi nó.
 
-That sentence is an interpretation, not a formal term introduced by the authors.
+Câu đó là sự diễn giải chứ không phải là thuật ngữ hình thức được tác giả đưa ra.
 
-### Relation to proprioception
+### Liên quan đến proprioception
 
-Textual embodiment answers **what body/control context is active**. Proprioception answers **what
-state that body is in now**. They are different signals.
+Câu trả lời bằng văn bản **nội dung/ngữ cảnh điều khiển nào đang hoạt động**. Quyền sở hữu câu trả lời ** cái gì
+trạng thái cơ thể đó hiện đang ở**. Chúng là những tín hiệu khác nhau.
 
-Qwen-VLA reports a RoboTwin-2.0 ablation in which adding joint state either as discretized prompt
-text or directly to the DiT produced only small gains over no state. The default model therefore omits
-proprioception and keeps the embodiment prompt as its platform-specific model input. This is evidence
-for that evaluated setting, not evidence that state is generally unnecessary. The authors' explanation
-depends on multi-view images exposing robot configuration and on relative-action prediction reducing
-the need for an absolute state reference.
+Qwen-VLA báo cáo quá trình cắt bỏ RoboTwin-2.0 trong đó thêm trạng thái khớp dưới dạng prompt rời rạc
+văn bản hoặc trực tiếp tới DiT chỉ tạo ra những lợi ích nhỏ mà không có trạng thái nào. Do đó, mô hình mặc định bỏ qua
+khả năng cảm nhận proprioception và giữ prompt hiện thân làm đầu vào mô hình dành riêng cho nền tảng của nó. Đây là bằng chứng
+đối với bối cảnh được đánh giá đó, không có bằng chứng nào cho thấy trạng thái nói chung là không cần thiết. Lời giải thích của tác giả
+phụ thuộc vào hình ảnh nhiều góc nhìn hiển thị cấu hình robot và khả năng giảm dự đoán hành động tương đối
+sự cần thiết của một tham chiếu trạng thái tuyệt đối.
 
-By contrast, [$\pi_0$](https://arxiv.org/abs/2410.24164) explicitly includes the robot's joint-angle
-vector in its observation and gives robotics-specific state/action tokens to an action expert. State can
-remain important under occlusion, contact, high-speed dynamics, absolute joint control, or partial
-observability.
+Ngược lại, [$\pi_0$](https://arxiv.org/abs/2410.24164) bao gồm rõ ràng góc khớp của robot
+vector trong quan sát của nó và cung cấp token trạng thái/hành động dành riêng cho robot cho chuyên gia hành động. Nhà nước có thể
+vẫn quan trọng dưới tác động của tắc, tiếp xúc, động học tốc độ cao, kiểm soát khớp tuyệt đối hoặc một phần
+khả năng quan sát.
 
-## Other VLAs with the same implementation pattern
+## VLAs khác có cùng mẫu triển khai
 
-The answer is **yes**, but exact matches are still a short list. The table distinguishes readable
-embodiment/control prompts from merely prompt-like latent mechanisms.
+Câu trả lời là **có**, nhưng kết quả trùng khớp chính xác vẫn là một danh sách ngắn. Bảng phân biệt có thể đọc được
+prompt hiện thân/điều khiển chỉ từ các cơ chế tiềm ẩn giống như prompt.
 
-| Model                                                             | What is placed in the prompt                                                                                                                                                          | How close is it to Qwen-VLA?                                                                                                           | Important difference                                                                                                                                                                   |
+| Người mẫu | Những gì được đặt trong dấu nhắc | Nó gần với Qwen-VLA đến mức nào?                                                                                                           | Sự khác biệt quan trọng |
 | ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [Green-VLA](https://arxiv.org/abs/2602.00919)                      | A structured embodiment/control-type prompt specifying the active effectors and action parameterization, such as arm/hand configuration, joint versus Cartesian control, and mobility | **Strong independent match**: text/control tokens condition one multi-embodiment VLA                                             | Also consumes proprioceptive state and maps actions into a fixed-semantic 64-dimensional unified space; text is one part of a larger alignment contract                                |
-| [Qwen-RobotManip](https://arxiv.org/abs/2606.17846)                | Structured fields for`embodiment`, task `instruction`, speed bin, `fps`, and camera-view direction                                                                              | **Strong match, related research lineage**: readable structured text conditions the Qwen-VL backbone and diffusion action expert | Uses a canonical 80-dimensional representation, camera-frame motion alignment, optional in-context action history, 15% field dropout, and reports prompt-component ablations           |
-| [X-VLA language-prompt baseline](https://arxiv.org/abs/2510.10274) | Scripted text such as`Embodiment: Single Franka, Camera Setup: Top View, Freq: 30Hz`, concatenated with the task instruction                                                        | **Partial independent match**: natural-language embodiment metadata enters the pretrained VLM encoder                            | This is a preliminary baseline, not X-VLA's final design; it omits explicit action convention, normalization, and horizon, and the authors prefer learned soft prompts for scalability |
-| [CHORUS](https://arxiv.org/abs/2606.12352)                         | A robot-identifying prefix naming the embodiment, such as`<ARX>` or `<Kinova>`, plus that robot's natural-language role in the collaborative task                                 | **Partial independent match**: text identifies which robot one shared VLA instance controls                                      | The prompt is closer to an identity/role tag than a physical control specification; it does not encode DoF, frames, units, normalization, or action type                               |
-| [Qwen-VLA](https://arxiv.org/abs/2605.30280)                       | Natural-language sentence containing platform, arm configuration, waist/base flags, FPS, horizon, and task                                                                            | **Reference implementation**                                                                                                     | Preserves source-native action semantics and relies on per-dataset normalization rather than a single fixed-semantic physical space                                                    |
+| [Xanh-VLA](https://arxiv.org/abs/2602.00919) | Prompt hiện thân/loại điều khiển có cấu trúc chỉ định các tác nhân hoạt động và tham số hóa hành động, chẳng hạn như cấu hình cánh tay/bàn tay, điều khiển khớp so với Descartes và tính di động | **Kết hợp độc lập mạnh**: token văn bản/điều khiển quy định một đa hiện thân VLA | Đồng thời sử dụng trạng thái cảm thụ bản thân và ánh xạ các hành động vào một không gian thống nhất 64 chiều ngữ nghĩa cố định; văn bản là một phần của hợp đồng căn chỉnh lớn hơn |
+| [Qwen-RobotManip](https://arxiv.org/abs/2606.17846) | Các trường có cấu trúc dành cho`embodiment`, nhiệm vụ `instruction`, thùng tốc độ, `fps` và hướng xem camera | **Kết hợp chặt chẽ, dòng nghiên cứu liên quan**: văn bản có cấu trúc dễ đọc tạo điều kiện cho chuyên gia hành động khuếch tán và xương sống Qwen-VL | Sử dụng biểu diễn 80 chiều chuẩn, căn chỉnh chuyển động khung máy ảnh, lịch sử hành động trong ngữ cảnh tùy chọn, tỷ lệ bỏ trường 15% và báo cáo cắt bỏ thành phần prompt |
+| [X-VLA cơ sở nhắc ngôn ngữ](https://arxiv.org/abs/2510.10274) | Văn bản có chữ viết như`Embodiment: Single Franka, Camera Setup: Top View, Freq: 30Hz`, được nối với hướng dẫn tác vụ | **Khớp độc lập một phần**: siêu dữ liệu hiện thân ngôn ngữ tự nhiên đi vào bộ mã hóa VLM được huấn luyện trước | Đây là đường cơ sở sơ bộ, không phải thiết kế cuối cùng của X-VLA; nó bỏ qua quy ước hành động rõ ràng, chuẩn hóa và đường chân trời, đồng thời các tác giả thích những prompt mềm đã học được về khả năng mở rộng |
+| [CHORUS](https://arxiv.org/abs/2606.12352) | Tiền tố nhận dạng robot đặt tên cho hiện thân, chẳng hạn như`<ARX>` hoặc `<Kinova>`, cộng với vai trò ngôn ngữ tự nhiên của robot đó trong nhiệm vụ cộng tác | **Khớp độc lập một phần**: văn bản xác định robot nào được chia sẻ điều khiển phiên bản VLA | Prompt gần với thẻ nhận dạng/vai trò hơn là đặc tả điều khiển vật lý; nó không mã hóa DoF, khung, đơn vị, chuẩn hóa hoặc loại hành động |
+| [Qwen-VLA](https://arxiv.org/abs/2605.30280) | Câu ngôn ngữ tự nhiên chứa nền tảng, cấu hình cánh tay, cờ thắt lưng/cơ sở, FPS, đường chân trời và nhiệm vụ | **Thực hiện tham khảo** | Bảo toàn ngữ nghĩa hành động gốc nguồn và dựa vào việc chuẩn hóa trên mỗi tập dữ liệu thay vì một không gian vật lý ngữ nghĩa cố định duy nhất |
 
-### Green-VLA
+### Xanh-VLA
 
-Green-VLA's policy fuses RGB, proprioceptive state, task language, and a structured
-embodiment/control-type prompt before its flow-matching action expert. Its control prompt makes the
-active body and control representation explicit while a semantic action layout and validity mask align
-heterogeneous robots. It is therefore the closest independent example found: it uses textual control
-conditioning, but does not expect text to replace state or the action mapping.
+Chính sách của Green-VLA hợp nhất RGB, trạng thái nhận cảm bản thân, ngôn ngữ tác vụ và cấu trúc
+prompt hiện thân/loại điều khiển trước chuyên gia hành động khớp luồng của nó. Dấu nhắc điều khiển của nó làm cho
+Nội dung hoạt động và biểu diễn điều khiển rõ ràng trong khi bố cục hành động ngữ nghĩa và mặt nạ hợp lệ căn chỉnh
+robot không đồng nhất. Do đó, đây là ví dụ độc lập gần nhất được tìm thấy: nó sử dụng điều khiển văn bản
+điều kiện hóa, nhưng không mong đợi văn bản sẽ thay thế trạng thái hoặc ánh xạ hành động.
 
 ### Qwen-RobotManip
 
-Qwen-RobotManip gives a particularly concrete structured-text example:
+Qwen-RobotManip đưa ra một ví dụ về văn bản có cấu trúc cụ thể:
 
 ```text
-embodiment: robot_aloha
-instruction: Take the toy off the table and put it on the mat.
-speed: 1000
-fps: 30
-camera view direction: arm side
+hiện thân: robot_aloha
+Hướng dẫn: Lấy đồ chơi ra khỏi bàn và đặt lên tấm thảm.
+tốc độ: 1000
+khung hình / giây: 30
+Hướng nhìn của camera: phía cánh tay
 ```
 
-Its paper also randomly drops the embodiment, speed, and FPS fields during training and reports an
-ablation separating embodiment tag, FPS, and in-context history. This is stronger evidence that prompt
-fields contribute than Qwen-VLA's results alone, although the two models share related authors and a
-Qwen backbone.
+Bài viết của nó cũng loại bỏ ngẫu nhiên các trường hiện thân, tốc độ và FPS trong quá trình đào tạo và báo cáo
+thẻ hiện thân tách biệt cắt bỏ, FPS và lịch sử trong ngữ cảnh. Đây là bằng chứng mạnh mẽ hơn cho thấy
+các lĩnh vực đóng góp nhiều hơn kết quả của Qwen-VLA, mặc dù hai mô hình có chung các tác giả liên quan và một
+Xương sống Qwen.
 
-### X-VLA's language-prompt baseline
+### Đường cơ sở nhắc nhở ngôn ngữ của X-VLA
 
-X-VLA is commonly described as a soft-prompt VLA, but its paper first evaluates a readable language
-baseline. Each domain receives a scripted description of embodiment, camera arrangement, and
-frequency, concatenated with the task instruction and encoded by Florence-Base. Examples distinguish
-single versus dual Franka, UR, AgileX, top/left/right/wrist views, and 15 versus 30 Hz.
+X-VLA thường được mô tả là VLA có dấu nhắc mềm, nhưng bài viết của nó trước tiên đánh giá ngôn ngữ có thể đọc được
+đường cơ sở. Mỗi miền nhận được một mô tả theo kịch bản về hiện thân, cách sắp xếp camera và
+tần số, được nối với lệnh nhiệm vụ và được mã hóa bởi Florence-Base. Ví dụ phân biệt
+Franka đơn so với kép, UR, AgileX, chế độ xem trên/trái/phải/cổ tay và 15 so với 30 Hz.
 
-This baseline confirms that natural-language hardware conditioning predates Qwen-VLA. It is not the
-released X-VLA design: the authors argue that carefully scripted descriptions are hard to maintain at
-scale and choose learned embeddings instead. It is also narrower than Qwen-VLA because it does not
-formally describe action horizon or the complete control convention.
+Đường cơ sở này xác nhận rằng điều kiện hóa phần cứng ngôn ngữ tự nhiên có trước Qwen-VLA. Nó không phải là
+phát hành thiết kế X-VLA: các tác giả cho rằng khó có thể duy trì các mô tả được viết kịch bản cẩn thận ở
+thay vào đó hãy chia tỷ lệ và chọn các nội dung nhúng đã học. Nó cũng hẹp hơn Qwen-VLA vì nó không
+mô tả chính thức phạm vi hành động hoặc quy ước kiểm soát hoàn chỉnh.
 
 ### CHORUS
 
-CHORUS adapts one $\pi_{0.5}$-based VLA policy to a team of heterogeneous robots. At each timestep,
-each robot independently receives only its local observation and a robot-identifying prompt. The
-prompt names the embodiment and states its role—for example, a `<YAM>` prefix followed by that
-robot's part of a collaborative lifting task—so a shared forward pass does not have to infer robot
-identity from pixels.
+CHORUS điều chỉnh một chính sách VLA dựa trên $\pi_{0.5}$ cho một nhóm robot không đồng nhất. Tại mỗi dấu thời gian,
+mỗi robot độc lập chỉ nhận được sự quan sát cục bộ và prompt nhận dạng robot. các
+nhắc đặt tên cho hiện thân và nêu rõ vai trò của nó—ví dụ: tiền tố `<YAM>` theo sau là tiền tố đó
+robot là một phần của nhiệm vụ nâng hợp tác—do đó, đường chuyền chung về phía trước không nhất thiết phải suy ra robot
+nhận dạng từ pixel.
 
-This is genuine textual embodiment conditioning, but at a weaker level than Qwen-VLA: the prompt
-routes identity and role, not the action schema or kinematics.
+Đây là sự điều kiện hóa thể hiện văn bản đích thực, nhưng ở mức độ yếu hơn Qwen-VLA: prompt
+định tuyến danh tính và vai trò, không phải lược đồ hành động hoặc động học.
 
-### Search conclusion
+### Kết luận tìm kiếm
 
-**Verified as of 2026-07-21:** Green-VLA and Qwen-RobotManip implement the same broad pattern of
-readable embodiment/control metadata conditioning a VLA. X-VLA's preliminary language baseline and
-CHORUS are partial matches. No other model found matches Qwen-VLA simultaneously on all three
-features: a natural-language robot description, control frequency/horizon/convention metadata, and that
-text serving as the main platform-specific condition for one shared action decoder. This is a bounded
-search conclusion, not proof that no other example exists in a fast-moving literature. Qwen-VLA also
-remains distinctive in combining manipulation, navigation, and human trajectory targets while
-preserving source-native action conventions.
+**Đã được xác minh kể từ ngày 21 tháng 07 năm 2026:** Green-VLA và Qwen-RobotManip triển khai cùng một mô hình rộng rãi về
+siêu dữ liệu hiện thân/kiểm soát có thể đọc được điều chỉnh VLA. Cơ sở ngôn ngữ sơ bộ của X-VLA và
+CHORUS chỉ khớp một phần. Không tìm thấy mẫu nào khác khớp đồng thời với Qwen-VLA trên cả ba mẫu
+các tính năng: mô tả robot bằng ngôn ngữ tự nhiên, siêu dữ liệu tần số/chân trời/quy ước điều khiển và điều đó
+văn bản đóng vai trò là điều kiện dành riêng cho nền tảng chính cho một bộ giải mã hành động được chia sẻ. Đây là một giới hạn
+kết luận tìm kiếm, không phải là bằng chứng cho thấy không có ví dụ nào khác tồn tại trong một nền văn học chuyển động nhanh. Qwen-VLA cũng vậy
+vẫn đặc biệt trong việc kết hợp các mục tiêu thao tác, điều hướng và quỹ đạo của con người trong khi
+duy trì các quy ước hành động nguồn-bản địa.
 
-## Related approaches that are not the same
+## Các cách tiếp cận liên quan không giống nhau
 
-| Approach                                          | Example                                                                                                   | What conditions the model                                                      | Why it is not textual embodiment                                                                                                                                                      |
+| Tiếp cận | Ví dụ | Điều kiện của mô hình | Tại sao nó không phải là hiện thân bằng văn bản |
 | ------------------------------------------------- | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Learned soft prompt                               | [X-VLA final model](https://arxiv.org/abs/2510.10274)                                                      | A separate set of learned embeddings for each data source/embodiment           | Unlike its preliminary language baseline, the final prompt vectors are not readable and do not explicitly state physical semantics; adapting a new robot learns new prompt parameters |
-| Explicit state conditioning                       | [$\pi_0$](https://arxiv.org/abs/2410.24164)                                                              | Joint-angle state projected into robotics-specific tokens                      | Describes instantaneous configuration numerically, not robot identity/control convention in text                                                                                      |
-| Dataset-specific normalization and decoding       | [Open X-Embodiment / RT-X](https://www.jiajunwu.com/papers/openx_icra.pdf)                                 | Coarsely aligned action vector plus per-dataset normalization/de-normalization | The physical interpretation is selected by the data/deployment path, not by a textual robot description                                                                               |
-| Structural morphology encoding                    | [Embedding Morphology into Transformers for Cross-Robot Policy Learning](https://arxiv.org/abs/2603.00182) | Per-joint kinematic tokens, topology-aware attention, and joint attributes     | Encodes the kinematic graph directly; more structural than text and intentionally adds an inductive bias text does not provide                                                        |
-| Instruction-only prompt plus external adapter key | [OpenVLA](https://github.com/openvla/openvla)                                                              | Task instruction in text; an external`unnorm_key` selects action statistics  | The instruction says what to do, while embodiment/action interpretation remains outside the language prompt                                                                           |
+| Đã học được prompt mềm | [Mẫu cuối cùng X-VLA](https://arxiv.org/abs/2510.10274) | Một tập hợp các phần nhúng đã học riêng biệt cho từng nguồn/hiện thân dữ liệu | Không giống như đường cơ sở ngôn ngữ sơ bộ của nó, vectơ nhắc nhở cuối cùng không thể đọc được và không nêu rõ ngữ nghĩa vật lý; điều chỉnh một robot mới học các thông số nhắc nhở mới |
+| Điều hòa trạng thái rõ ràng | [$\pi_0$](https://arxiv.org/abs/2410.24164) | Trạng thái góc khớp được chiếu vào các token dành riêng cho robot | Mô tả cấu hình tức thời bằng số, không phải quy ước nhận dạng/điều khiển robot trong văn bản |
+| Chuẩn hóa và giải mã dành riêng cho tập dữ liệu | [Mở X-Phương án / RT-X](https://www.jiajunwu.com/papers/openx_icra.pdf) | Vectơ hành động được căn chỉnh thô cộng với chuẩn hóa/khử chuẩn hóa trên mỗi tập dữ liệu | Việc diễn giải vật lý được chọn theo đường dẫn dữ liệu/triển khai chứ không phải theo mô tả robot bằng văn bản |
+| Mã hóa hình thái cấu trúc | [Nhúng Hình thái học vào Máy biến áp để học chính sách giữa các robot](https://arxiv.org/abs/2603.00182) | Mã thông báo động học trên mỗi khớp, sự chú ý nhận biết cấu trúc liên kết và các thuộc tính chung | Mã hóa trực tiếp đồ thị động học; mang tính cấu trúc hơn văn bản và cố ý thêm một thành kiến ​​quy nạp mà văn bản không cung cấp |
+| Prompt chỉ có hướng dẫn cộng với phím bộ điều hợp bên ngoài | [OpenVLA](https://github.com/openvla/openvla) | Hướng dẫn nhiệm vụ bằng văn bản; bên ngoài`unnorm_key` chọn thống kê hành động | Hướng dẫn cho biết phải làm gì, trong khi diễn giải hiện thân/hành động vẫn nằm ngoài dấu nhắc ngôn ngữ |
 
-These mechanisms are complementary. A robust multi-robot system may use readable textual metadata for
-routing, numerical state for the current configuration, structural morphology tokens for kinematics,
-and an explicit adapter for execution.
+Các cơ chế này bổ sung cho nhau. Một hệ thống nhiều robot mạnh mẽ có thể sử dụng siêu dữ liệu văn bản có thể đọc được để
+định tuyến, trạng thái số cho cấu hình hiện tại, token hình thái cấu trúc cho động học,
+và một bộ chuyển đổi rõ ràng để thực thi.
 
-## What the current evidence supports
+## Những bằng chứng hiện tại hỗ trợ những gì
 
-### Verified
+### Đã xác minh
 
-- Text/control tokens can condition one shared action generator across multiple training
-  embodiments in Qwen-VLA, Green-VLA, and Qwen-RobotManip.
-- Qwen-VLA's official report and
-  [official repository](https://github.com/QwenLM/Qwen-VLA) describe one set of weights and no
-  per-platform output heads.
-- Qwen-VLA still uses per-dataset normalization and source-native action conventions.
-- Qwen-RobotManip reports an embodiment-prompt design and component ablations; Green-VLA combines
-  its control prompt with an explicitly unified action space.
-- X-VLA's paper implements readable embodiment/camera/frequency prompts as a preliminary baseline,
-  and CHORUS conditions a shared policy on textual robot identity and role.
+- Mã thông báo văn bản/điều khiển có thể điều chỉnh một trình tạo hành động được chia sẻ trong nhiều khóa đào tạo
+  các hiện thân trong Qwen-VLA, Green-VLA và Qwen-RobotManip.
+- Báo cáo chính thức của Qwen-VLA và
+  [kho lưu trữ chính thức](https://github.com/QwenLM/Qwen-VLA) mô tả một bộ trọng số và không
+  đầu ra trên mỗi nền tảng.
+- Qwen-VLA vẫn sử dụng quy ước chuẩn hóa theo từng tập dữ liệu và hành động gốc nguồn.
+- Qwen-RobotManip báo cáo một thiết kế theo hiện thân và việc cắt bỏ thành phần; Green-VLA kết hợp
+  prompt điều khiển của nó với một không gian hành động thống nhất rõ ràng.
+- Bài viết của X-VLA triển khai các prompt về hiện thân/máy ảnh/tần số có thể đọc được làm đường cơ sở sơ bộ,
+  và CHORUS đưa ra chính sách chung về nhận dạng và vai trò của robot văn bản.
 
-### Inferred
+### Suy ra
 
-- The prompt likely works partly as a semantically initialized dataset/robot identifier. Repeated
-  co-occurrence lets the network associate text fields with observation statistics, active channels,
-  action scales, and temporal patterns.
-- Human-readable compositional fields may be more reusable than an opaque dataset ID when a new
-  platform shares seen attributes, but existing evaluations do not establish a general law of
-  compositional transfer.
-- Text is most useful for slowly changing or episode-level metadata. Fast continuous state is usually
-  better represented numerically.
+- Prompt có thể hoạt động một phần như một tập dữ liệu/mã định danh robot được khởi tạo về mặt ngữ nghĩa. lặp đi lặp lại
+  sự xuất hiện đồng thời cho phép mạng liên kết các trường văn bản với số liệu thống kê quan sát, các kênh hoạt động,
+  thang đo hành động và mô hình thời gian.
+- Các trường tổng hợp mà con người có thể đọc được có thể được tái sử dụng nhiều hơn so với tập dữ liệu không rõ ràng ID khi có một
+  nền tảng chia sẻ các thuộc tính đã thấy, nhưng các đánh giá hiện tại không thiết lập luật chung về
+  chuyển giao thành phần.
+- Văn bản hữu ích nhất cho siêu dữ liệu ở cấp độ tập hoặc thay đổi chậm. Trạng thái liên tục nhanh thường là
+  được thể hiện tốt hơn bằng số.
 
-### Unknown or not established
+### Không rõ hoặc chưa được thành lập
 
-- Qwen-VLA does not isolate the effect of each prompt field or prompt wording in a dedicated
-  ablation.
-- Its reported generalist benchmark model is trained jointly on the evaluated embodiments. Its ALOHA
-  real-robot results use ALOHA demonstrations for fine-tuning, and its DOMINO zero-shot result tests
-  unseen dynamics rather than an arbitrary unseen robot. These results do not prove prompt-only control
-  of a completely novel morphology.
-- The published Qwen-VLA template names the robot, arm configuration, FPS, and horizon, but does not
-  explicitly serialize channel order, units, coordinate frame, rotation representation, gripper
-  convention, or normalization statistics. Prose that says the prompt specifies the “control
-  convention” should therefore be read together with the external dataset/adapter contract.
-- As accessed on 2026-07-21, the official Qwen-VLA repository contains the research overview and
-  assets but not enough implementation code to audit exact runtime prompt construction and decoding.
+- Qwen-VLA không tách biệt hiệu ứng của từng trường prompt hoặc từ ngữ nhắc nhở trong một
+  sự cắt bỏ.
+- Mô hình điểm chuẩn tổng quát được báo cáo của nó được đào tạo chung dựa trên các hiện thân được đánh giá. ALOHA của nó
+  Các kết quả trên robot thực sử dụng các bản trình diễn ALOHA để tinh chỉnh và các thử nghiệm kết quả không bắn DOMINO của nó
+  động lực vô hình chứ không phải là một robot vô hình tùy ý. Những kết quả này không chứng minh khả năng kiểm soát chỉ nhanh chóng
+  của một hình thái hoàn toàn mới lạ.
+- Mẫu Qwen-VLA đã xuất bản đặt tên cho robot, cấu hình cánh tay, FPS và đường chân trời, nhưng không
+  tuần tự hóa rõ ràng thứ tự kênh, đơn vị, khung tọa độ, biểu diễn xoay, bộ kẹp
+  thống kê quy ước hoặc chuẩn hóa. Văn xuôi cho biết prompt chỉ định “điều khiển
+  quy ước” do đó nên được đọc cùng với hợp đồng bộ dữ liệu/bộ chuyển đổi bên ngoài.
+- Được truy cập vào ngày 21-07-2026, kho lưu trữ Qwen-VLA chính thức chứa thông tin tổng quan về nghiên cứu và
+  nội dung nhưng không đủ mã triển khai để kiểm tra quá trình xây dựng và giải mã prompt thời gian chạy chính xác.
 
-## Recommended data and deployment contract
+## Dữ liệu được đề xuất và hợp đồng triển khai
 
-Text should be a **derived view of structured embodiment metadata**, not the only source of truth.
-A training record should retain machine-checkable fields such as:
+Văn bản phải là **chế độ xem bắt nguồn từ siêu dữ liệu hiện thân có cấu trúc** chứ không phải là nguồn thông tin chính xác duy nhất.
+Hồ sơ đào tạo phải giữ lại các trường có thể kiểm tra bằng máy, chẳng hạn như:
 
 ```yaml
 embodiment_id: aloha_v2
@@ -261,53 +266,53 @@ normalization_id: aloha_v2_q01_q99
 adapter_version: aloha_v2_controller_3
 ```
 
-Generate the model-facing prompt deterministically from those fields, for example:
+Tạo prompt đối mặt với mô hình một cách xác định từ các trường đó, ví dụ:
 
 ```text
-The robot is ALOHA with dual arms and no mobile base.
-Control uses absolute joint positions at 30 Hz.
-Predict the next 16 actions for: put the red cup in the bin.
+Robot là ALOHA có hai cánh tay và không có đế di động.
+Điều khiển sử dụng các vị trí khớp tuyệt đối ở tần số 30 Hz.
+Dự đoán 16 hành động tiếp theo về: bỏ cốc màu đỏ vào thùng rác.
 ```
 
-The structured record must remain authoritative. A deployment adapter should validate the prompt
-profile against the action schema, normalization statistics, expected cameras, controller version, and
-safety limits before inference. Changing only the prose while leaving those components inconsistent is
-not embodiment transfer; it is a schema mismatch.
+Hồ sơ có cấu trúc phải vẫn có thẩm quyền. Bộ điều hợp triển khai sẽ xác thực prompt
+cấu hình dựa trên lược đồ hành động, số liệu thống kê chuẩn hóa, camera dự kiến, phiên bản bộ điều khiển và
+giới hạn an toàn trước khi suy luận. Chỉ thay đổi phần văn xuôi trong khi để lại những thành phần đó không nhất quán là
+không chuyển giao hiện thân; đó là một lược đồ không khớp.
 
-## Conclusion
+## Phần kết luận
 
-Textual embodiment is a useful, low-friction way to expose episode-level robot and control metadata to
-the language-conditioned part of a VLA. It can let one policy route among multiple learned action
-distributions without per-platform model heads. It should not be mistaken for a universal robot
-description or a substitute for proprioception, morphology, action semantics, and the control adapter.
+Phương án bằng văn bản là một cách hữu ích, ít ma sát để hiển thị siêu dữ liệu và kiểm soát siêu dữ liệu ở cấp độ tập cho
+phần điều chỉnh ngôn ngữ của VLA. Nó có thể cho phép một chính sách định tuyến giữa nhiều hành động đã học
+bản phân phối không có đầu mô hình trên mỗi nền tảng. Không nên nhầm nó với một robot vạn năng
+mô tả hoặc sự thay thế cho khả năng nhận thức, hình thái, ngữ nghĩa hành động và bộ điều khiển.
 
-Other VLAs do implement the same broad idea—most clearly Green-VLA and Qwen-RobotManip—but the
-field currently uses several incompatible meanings of “prompt.” Reports and code should always say
-whether a prompt is readable text, a learned latent vector, a categorical embodiment ID, or a
-structured kinematic representation.
+VLAs khác thực hiện cùng một ý tưởng rộng rãi—rõ ràng nhất là Green-VLA và Qwen-RobotManip—nhưng
+trường hiện sử dụng một số ý nghĩa không tương thích của “nhắc nhở”. Báo cáo và mã phải luôn nói
+liệu prompt là văn bản có thể đọc được, vectơ tiềm ẩn đã học, hiện thân phân loại ID hay
+biểu diễn động học có cấu trúc.
 
-## Primary sources
+## Nguồn sơ cấp
 
-1. Wang et al. **Qwen-VLA: Unifying Vision-Language-Action Modeling across Tasks, Environments,
-   and Robot Embodiments.** arXiv:2605.30280, 2026.
-   [Paper](https://arxiv.org/abs/2605.30280) ·
-   [Official repository](https://github.com/QwenLM/Qwen-VLA). Accessed 2026-07-21.
-2. Apanasevich et al. **Green-VLA: Staged Vision-Language-Action Model for Generalist Robots.**
-   arXiv:2602.00919, 2026. [Paper](https://arxiv.org/abs/2602.00919) ·
-   [Project](https://greenvla.github.io/). Accessed 2026-07-21.
-3. Yuan et al. **Qwen-RobotManip Technical Report: Alignment Unlocks Scale for Robotic
-   Manipulation Foundation Models.** arXiv:2606.17846, 2026.
-   [Paper](https://arxiv.org/abs/2606.17846). Accessed 2026-07-21.
-4. Zheng et al. **X-VLA: Soft-Prompted Transformer as Scalable Cross-Embodiment
-   Vision-Language-Action Model.** arXiv:2510.10274, 2025.
-   [Paper](https://arxiv.org/abs/2510.10274). Accessed 2026-07-21.
-5. Black et al. **$\pi_0$: A Vision-Language-Action Flow Model for General Robot Control.**
-   arXiv:2410.24164, revised 2026. [Paper](https://arxiv.org/abs/2410.24164). Accessed 2026-07-21.
-6. Padalkar et al. **Open X-Embodiment: Robotic Learning Datasets and RT-X Models.** ICRA 2024.
-   [Paper](https://www.jiajunwu.com/papers/openx_icra.pdf). Accessed 2026-07-21.
-7. Suzuki et al. **Embedding Morphology into Transformers for Cross-Robot Policy Learning.**
-   arXiv:2603.00182, 2026. [Paper](https://arxiv.org/abs/2603.00182). Accessed 2026-07-21.
-8. Kim et al. **OpenVLA: An Open-Source Vision-Language-Action Model.** 2024.
-   [Official repository](https://github.com/openvla/openvla). Accessed 2026-07-21.
-9. Doshi et al. **CHORUS: Decentralized Multi-Embodiment Collaboration with One VLA Policy.**
-   arXiv:2606.12352, 2026. [Paper](https://arxiv.org/abs/2606.12352). Accessed 2026-07-21.
+1. Vương và cộng sự. **Qwen-VLA: Thống nhất Mô hình Hành động-Ngôn ngữ-Thị giác giữa các Nhiệm vụ, Môi trường,
+   và các Phương án Robot.** arXiv:2605.30280, 2026.
+   [Giấy](https://arxiv.org/abs/2605.30280) ·
+   [Kho lưu trữ chính thức](https://github.com/QwenLM/Qwen-VLA). Truy cập 2026-07-21.
+2. Apanasevich và cộng sự. **Green-VLA: Mô hình hành động-ngôn ngữ-thị giác theo giai đoạn dành cho robot tổng quát.**
+   arXiv:2602.00919, 2026. [Giấy](https://arxiv.org/abs/2602.00919) ·
+   [Dự án](https://greenvla.github.io/). Truy cập 2026-07-21.
+3. Nguyên và cộng sự. **Báo cáo kỹ thuật Qwen-RobotManip: Căn chỉnh mở khóa quy mô cho robot
+   Các mô hình nền tảng thao túng.** arXiv:2606.17846, 2026.
+   [Giấy](https://arxiv.org/abs/2606.17846). Truy cập 2026-07-21.
+4. Zheng và cộng sự. **X-VLA: Máy biến áp có dấu nhắc mềm như một hiện thân chéo có thể mở rộng
+   Mô hình Hành động-Ngôn ngữ-Thị giác.** arXiv:2510.10274, 2025.
+   [Giấy](https://arxiv.org/abs/2510.10274). Truy cập 2026-07-21.
+5. Đen và cộng sự. **$\pi_0$: Mô hình luồng hành động-ngôn ngữ-thị giác để điều khiển robot chung.**
+   arXiv:2410.24164, sửa đổi năm 2026. [Giấy](https://arxiv.org/abs/2410.24164). Truy cập 2026-07-21.
+6. Padalkar và cộng sự. **Phương án X mở: Bộ dữ liệu học tập bằng robot và Mô hình RT-X.** ICRA 2024.
+   [Giấy](https://www.jiajunwu.com/papers/openx_icra.pdf). Truy cập 2026-07-21.
+7. Suzuki và cộng sự. **Nhúng Hình thái học vào Máy biến áp để học chính sách giữa các robot.**
+   arXiv:2603.00182, 2026. [Giấy](https://arxiv.org/abs/2603.00182). Truy cập 2026-07-21.
+8. Kim và cộng sự. **OpenVLA: Mô hình hành động-ngôn ngữ-thị giác nguồn mở.** 2024.
+   [Kho lưu trữ chính thức](https://github.com/openvla/openvla). Truy cập 2026-07-21.
+9. Doshi và cộng sự. **CHORUS: Hợp tác đa hiện thân phi tập trung với một chính sách VLA.**
+   arXiv:2606.12352, 2026. [Giấy](https://arxiv.org/abs/2606.12352). Truy cập 2026-07-21.

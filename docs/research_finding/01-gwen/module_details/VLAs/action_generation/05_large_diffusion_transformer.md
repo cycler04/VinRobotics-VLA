@@ -1,306 +1,307 @@
-# Large or Decoder-Centric DiT Action Decoders
+# Bộ giải mã hành động DiT lớn hoặc lấy bộ giải mã làm trung tâm
 
-> **Scope.** Action generators that place substantial Transformer capacity
-> inside the iterative diffusion/flow path instead of using a shallow action
-> readout. Requested examples: RDT-1B, Dita, and Qwen-VLA. Sources checked
-> 2026-07-21.
+> **Phạm vi.** Các bộ sinh hành động đặt phần lớn năng lực Transformer
+> bên trong đường lặp diffusion/flow thay vì dùng một đầu đọc hành động nông.
+> Các ví dụ được yêu cầu: RDT-1B, Dita và Qwen-VLA. Nguồn được kiểm tra
+> ngày 2026-07-21.
 
-## Taxonomy correction first
+## Trước hết cần sửa cách phân loại
 
-“Large standalone Diffusion Transformer” is not accurate for all three models:
+“Diffusion Transformer độc lập cỡ lớn” không chính xác với cả ba mô hình:
 
-| Model    |                       Verified action-generator scale | Objective                 | Is the decoder standalone from the whole VLA?                                                  |
+| Mô hình | Quy mô bộ sinh hành động đã xác minh | Mục tiêu | Bộ giải mã có độc lập với toàn bộ VLA không? |
 | -------- | ----------------------------------------------------: | ------------------------- | ---------------------------------------------------------------------------------------------- |
-| RDT-1B   |                                    1.2B-parameter RDT | diffusion                 | Decoder-centric policy, but still conditioned by separate language/vision encoders             |
-| Dita     |              334M parameters for the published policy | DDPM diffusion            | Integrated policy with DINOv2, CLIP, Q-Former, and causal DiT; the authors call it lightweight |
-| Qwen-VLA | about 1.15B DiT action decoder after a Qwen3.5-4B VLM | conditional flow matching | No; the DiT is a separate downstream decoder conditioned by VLM hidden states                  |
+| RDT-1B | RDT 1,2B tham số | diffusion | Policy lấy bộ giải mã làm trung tâm, nhưng vẫn được điều kiện hóa bởi các encoder ngôn ngữ/thị giác riêng |
+| Dita | 334M tham số cho policy đã công bố | DDPM diffusion | Policy tích hợp DINOv2, CLIP, Q-Former và causal DiT; các tác giả gọi nó là gọn nhẹ |
+| Qwen-VLA | Bộ giải mã hành động DiT khoảng 1,15B tham số sau Qwen3.5-4B VLM | conditional flow matching | Không; DiT là bộ giải mã downstream riêng, được điều kiện hóa bằng hidden state của VLM |
 
-The defensible common label is **large or decoder-centric DiT action
-generation**. RDT-1B is the unambiguous billion-parameter example. Dita belongs
-because it moves denoising into the main Transformer token sequence rather than
-because it is billion-scale. Qwen-VLA belongs here because action generation is
-performed by a billion-parameter DiT decoder, not by token-routed expert weights
-inside the Qwen backbone.
+Nhãn chung có thể bảo vệ được là **sinh hành động DiT lớn hoặc lấy bộ giải mã làm
+trung tâm**. RDT-1B là ví dụ rõ ràng ở quy mô tỷ tham số. Dita thuộc nhóm này
+vì nó đưa quá trình khử nhiễu vào chuỗi token Transformer chính, không phải
+vì đạt quy mô tỷ tham số. Qwen-VLA thuộc nhóm này vì hành động được sinh bởi
+bộ giải mã DiT tỷ tham số, chứ không phải các trọng số expert định tuyến theo token
+bên trong backbone Qwen.
 
-## What changes relative to a compact head?
+## Điều gì thay đổi so với một head nhỏ gọn?
 
 ```text
-Compact head:
-multimodal backbone -> one fused embedding -> small MLP denoiser x N
+Head nhỏ gọn:
+backbone đa phương thức -> một embedding hợp nhất -> bộ khử nhiễu MLP nhỏ x N
 
-Decoder-centric DiT:
-language/image/state tokens + noisy action tokens
-        -> many Transformer blocks with attention-based conditioning x N
-        -> refined action chunk
+DiT lấy bộ giải mã làm trung tâm:
+token ngôn ngữ/hình ảnh/trạng thái + token hành động nhiễu
+        -> nhiều block Transformer với điều kiện hóa dựa trên attention x N
+        -> action chunk đã tinh chỉnh
 ```
 
-The expected benefit is greater capacity and finer token-level conditioning for
-heterogeneous images, histories, embodiments, and action spaces. The cost is
-that every diffusion or flow step invokes a substantial Transformer.
+Lợi ích kỳ vọng là năng lực lớn hơn và khả năng điều kiện hóa chi tiết hơn ở cấp token cho
+các hình ảnh, lịch sử, embodiment và action space không đồng nhất. Đổi lại, mỗi bước
+diffusion hoặc flow đều gọi một Transformer đáng kể.
 
-Here **DiT names the denoising-network architecture**, not one mandatory loss.
-RDT-1B and Dita use DDPM-derived diffusion objectives, while Qwen-VLA uses a
-DiT to predict a flow-matching velocity field. All three repeatedly apply a
-Transformer to an intermediate noisy action trajectory.
+Ở đây, **DiT chỉ kiến trúc mạng khử nhiễu**, không phải một hàm loss bắt buộc.
+RDT-1B và Dita dùng các mục tiêu diffusion bắt nguồn từ DDPM, còn Qwen-VLA dùng
+DiT để dự đoán trường vận tốc flow matching. Cả ba đều áp dụng Transformer lặp lại
+cho một trajectory hành động nhiễu trung gian.
 
 ## RDT-1B
 
-RDT-1B is a Robotics Diffusion Transformer scaled to 1.2B parameters for
-bimanual manipulation. It uses separate SigLIP vision and T5-XXL language
-encoders, proprioceptive inputs, and a scalable Transformer denoiser. The policy
-was pretrained on multi-robot data and predicts the next 64 robot actions.
-[RDT-1B paper](https://arxiv.org/abs/2410.07864) · [official model card](https://huggingface.co/robotics-diffusion-transformer/rdt-1b)
+RDT-1B là Robotics Diffusion Transformer được mở rộng lên 1,2B tham số cho
+thao tác hai tay. Mô hình dùng các encoder thị giác SigLIP và ngôn ngữ T5-XXL
+riêng, đầu vào proprioception và bộ khử nhiễu Transformer có khả năng mở rộng. Policy
+được pretrain trên dữ liệu đa robot và dự đoán 64 hành động robot tiếp theo.
+[Bài báo RDT-1B](https://arxiv.org/abs/2410.07864) · [model card chính thức](https://huggingface.co/robotics-diffusion-transformer/rdt-1b)
 
-The denoiser itself has 28 layers, width 2,048, and 32 attention heads. It
-alternates cross-attention to language and image conditions. Training corrupts
-actions with a 1,000-step DDPM schedule and learns a clean-action estimate with MSE; deployment uses five DPM-Solver++ steps to produce a 64-action chunk.
-[RDT-1B, §4.1, §5, and Appendix H](https://proceedings.iclr.cc/paper_files/paper/2025/file/49f80e4d2471ad4f2edf4f5f1ab62339-Paper-Conference.pdf)
+Bản thân bộ khử nhiễu có 28 layer, chiều rộng 2.048 và 32 attention head. Nó
+luân phiên cross-attention với các điều kiện ngôn ngữ và hình ảnh. Khi huấn luyện,
+hành động được thêm nhiễu theo lịch DDPM 1.000 bước và mô hình học ước tính hành động sạch
+bằng MSE; khi triển khai, năm bước DPM-Solver++ được dùng để tạo một chunk 64 hành động.
+[RDT-1B, §4.1, §5 và Phụ lục H](https://proceedings.iclr.cc/paper_files/paper/2025/file/49f80e4d2471ad4f2edf4f5f1ab62339-Paper-Conference.pdf)
 
-A central design is the Physically Interpretable Unified Action Space. It
-allocates slots for common physical quantities—joint and end-effector
-positions/velocities, grippers, and mobile-base motion—so heterogeneous robots
-can be padded/masked into one interface without pretending their raw vectors
-already have identical meanings. The model card explicitly warns that an
-unseen embodiment still requires target-robot fine-tuning; a unified tensor is
-not zero-shot embodiment transfer.
+Một thiết kế trung tâm là Physically Interpretable Unified Action Space. Nó
+phân bổ các vị trí cho những đại lượng vật lý phổ biến—vị trí/vận tốc khớp và
+end effector, bộ kẹp và chuyển động đế di động—để các robot không đồng nhất
+có thể được padding/masking vào một giao diện mà không giả vờ rằng các vector thô
+của chúng vốn có ý nghĩa giống nhau. Model card cảnh báo rõ rằng một
+embodiment chưa từng thấy vẫn cần fine-tune trên robot đích; tensor thống nhất
+không đồng nghĩa với chuyển giao embodiment zero-shot.
 
-RDT's conditioning blocks alternate access to language, images, and robot-state
-information, letting a large denoiser combine modalities while refining the
-action chunk. Its reported strength is action-model capacity for high-
-dimensional, multimodal bimanual control; its practical costs include a large
-iterative network and sensitivity to control latency/action-horizon choices.
+Các block điều kiện hóa của RDT luân phiên truy cập thông tin ngôn ngữ, hình ảnh
+và trạng thái robot, cho phép bộ khử nhiễu lớn kết hợp các phương thức trong khi
+tinh chỉnh action chunk. Điểm mạnh được báo cáo là năng lực mô hình hóa hành động
+cho điều khiển hai tay đa phương thức, nhiều chiều; chi phí thực tế gồm một
+mạng lặp lớn và độ nhạy với lựa chọn độ trễ điều khiển/action horizon.
 
 ## Dita
 
-Dita was proposed as a reaction to compact diffusion heads. Its authors argue
-that conditioning a shallow denoiser on one early-fused embedding can hide
-small visual changes that matter for action deltas. Dita instead concatenates:
+Dita được đề xuất để đáp lại các diffusion head nhỏ gọn. Các tác giả lập luận
+rằng điều kiện hóa một bộ khử nhiễu nông bằng một embedding được hợp nhất sớm có thể che mất
+những thay đổi thị giác nhỏ nhưng quan trọng đối với độ chênh hành động. Thay vào đó, Dita nối:
 
-- frozen-CLIP language tokens;
-- DINOv2 image patch features selected by an instruction-conditioned Q-Former;
-- diffusion timestep embeddings;
-- padded, noised 7D action tokens.
+- token ngôn ngữ từ CLIP đã đóng băng;
+- đặc trưng image patch DINOv2 được chọn bởi Q-Former có điều kiện theo chỉ dẫn;
+- embedding diffusion timestep;
+- token hành động 7D đã padding và thêm nhiễu.
 
-These tokens enter one causal Transformer, so the action chunk is denoised
-in-context while attending directly to historical visual tokens. Training uses
-a DDPM MSE noise-prediction objective. The 12-block LLaMA2-style Transformer has
-width 768; the full policy reports 334M parameters, of which 221M are trainable.
-[Dita, §3 and Appendix A](https://arxiv.org/abs/2503.19757)
+Các token này đi vào một causal Transformer, vì vậy action chunk được khử nhiễu
+trong ngữ cảnh khi attention trực tiếp đến các token thị giác lịch sử. Quá trình huấn luyện dùng
+mục tiêu dự đoán nhiễu DDPM MSE. Transformer kiểu LLaMA2 gồm 12 block có
+chiều rộng 768; toàn bộ policy được báo cáo có 334M tham số, trong đó 221M có thể huấn luyện.
+[Dita, §3 và Phụ lục A](https://arxiv.org/abs/2503.19757)
 
-The reported base setup uses two historical image observations and a trajectory
-length of 16. The paper's wording about “16 action chunks” is ambiguous; the
-current official configuration uses `traj_length=16` and
-`num_pred_action=15`, so this report does not turn that wording into a stronger
-16-action claim. Training uses a 1,000-step DDPM schedule; the main zero-shot
-evaluation uses 20-step DDIM, while an ablation found 10 steps strongest in one
-reported setting. [Dita paper](https://arxiv.org/abs/2503.19757) ·
-[official repository](https://github.com/RoboDita/Dita)
+Thiết lập cơ sở được báo cáo dùng hai observation hình ảnh lịch sử và một trajectory
+dài 16. Cách diễn đạt “16 action chunk” trong bài báo còn mơ hồ; cấu hình
+chính thức hiện tại dùng `traj_length=16` và `num_pred_action=15`, vì vậy báo cáo
+này không nâng cách diễn đạt đó thành một khẳng định mạnh hơn rằng có 16 hành động.
+Quá trình huấn luyện dùng lịch DDPM 1.000 bước; đánh giá zero-shot chính dùng DDIM
+20 bước, trong khi một ablation cho thấy 10 bước mạnh nhất ở một thiết lập được báo cáo.
+[Bài báo Dita](https://arxiv.org/abs/2503.19757) ·
+[repository chính thức](https://github.com/RoboDita/Dita)
 
-**Verified limitation of the requested label.** The paper reports 334M
-parameters and explicitly describes Dita as a lightweight open-source baseline.
-It is “large-head” relative to a three-layer MLP and decoder-centric in its
-conditioning, but it is not in the same scale class as RDT-1B.
+**Hạn chế đã xác minh của nhãn được yêu cầu.** Bài báo báo cáo 334M
+tham số và mô tả rõ Dita là một baseline mã nguồn mở gọn nhẹ.
+Nó là “head lớn” so với MLP ba layer và lấy bộ giải mã làm trung tâm trong cách
+điều kiện hóa, nhưng không cùng lớp quy mô với RDT-1B.
 
-The paper's ablations support its architecture only within the tested setups:
-longer trajectories helped on ManiSkill2, two observation frames beat one or
-three in the reported configuration, and ten DDIM steps worked best among the
-evaluated step counts for the cited Google Robot task. These are not universal
-decoder laws. [Dita, §4.6](https://arxiv.org/abs/2503.19757)
+Các ablation trong bài báo chỉ hỗ trợ kiến trúc trong những thiết lập đã kiểm thử:
+trajectory dài hơn có ích trên ManiSkill2, hai observation frame tốt hơn một hoặc
+ba trong cấu hình được báo cáo, và mười bước DDIM hoạt động tốt nhất trong số
+các số bước được đánh giá cho nhiệm vụ Google Robot được trích dẫn. Đây không phải
+quy luật chung của bộ giải mã. [Dita, §4.6](https://arxiv.org/abs/2503.19757)
 
-The name should also be kept exact: the official model is **Dita**. Neither
-“DiTA” nor “DiT-Action” is the canonical title in its paper, project page, or
-repository.
+Tên cũng phải được giữ chính xác: mô hình chính thức là **Dita**. Cả
+“DiTA” lẫn “DiT-Action” đều không phải tên chuẩn trong bài báo, trang dự án hoặc
+repository của mô hình.
 
-## Qwen-VLA: the DiT action decoder
+## Qwen-VLA: bộ giải mã hành động DiT
 
-The important Qwen-VLA module is a **separate, single-stream DiT action
-decoder** after the Qwen3.5-4B VLM. The paper uses “action expert” as a loose
-functional label in §2.2, but the architecture is not a π0-style expert that
-routes robot tokens through alternate weights inside the VLM Transformer.
+Module Qwen-VLA quan trọng là một **bộ giải mã hành động DiT single-stream
+riêng** nằm sau Qwen3.5-4B VLM. Bài báo dùng “action expert” như một
+nhãn chức năng không chặt chẽ trong §2.2, nhưng kiến trúc không phải expert kiểu π0
+định tuyến token robot qua các trọng số thay thế bên trong VLM Transformer.
 
-Qwen-VLA has a serial boundary:
+Qwen-VLA có ranh giới nối tiếp:
 
 ```text
-images + instruction + embodiment/FPS/horizon prompt
+hình ảnh + chỉ dẫn + prompt embodiment/FPS/horizon
                          |
                          v
                   Qwen3.5-4B VLM
                          |
-                 final hidden states
+                  hidden state cuối
                          |
-              linear projection to DiT width
+             phép chiếu tuyến tính sang chiều rộng DiT
                          |
                          +--------------------------+
                                                     |
-noisy H x K action tensor -> action projection -> action tokens
-flow time tau ------------> timestep embedding -> AdaLN controls
+tensor hành động nhiễu H x K -> phép chiếu hành động -> token hành động
+thời gian flow tau ----------> embedding timestep -> điều khiển AdaLN
                                                     |
                                                     v
-              concatenate [VLM context ; action tokens]
+              nối [ngữ cảnh VLM ; token hành động]
                                                     |
-                 16 single-stream DiT blocks
-           joint self-attention + multi-section RoPE
+                 16 block DiT single-stream
+         self-attention chung + multi-section RoPE
                                                     |
-              retain and project action positions
-                                                    |
-                                                    v
-                    H x K velocity field
-                                                    |
-                   several Euler updates
+             giữ lại và chiếu các vị trí hành động
                                                     |
                                                     v
-                    continuous action chunk
+                    trường vận tốc H x K
+                                                    |
+                   nhiều lần cập nhật Euler
+                                                    |
+                                                    v
+                   action chunk liên tục
 ```
 
-The VLM is run to produce semantic context first. Its hidden states are mapped
-into the DiT channel dimension by a linear layer. The noised action vector at
-each future timestep is separately projected into an action token. These two
-token groups are concatenated and then processed together by the DiT.
+VLM chạy trước để tạo ngữ cảnh ngữ nghĩa. Hidden state của nó được ánh xạ
+sang chiều kênh DiT bằng một layer tuyến tính. Vector hành động nhiễu tại
+mỗi timestep tương lai được chiếu riêng thành một token hành động. Hai
+nhóm token này được nối rồi DiT xử lý cùng nhau.
 
-This serial forward boundary does not mean the VLM must stay frozen: Qwen-VLA's
-continued pretraining and supervised fine-tuning jointly update the backbone
-and decoder. It means the two modules retain separate blocks and parameter
-sets, with VLM hidden states serving as the DiT's conditioning tokens.
+Ranh giới forward nối tiếp này không có nghĩa VLM phải giữ nguyên: quá trình
+continued pretraining và supervised fine-tuning của Qwen-VLA cùng cập nhật backbone
+và bộ giải mã. Nó có nghĩa hai module giữ các block và tập tham số riêng,
+với hidden state VLM đóng vai trò token điều kiện hóa của DiT.
 
-“Joint self-attention” means that, inside the DiT, action positions can use the
-full projected visual-language context and can coordinate with other action
-timesteps. It does **not** mean the Qwen VLM and DiT share Transformer blocks or
-expert routing. The VLM has already produced its hidden states before the DiT
-decoder begins. [Qwen-VLA, §2.2](https://arxiv.org/abs/2605.30280)
+“Self-attention chung” nghĩa là bên trong DiT, các vị trí hành động có thể dùng
+toàn bộ ngữ cảnh thị giác-ngôn ngữ đã chiếu và phối hợp với các timestep hành động khác.
+Nó **không** có nghĩa Qwen VLM và DiT dùng chung block Transformer hoặc
+expert routing. VLM đã tạo xong hidden state trước khi bộ giải mã DiT
+bắt đầu. [Qwen-VLA, §2.2](https://arxiv.org/abs/2605.30280)
 
-### What one DiT pass computes
+### Một lượt DiT tính toán gì
 
-The DiT does not directly output the final action chunk in one pass. One call
-predicts a velocity field for the current noisy/intermediate action tensor.
+DiT không trực tiếp xuất action chunk cuối trong một lượt. Một lần gọi
+dự đoán trường vận tốc cho tensor hành động nhiễu/trung gian hiện tại.
 
-Let `Y0` be the clean demonstrated target and `Y1` Gaussian noise. Training
-samples a flow time `tau` and forms:
+Gọi `Y0` là mục tiêu demonstration sạch và `Y1` là nhiễu Gaussian. Khi huấn luyện,
+mô hình lấy mẫu thời gian flow `tau` và tạo:
 
 ```text
 Y_tau = (1 - tau) * Y0 + tau * Y1
-target velocity = Y1 - Y0
+vận tốc mục tiêu = Y1 - Y0
 ```
 
-The DiT receives `Y_tau`, `tau`, and the projected VLM context. AdaLN injects
-the flow-time embedding into the Transformer computation, while multi-section
-RoPE provides position structure aligned with the multimodal backbone. The
-output action positions are mapped back to an `H x K` velocity tensor and
-optimized with masked MSE. [Qwen-VLA, §§2.2 and 2.5](https://arxiv.org/abs/2605.30280)
+DiT nhận `Y_tau`, `tau` và ngữ cảnh VLM đã chiếu. AdaLN đưa
+embedding thời gian flow vào quá trình tính toán Transformer, còn multi-section
+RoPE cung cấp cấu trúc vị trí phù hợp với backbone đa phương thức. Các
+vị trí hành động đầu ra được ánh xạ trở lại tensor vận tốc `H x K` và
+tối ưu bằng masked MSE. [Qwen-VLA, §§2.2 và 2.5](https://arxiv.org/abs/2605.30280)
 
-At inference, generation begins at `tau=1` with Gaussian noise and integrates
-toward `tau=0`. For a decreasing Euler step `delta`, the conceptual update is:
+Khi inference, quá trình sinh bắt đầu tại `tau=1` bằng nhiễu Gaussian và tích phân
+về `tau=0`. Với bước Euler giảm dần `delta`, phép cập nhật về mặt khái niệm là:
 
 ```text
 Y_(tau-delta) = Y_tau - delta * v_theta(Y_tau, tau, VLM_context)
 ```
 
-Every Euler step reruns the 16-block DiT on the updated action tensor. The
-paper says “a few” Euler steps but does not disclose the exact default count, so
-the report does not assume ten steps from π0 or another model. The final tensor
-at `tau=0`, not the velocity from one DiT pass, is the generated action chunk.
+Mỗi bước Euler chạy lại DiT 16 block trên tensor hành động đã cập nhật. Bài báo
+nói “một vài” bước Euler nhưng không công bố số bước mặc định chính xác, vì vậy
+báo cáo không giả định mười bước từ π0 hoặc mô hình khác. Tensor cuối tại
+`tau=0`, chứ không phải vận tốc từ một lượt DiT, là action chunk được sinh ra.
 
-### What makes this a large DiT
+### Điều gì khiến đây là DiT lớn
 
-The approximately 1.15B decoder parameters are distributed as follows:
+Khoảng 1,15B tham số bộ giải mã được phân bổ như sau:
 
-| DiT component              |           Reported parameters | Role                                                        |
+| Thành phần DiT | Số tham số được báo cáo | Vai trò |
 | -------------------------- | ----------------------------: | ----------------------------------------------------------- |
-| 16 DiT blocks              | about 1.13B total, 70.8M each | Joint attention and transformation of context/action tokens |
-| Raw-action projection MLPs |                          4.9M | Map between the raw action dimension and DiT latent width   |
-| VLM-to-DiT projection      |                          3.9M | Map Qwen hidden states into the decoder channel space       |
-| Timestep embedding         |                          2.8M | Encode flow time for AdaLN conditioning                     |
-| Output AdaLN modulation    |                          4.7M | Condition the decoder's output path on flow time            |
+| 16 block DiT | tổng khoảng 1,13B, mỗi block 70,8M | Attention chung và biến đổi token ngữ cảnh/hành động |
+| MLP chiếu hành động thô | 4,9M | Ánh xạ giữa chiều hành động thô và chiều latent DiT |
+| Phép chiếu VLM-sang-DiT | 3,9M | Ánh xạ hidden state Qwen sang không gian kênh của bộ giải mã |
+| Embedding timestep | 2,8M | Mã hóa thời gian flow để điều kiện hóa AdaLN |
+| Điều biến AdaLN đầu ra | 4,7M | Điều kiện hóa đường đầu ra của bộ giải mã theo thời gian flow |
 
-This scale is why Qwen-VLA fits the present family. The DiT is not a shallow
-head on one pooled VLM vector: it repeatedly processes all projected VLM context
-tokens together with the entire noisy trajectory. [Qwen-VLA, §2.2](https://arxiv.org/abs/2605.30280)
+Quy mô này là lý do Qwen-VLA phù hợp với họ mô hình hiện tại. DiT không phải một
+head nông trên một vector VLM đã pooling: nó liên tục xử lý mọi token ngữ cảnh VLM
+đã chiếu cùng toàn bộ trajectory nhiễu. [Qwen-VLA, §2.2](https://arxiv.org/abs/2605.30280)
 
-### From one DiT to many embodiments
+### Từ một DiT đến nhiều embodiment
 
-The decoder always predicts a fixed tensor `Y in R^(H x K)`, but each dataset
-may use only `H_task <= H` timesteps and `c <= K` channels. Valid values occupy
-the leading region; the rest is zero-padded. A binary mask excludes padded
-channels and timesteps from the flow loss, with active channels averaged
-uniformly so embodiments with more dimensions do not automatically dominate.
+Bộ giải mã luôn dự đoán tensor cố định `Y in R^(H x K)`, nhưng mỗi dataset
+có thể chỉ dùng `H_task <= H` timestep và `c <= K` kênh. Các giá trị hợp lệ
+nằm ở vùng đầu; phần còn lại được zero-padding. Mask nhị phân loại các kênh
+và timestep đã padding khỏi flow loss, đồng thời lấy trung bình đều các kênh hoạt động
+để embodiment có nhiều chiều hơn không tự động chi phối.
 
-The one DiT is reused without embodiment-specific output heads. The control
-meaning instead comes from:
+Một DiT được tái sử dụng mà không có output head riêng cho từng embodiment. Ý nghĩa
+điều khiển đến từ:
 
-- the VLM prompt describing robot type, arm configuration, control frequency,
-  action convention, and horizon;
-- the dataset's native channel semantics;
-- per-dataset 1st/99th-percentile normalization;
-- the validity mask selecting the real portion of `H x K`.
+- prompt VLM mô tả loại robot, cấu hình cánh tay, control frequency,
+  quy ước hành động và horizon;
+- ngữ nghĩa kênh gốc của dataset;
+- phép chuẩn hóa percentile 1/99 theo từng dataset;
+- validity mask chọn phần thực của `H x K`.
 
-Thus the shared DiT unifies the **tensor interface and decoder parameters**, not
-the physical semantics of delta end-effector motion, absolute joint commands,
-grippers, navigation waypoints, or human-pose trajectories.
+Vì vậy, DiT dùng chung thống nhất **giao diện tensor và tham số bộ giải mã**, chứ
+không thống nhất ngữ nghĩa vật lý của chuyển động end effector dạng delta, lệnh khớp
+tuyệt đối, bộ kẹp, waypoint điều hướng hoặc trajectory pose người.
 [Qwen-VLA, §§2.3-2.5](https://arxiv.org/abs/2605.30280)
 
-The default architecture does not use robot proprioception. The paper reports
-only marginal gains from adding state in one RoboTwin-2.0 ablation and keeps
-the default interface vision-and-prompt conditioned. It also lists memory,
-failure recovery, force/tactile feedback, and stronger long-horizon evaluation
-among remaining gaps.
+Kiến trúc mặc định không dùng proprioception của robot. Bài báo chỉ báo cáo
+mức cải thiện nhỏ khi bổ sung state trong một ablation RoboTwin-2.0 và giữ
+giao diện mặc định được điều kiện hóa bằng thị giác và prompt. Bài báo cũng liệt kê
+bộ nhớ, phục hồi sau thất bại, phản hồi lực/xúc giác và đánh giá dài hạn mạnh hơn
+trong số những khoảng trống còn lại.
 
-The exact boundary is therefore:
+Ranh giới chính xác vì vậy là:
 
 ```text
-Qwen3.5 VLM = visual-language representation and reasoning
-Qwen-VLA DiT = iterative flow-matching decoder over continuous trajectories
-controller   = denormalization, embodiment mapping, safety, and execution
+Qwen3.5 VLM = biểu diễn và suy luận thị giác-ngôn ngữ
+Qwen-VLA DiT = bộ giải mã flow matching lặp trên trajectory liên tục
+bộ điều khiển = giải chuẩn hóa, ánh xạ embodiment, an toàn và thực thi
 ```
 
-**Current availability.** As checked on 2026-07-21, the official Qwen-VLA
-repository exposes the paper-facing README and assets but no implementation,
-checkpoint, package, or release. Its architecture and reported results are
-public; a runnable official open-source policy is not yet evidenced by that
-repository. [Official Qwen-VLA repository](https://github.com/QwenLM/Qwen-VLA)
+**Tình trạng hiện tại.** Theo kiểm tra ngày 2026-07-21, repository Qwen-VLA
+chính thức cung cấp README và asset phục vụ bài báo nhưng không có implementation,
+checkpoint, package hoặc release. Kiến trúc và kết quả báo cáo đã công khai;
+repository đó chưa cung cấp bằng chứng về một policy mã nguồn mở chính thức có thể chạy.
+[Repository Qwen-VLA chính thức](https://github.com/QwenLM/Qwen-VLA)
 
-## Cross-model comparison
+## So sánh giữa các mô hình
 
-| Property                   | RDT-1B                                          | Dita                                                          | Qwen-VLA                                                                               |
+| Thuộc tính | RDT-1B | Dita | Qwen-VLA |
 | -------------------------- | ----------------------------------------------- | ------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| Continuous generator       | Diffusion Transformer                           | DDPM causal Transformer                                       | 16-block flow-matching DiT decoder                                                     |
-| Conditioning topology      | Dedicated multimodal conditioning blocks        | Raw multimodal tokens in one in-context sequence              | Joint self-attention over VLM states and noisy actions                                 |
-| Published horizon example  | 64 actions                                      | Trajectory length 16; current repo config predicts 15 actions | 16-action manipulation chunks; 8-waypoint navigation chunks in reported SFT/evaluation |
-| Embodiment mechanism       | Physically interpretable unified action slots   | Common 7D EEF representation in reported core setup           | Text embodiment prompt + padded/masked tensor + per-dataset normalization              |
-| Main classification caveat | Clearly large, but still uses external encoders | Decoder-centric, not billion-scale                            | Separate downstream DiT; not π0-style token-routed expert weights                     |
+| Bộ sinh liên tục | Diffusion Transformer | DDPM causal Transformer | Bộ giải mã DiT flow matching gồm 16 block |
+| Cấu trúc điều kiện hóa | Các block điều kiện hóa đa phương thức chuyên biệt | Token đa phương thức thô trong một chuỗi in-context | Self-attention chung trên state VLM và hành động nhiễu |
+| Ví dụ horizon đã công bố | 64 hành động | Trajectory dài 16; cấu hình repo hiện tại dự đoán 15 hành động | Chunk thao tác 16 hành động; chunk điều hướng 8 waypoint trong SFT/đánh giá được báo cáo |
+| Cơ chế embodiment | Các vị trí hành động thống nhất, có thể diễn giải vật lý | Biểu diễn EEF 7D chung trong thiết lập cốt lõi được báo cáo | Prompt embodiment bằng văn bản + tensor padding/masking + chuẩn hóa theo dataset |
+| Lưu ý chính khi phân loại | Rõ ràng là lớn, nhưng vẫn dùng encoder bên ngoài | Lấy bộ giải mã làm trung tâm, không ở quy mô tỷ tham số | DiT downstream riêng; không phải trọng số expert định tuyến theo token kiểu π0 |
 
-## Trade-offs
+## Đánh đổi
 
-Potential advantages:
+Ưu điểm tiềm năng:
 
-- more capacity for multimodal and cross-embodiment action distributions;
-- attention can preserve fine-grained links between image/history tokens and
-  action timesteps;
-- a large action model can scale independently from the semantic backbone;
-- joint trajectory denoising captures temporal correlation.
+- năng lực lớn hơn cho các phân phối hành động đa phương thức và đa embodiment;
+- attention có thể giữ các liên kết chi tiết giữa token hình ảnh/lịch sử và
+  timestep hành động;
+- mô hình hành động lớn có thể mở rộng độc lập với backbone ngữ nghĩa;
+- khử nhiễu trajectory chung nắm bắt tương quan thời gian.
 
-Costs and unknowns:
+Chi phí và điểm chưa biết:
 
-- repeated passes through hundreds of millions or billions of parameters can
-  dominate control latency;
-- model size, pretraining data, input modalities, and objective change together
-  in published comparisons, so scale benefits are not cleanly isolated;
-- padded unified tensors do not solve semantic incompatibilities across
-  coordinate frames, units, or control conventions;
-- benchmark superiority in one robot/simulator does not establish better
-  robustness or real-time behavior elsewhere;
-- “standalone” should not be used unless the boundary excludes the encoders and
-  conditioning modules explicitly.
+- các lượt chạy lặp qua hàng trăm triệu hoặc hàng tỷ tham số có thể
+  chi phối độ trễ điều khiển;
+- quy mô mô hình, dữ liệu pretraining, phương thức đầu vào và mục tiêu thay đổi cùng lúc
+  trong các so sánh đã công bố, nên lợi ích từ quy mô chưa được tách biệt rõ ràng;
+- tensor thống nhất có padding không giải quyết sự không tương thích ngữ nghĩa giữa
+  hệ tọa độ, đơn vị hoặc quy ước điều khiển;
+- vượt trội trên một benchmark robot/trình mô phỏng không chứng minh độ bền vững
+  hoặc hành vi thời gian thực tốt hơn ở nơi khác;
+- không nên dùng từ “độc lập” trừ khi ranh giới loại trừ rõ các encoder và
+  module điều kiện hóa.
 
-## Sources
+## Nguồn
 
-- Liu et al. *RDT-1B: a Diffusion Foundation Model for Bimanual Manipulation*,
-  arXiv:2410.07864v2, 2025. [Paper](https://arxiv.org/abs/2410.07864) ·
-  [Official project](https://rdt-robotics.github.io/rdt-robotics/) ·
-  [Official model card](https://huggingface.co/robotics-diffusion-transformer/rdt-1b)
-- Hou et al. *Dita: Scaling Diffusion Transformer for Generalist
+- Liu và cộng sự. *RDT-1B: a Diffusion Foundation Model for Bimanual Manipulation*,
+  arXiv:2410.07864v2, 2025. [Bài báo](https://arxiv.org/abs/2410.07864) ·
+  [Dự án chính thức](https://rdt-robotics.github.io/rdt-robotics/) ·
+  [Model card chính thức](https://huggingface.co/robotics-diffusion-transformer/rdt-1b)
+- Hou và cộng sự. *Dita: Scaling Diffusion Transformer for Generalist
   Vision-Language-Action Policy*, arXiv:2503.19757v2, ICCV 2025.
-  [Paper](https://arxiv.org/abs/2503.19757) ·
-  [Official project](https://robodita.github.io/)
-- Wang et al. *Qwen-VLA: Unifying Vision-Language-Action Modeling across Tasks,
+  [Bài báo](https://arxiv.org/abs/2503.19757) ·
+  [Dự án chính thức](https://robodita.github.io/)
+- Wang và cộng sự. *Qwen-VLA: Unifying Vision-Language-Action Modeling across Tasks,
   Environments, and Robot Embodiments*, arXiv:2605.30280v2, 2026.
-  [Paper](https://arxiv.org/abs/2605.30280) ·
-  [Official repository](https://github.com/QwenLM/Qwen-VLA)
+  [Bài báo](https://arxiv.org/abs/2605.30280) ·
+  [Repository chính thức](https://github.com/QwenLM/Qwen-VLA)

@@ -1,69 +1,69 @@
-# Kinetix evaluation and reference-code stack
+# Stack đánh giá và mã tham chiếu Kinetix
 
-## Purpose and scope
+## Mục đích và phạm vi
 
-The public repository is a simulation reproduction package for both RTC papers. It is evidence for
-the algorithmic branches and Kinetix results, but it is not the full real-robot deployment stack.
-Inspection in this report is pinned to commit `9296f31` on 2026-07-22; the code was read, not run.
+Kho lưu trữ công cộng là gói tái tạo mô phỏng cho cả hai bài báo RTC. Nó là bằng chứng cho
+các nhánh thuật toán và kết quả Kinetix, nhưng nó không phải là ngăn xếp triển khai robot thực đầy đủ.
+Việc kiểm tra trong báo cáo này được ghim để cam kết `9296f31` vào ngày 22-07-2026; mã đã được đọc, không chạy.
 
-## Executable modules
+## Các mô-đun thực thi
 
-| File | Responsibility | Important RTC behavior |
+| Tập tin | Trách nhiệm | Hành vi quan trọng của RTC |
 |---|---|---|
-| `src/model.py` | MLP-Mixer flow policy and samplers | Vanilla flow, BID, inference-time guidance, training-time prefix conditioning |
-| `src/train_expert.py` | Reinforcement-learning expert training | Produces expert checkpoints for the 12 levels |
-| `src/generate_data.py` | Demonstration collection | Builds million-transition datasets from mixtures of experts |
-| `src/train_flow.py` | Imitation-learning policy training | Builds contiguous `H`-step chunks and calls the standard or prefix-conditioned loss |
-| `src/eval_flow.py` | Batched delay/horizon evaluation | Compares naive async, RTC, BID, and hard-prefix sampling |
-| `worlds/l/*.json` | Kinetix levels | Twelve dynamic control environments used in the paper |
+| `src/model.py` | Bộ lấy mẫu và chính sách luồng MLP-Mixer | Luồng Vanilla, BID, hướng dẫn thời gian suy luận, điều hòa tiền tố thời gian đào tạo |
+| `src/train_expert.py` | Đào tạo chuyên gia tăng cường học tập | Tạo điểm kiểm tra chuyên môn cho 12 cấp độ |
+| `src/generate_data.py` | Bộ sưu tập trình diễn | Xây dựng bộ dữ liệu chuyển đổi hàng triệu từ sự kết hợp của các chuyên gia |
+| `src/train_flow.py` | Đào tạo chính sách học tập bắt chước | Xây dựng các khối bước `H` liền kề và gọi tổn thất tiêu chuẩn hoặc tiền tố có điều kiện |
+| `src/eval_flow.py` | Đánh giá độ trễ/chân trời theo đợt | So sánh lấy mẫu không đồng bộ ngây thơ, RTC, BID và lấy mẫu tiền tố cứng |
+| `worlds/l/*.json` | Cấp độ Kinetix | Mười hai môi trường điều khiển động được sử dụng trong bài báo |
 
-The end-to-end reproduction flow documented by the repository is:
+Luồng sao chép từ đầu đến cuối được kho lưu trữ ghi lại là:
 
 ```mermaid
 flowchart LR
     EXP[Train experts] --> DATA[Generate demonstrations]
     DATA --> FLOW[Train flow policies]
-    FLOW --> EVAL[Evaluate delay and horizon sweep]
-    EVAL --> METRIC[Solve rate and rollout statistics]
+    FLOW --> EVAL[Đánh giá quét độ trễ và chân trời]
+    EVAL --> METRIC[Tỷ lệ giải thành công và thống kê rollout]
 ```
 
-## Model and experiment contract
+## Hợp đồng mô hình và thí nghiệm
 
-The default simulation policy has `H=8`, four MLP-Mixer blocks, a 256-dimensional channel, and
-five flow steps at evaluation. The evaluator defaults to 2,048 rollouts and sweeps inference delays
-0–4 and valid execution horizons. It asserts `s >= d`, then the loop aligns old and new chunks before
-executing them.
+Chính sách mô phỏng mặc định có `H=8`, bốn khối MLP-Mixer, kênh 256 chiều và
+năm bước trong quá trình đánh giá. Người đánh giá mặc định có 2.048 lần triển khai và quét độ trễ suy luận
+0–4 và các khoảng thời gian thực hiện hợp lệ. Nó xác nhận `s >= d`, sau đó vòng lặp căn chỉnh các đoạn cũ và mới trước đó
+thực hiện chúng.
 
-Training forms chunks from contiguous actions and zeros positions after an episode terminates
-([`train_flow.py`, lines 166–181](https://github.com/Physical-Intelligence/real-time-chunking-kinetix/blob/9296f31d62d5bfeb5779dcb2f9bcf71ca37f448b/src/train_flow.py#L166-L181)).
-The repository README says training-time RTC is reproduced by setting `simulated_delay=5`, loading
-the epoch-24 checkpoint, and fine-tuning for eight epochs.
+Quá trình đào tạo tạo thành các khối từ các hành động liền kề và vị trí số 0 sau khi một tập kết thúc
+([`train_flow.py`, dòng 166–181](https://github.com/Physical-Intelligence/real-time-chunking-kinetix/blob/9296f31d62d5bfeb5779dcb2f9bcf71ca37f448b/src/train_flow.py#L166-L181)).
+Kho lưu trữ README cho biết RTC thời gian đào tạo được sao chép bằng cách cài đặt `simulated_delay=5`, đang tải
+điểm kiểm tra kỷ nguyên-24 và tinh chỉnh cho tám kỷ nguyên.
 
-## What can and cannot be reproduced
+## Những gì có thể và không thể được sao chép
 
-- **Verified from code/docs:** the 12 Kinetix level definitions, model/loss/sampling branches, expert
-  and demonstration pipeline, and simulated evaluation sweep are public.
-- **Verified from the repository README:** pretrained expert assets are about 60 GiB, computation is
-  sharded over levels, and the number of GPUs must divide the number of selected levels. This report
-  does not download those assets.
-- **Not present:** `π0.5`/`π0.6` weights, real robot scheduler, camera/network stack, robot task data,
-  or scripts reproducing the six-task and two-task real-world evaluations.
-- **Not rerun:** dependency installation, checkpoint download, training, and the 2,048-rollout sweep.
-  Therefore this document verifies code structure, not numerical reproducibility in this workspace.
+- **Đã xác minh từ mã/tài liệu:** 12 định nghĩa cấp độ Kinetix, các nhánh mô hình/tổn thất/lấy mẫu, chuyên gia
+  và quy trình trình diễn cũng như quá trình quét đánh giá mô phỏng được công khai.
+- **Đã được xác minh từ kho lưu trữ README:** nội dung chuyên gia được đào tạo trước có dung lượng khoảng 60 GiB, tính toán là
+  được phân chia theo các cấp và số GPUs phải chia cho số cấp đã chọn. Báo cáo này
+  không tải xuống những tài sản đó.
+- **Không có mặt:** Trọng lượng `π0.5`/`π0.6`, bộ lập lịch rô-bốt thực, ngăn xếp camera/mạng, dữ liệu tác vụ rô-bốt,
+  hoặc các tập lệnh tái tạo các đánh giá trong thế giới thực gồm sáu nhiệm vụ và hai nhiệm vụ.
+- **Không chạy lại:** cài đặt phụ thuộc, tải xuống điểm kiểm tra, đào tạo và quét 2.048 lượt triển khai.
+  Do đó, tài liệu này xác minh cấu trúc mã chứ không phải khả năng tái tạo bằng số trong không gian làm việc này.
 
-## Practical reproduction caution
+## Thận trọng khi sao chép thực tế
 
-The upstream README's default expert training and datasets are expensive: multiple H100 GPUs,
-millions of environment steps, and large cloud assets. A future local reproduction should first run
-one level, one seed, a reduced transition count, and a reduced evaluation batch before attempting the
-paper-scale sweep. This is a proposed smoke-test strategy, not a command verified in this workspace.
+Bộ dữ liệu và đào tạo chuyên gia mặc định của README ngược dòng rất đắt tiền: nhiều H100 GPUs,
+hàng triệu bước môi trường và tài sản đám mây lớn. Một bản tái tạo cục bộ trong tương lai trước tiên sẽ chạy
+một cấp độ, một hạt giống, số lần chuyển tiếp giảm và đợt đánh giá giảm trước khi thử
+quét quy mô giấy. Đây là chiến lược thử nghiệm khói được đề xuất chứ không phải lệnh được xác minh trong không gian làm việc này.
 
-## Evidence
+## Chứng cớ
 
-- [Repository README at commit `9296f31`](https://github.com/Physical-Intelligence/real-time-chunking-kinetix/blob/9296f31d62d5bfeb5779dcb2f9bcf71ca37f448b/README.md).
+- [Kho lưu trữ README tại cam kết `9296f31`](https://github.com/Physical-Intelligence/real-time-chunking-kinetix/blob/9296f31d62d5bfeb5779dcb2f9bcf71ca37f448b/README.md).
 - [`src/model.py`](https://github.com/Physical-Intelligence/real-time-chunking-kinetix/blob/9296f31d62d5bfeb5779dcb2f9bcf71ca37f448b/src/model.py),
-  [`src/train_flow.py`](https://github.com/Physical-Intelligence/real-time-chunking-kinetix/blob/9296f31d62d5bfeb5779dcb2f9bcf71ca37f448b/src/train_flow.py), and
+  [`src/train_flow.py`](https://github.com/Physical-Intelligence/real-time-chunking-kinetix/blob/9296f31d62d5bfeb5779dcb2f9bcf71ca37f448b/src/train_flow.py) và
   [`src/eval_flow.py`](https://github.com/Physical-Intelligence/real-time-chunking-kinetix/blob/9296f31d62d5bfeb5779dcb2f9bcf71ca37f448b/src/eval_flow.py),
-  inspected 2026-07-22.
-- *Real-Time Execution of Action Chunking Flow Policies*, Section 4 and Appendix A.5–A.7:
-  [local PDF](<../../../papers/02-realtime-chunking/Real-Time Execution of Action Chunking Flow Policies.pdf>).
+  kiểm tra 2026-07-22.
+- *Thực thi chính sách luồng hành động theo thời gian thực*, Phần 4 và Phụ lục A.5–A.7:
+  [PDF cục bộ](<../../../papers/02-realtime-chunking/Real-Time Execution of Action Chunking Flow Policies.pdf>).

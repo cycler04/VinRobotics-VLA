@@ -1,222 +1,224 @@
 
 # Diffusion Transformer (DiT)
 
-## What is DiT?
+## DiT là gì?
 
-**Diffusion Transformer (DiT)** is a **Transformer-based backbone** for generative models. It replaces the traditional U-Net used in diffusion models.
+**Diffusion Transformer (DiT)** là **backbone dựa trên Transformer** cho mô hình sinh.
+Nó thay thế U-Net truyền thống trong các mô hình khuếch tán.
 
-Unlike **Flow Matching**, **DDPM**, or **Rectified Flow**, DiT is **not a training algorithm**. It is simply the neural network that learns the mapping:
+Khác với **flow matching**, **DDPM** hay **rectified flow**, DiT **không phải mục
+tiêu huấn luyện**. Nó là mạng nơ-ron học phép ánh xạ:
 
 $$
 f_\theta(x_t, t, c)
 $$
 
-where:
+Ở đâu:
 
-- \(x_t\): noisy latent
+- \(x_t\): latent nhiễu
 - \(t\): timestep
-- \(c\): conditioning information (text, image, robot state, etc.)
+- \(c\): thông tin điều hòa (văn bản, hình ảnh, trạng thái robot, v.v.)
 
-The model predicts a target determined by the training objective.
+Mô hình dự đoán mục tiêu được xác định bởi mục tiêu đào tạo.
 
 ---
 
-## Relationship with Flow Matching
+## Mối quan hệ với khớp luồng
 
-DiT and Flow Matching solve different problems.
+DiT và Flow Match giải quyết các vấn đề khác nhau.
 
-| Component               | Role                                                        |
+| Thành phần | Vai trò |
 | ----------------------- | ----------------------------------------------------------- |
-| **DiT**           | Neural network architecture (Transformer backbone)          |
-| **Flow Matching** | Training objective that teaches the network what to predict |
+| **DiT** | Kiến trúc mạng nơ-ron (Transformer Backbone) |
+| **Kết hợp luồng** | Mục tiêu đào tạo dạy cho mạng những gì cần dự đoán |
 
-The same DiT architecture can also be trained using:
+Kiến trúc DiT tương tự cũng có thể được đào tạo bằng cách sử dụng:
 
-- DDPM (noise prediction)
-- Velocity prediction
-- Score Matching
-- Flow Matching
-- Consistency Models
+- DDPM (dự đoán tiếng ồn)
+- velocity prediction
+- score matching
+- Flow matching
+- Mô hình nhất quán
 
-Only the prediction target changes.
+Chỉ có mục tiêu dự đoán thay đổi.
 
 ---
 
-## General Architecture
+## Kiến trúc tổng hợp
 
 ```text
-Noisy latent + timestep + conditions
+Tiềm ẩn ồn ào + timestep + điều kiện
                 │
                 ▼
-        Diffusion Transformer
+        Transformer khuếch tán
                 │
                 ▼
-      Predicted target (noise, flow,
-      velocity, action, etc.)
+      Mục tiêu dự đoán (tiếng ồn, dòng chảy,
+      tốc độ, hành động, v.v.)
 ```
 
 ---
 
-## Common Applications
+## Ứng dụng phổ biến
 
-### 1. Image Generation
+### 1. Tạo hình ảnh
 
-The most common use.
+Việc sử dụng phổ biến nhất.
 
 ```text
-Text
+Chữ
   │
-Text Encoder
+Bộ mã hóa văn bản
   │
-Latent + Noise
+Tiềm ẩn + Tiếng ồn
   │
  DiT
   │
-Image
+Hình ảnh
 ```
 
-Examples:
+Ví dụ:
 
 - FLUX
-- Stable Diffusion 3
-- Qwen-Image
+- Khuếch tán ổn định 3
+- Hình ảnh Qwen
 
 ---
 
-### 2. Video Generation
+### 2. Tạo video
 
-Instead of image patches, the model processes **spatio-temporal patches** (time × height × width).
+Thay vì các bản vá hình ảnh, mô hình xử lý **các bản vá không gian-thời gian** (thời gian × chiều cao × chiều rộng).
 
-Examples:
+Ví dụ:
 
 - Sora
-- Movie Gen
+- Thể loại phim
 
 ---
 
-### 3. Audio Generation
+### 3. Tạo âm thanh
 
-DiT can generate or enhance audio from latent representations.
+DiT có thể tạo hoặc tăng cường âm thanh từ các biểu diễn tiềm ẩn.
 
-Applications include:
+Các ứng dụng bao gồm:
 
-- Speech synthesis
-- Music generation
-- Audio editing
-
----
-
-### 4. 3D Generation
-
-The input may be:
-
-- Point clouds
-- Voxels
-- Latent 3D representations
-
-Applications include:
-
-- 3D object generation
-- CAD generation
-- Neural rendering
+- Tổng hợp giọng nói
+- Thế hệ âm nhạc
+- Chỉnh sửa âm thanh
 
 ---
 
-### 5. Robotics
+### 4. Thế hệ 3D
 
-Modern robot foundation models use DiT to predict continuous robot actions.
+Đầu vào có thể là:
+
+- Đám mây điểm
+- Voxel
+- Biểu diễn 3D tiềm ẩn
+
+Các ứng dụng bao gồm:
+
+- Tạo đối tượng 3D
+- Thế hệ CAD
+- Kết xuất thần kinh
+
+---
+
+### 5. Người máy
+
+Các mô hình nền tảng robot hiện đại sử dụng DiT để dự đoán các hành động liên tục của robot.
 
 ```text
-Image + Robot State + Instruction
+Hình ảnh + Trạng thái Robot + Hướng dẫn
                 │
                 ▼
                DiT
                 │
                 ▼
-      Future action trajectory
+      Quỹ đạo hành động tương lai
 ```
 
-Outputs may include:
+Đầu ra có thể bao gồm:
 
-- End-effector pose
-- Joint commands
-- Navigation actions
-- Manipulation trajectories
+- Tư thế tác động cuối
+- Lệnh chung
+- Hành động điều hướng
+- Quỹ đạo thao tác
 
-#### DiT in Qwen-VLA
+#### DiT trong Qwen-VLA
 
-Qwen-VLA places a **separate 16-block DiT action decoder** after its
-Qwen3.5-4B vision-language backbone. The VLM first produces hidden states from
-images, instructions, and the embodiment prompt. After projection to the DiT
-width, those context tokens are concatenated with projected noisy-action tokens
-and processed using joint self-attention, flow-timestep AdaLN conditioning, and
-multi-section RoPE.
+Qwen-VLA đặt **bộ giải mã hành động DiT 16 khối riêng biệt** sau nó
+Xương sống ngôn ngữ tầm nhìn Qwen3.5-4B. VLM trước tiên tạo ra các trạng thái ẩn từ
+hình ảnh, hướng dẫn và lời nhắc thực hiện. Sau khi chiếu tới DiT
+chiều rộng, các mã thông báo ngữ cảnh đó được nối với các mã thông báo hành động ồn ào dự kiến
+và được xử lý bằng cách sử dụng khả năng tự chú ý của khớp, điều hòa AdaLN theo bước thời gian và
+RoPE nhiều phần.
 
 ```text
-Qwen3.5 VLM hidden states + noisy action chunk + flow timestep
+Qwen3.5 VLM trạng thái ẩn + đoạn hành động ồn ào + timestep dòng chảy
                               │
                               ▼
-                   16-block DiT decoder
+                   Bộ giải mã DiT 16 khối
                               │
                               ▼
-                    action velocity field
+                    trường vận tốc hành động
                               │
-                    repeated Euler updates
+                    cập nhật Euler lặp đi lặp lại
                               ▼
-                  continuous action chunk
+                  đoạn hành động liên tục
 ```
 
-One DiT pass predicts a **flow velocity**, not the final command. Starting from
-Gaussian action noise, several Euler steps repeatedly call the approximately
-1.15B-parameter DiT until it produces the final `H × K` action or trajectory
-tensor. Thus, “DiT” identifies the decoder architecture, while conditional flow
-matching defines its learning and generation process. [Qwen-VLA, §§2.2–2.5](https://arxiv.org/abs/2605.30280)
-See [the detailed action-decoder report](action_generation/05_large_diffusion_transformer.md#qwen-vla-the-dit-action-decoder)
-for the tensor mask, parameter breakdown, and multi-embodiment interface.
+Một lần forward qua DiT dự đoán **tốc độ dòng**, chứ không phải lệnh cuối cùng. Bắt đầu từ
+Nhiễu tác động Gaussian, một số bước Euler liên tục gọi giá trị xấp xỉ
+DiT tham số 1,15B cho đến khi nó tạo ra hành động hoặc quỹ đạo `H × K` cuối cùng
+tensor. Do đó, “DiT” xác định kiến ​​trúc bộ giải mã, trong khi luồng điều kiện
+kết hợp xác định quá trình học tập và tạo ra nó. [Qwen-VLA, §§2.2–2.5](https://arxiv.org/abs/2605.30280)
+Xem [báo cáo chi tiết về bộ giải mã hành động](action_generation/05_large_diffusion_transformer.md#qwen-vla-the-dit-action-decoding)
+cho mặt nạ tensor, phân tích tham số và giao diện đa phương án.
 
 ---
 
-### 6. Motion Generation
+### 6. Tạo chuyển động
 
-DiT can predict future human or robot motion.
+DiT có thể dự đoán chuyển động của con người hoặc robot trong tương lai.
 
-Examples:
+Ví dụ:
 
-- Human pose prediction
-- Robot trajectory planning
-- Animation generation
-
----
-
-### 7. Scientific Modeling
-
-Researchers also apply DiT to continuous scientific data such as:
-
-- Molecular generation
-- Protein structures
-- Material design
-- Physics simulations
+- Dự đoán tư thế con người
+- Lập kế hoạch quỹ đạo robot
+- Thế hệ hoạt hình
 
 ---
 
-## Why DiT Is Popular
+### 7. Mô hình khoa học
 
-Compared with U-Nets, Transformers provide:
+Các nhà nghiên cứu cũng áp dụng DiT vào dữ liệu khoa học liên tục như:
 
-| Feature                       | U-Net    | DiT       |
+- Thế hệ phân tử
+- Cấu trúc protein
+- Thiết kế vật liệu
+- Mô phỏng vật lý
+
+---
+
+## Tại sao DiT lại phổ biến
+
+So với U-Nets, Transformers cung cấp:
+
+| Tính năng | U-Net | DiT |
 | ----------------------------- | -------- | --------- |
-| Global attention              | Limited  | ✓        |
-| Large-scale model scaling     | Moderate | Excellent |
-| Multimodal conditioning       | Moderate | Excellent |
-| Variable-length token support | Limited  | ✓        |
+| Sự chú ý toàn cầu | Hạn chế | ✓ |
+| Nhân rộng mô hình quy mô lớn | Trung bình | Xuất sắc |
+| Điều hòa đa phương thức | Trung bình | Xuất sắc |
+| Hỗ trợ mã thông báo có độ dài thay đổi | Hạn chế | ✓ |
 
-These advantages have made DiT the preferred backbone for many modern generative foundation models.
+Những ưu điểm này đã khiến DiT trở thành xương sống được ưa chuộng cho nhiều mô hình nền tảng thế hệ hiện đại.
 
 ---
 
-## Key Takeaways
+## Bài học chính
 
-- **DiT is a Transformer architecture, not a training algorithm.**
-- It can be paired with **Flow Matching, DDPM, Score Matching, Velocity Prediction,** and other objectives.
-- The same architecture is used across **image, video, audio, 3D, robotics, motion, and scientific generation**.
-- Its flexibility and scalability have made it the dominant backbone for many recent generative AI models.
+- **DiT là kiến ​​trúc Transformer, không phải thuật toán huấn luyện.**
+- Nó có thể được ghép nối với **Flow matching, DDPM, score matching, velocity prediction** và các mục tiêu khác.
+- Kiến trúc tương tự được sử dụng trên **hình ảnh, video, âm thanh, 3D, robot, chuyển động và thế hệ khoa học**.
+- Tính linh hoạt và khả năng mở rộng của nó đã khiến nó trở thành xương sống thống trị cho nhiều mẫu AI thế hệ gần đây.

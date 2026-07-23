@@ -1,960 +1,960 @@
-# Modern LLM Families: Architecture, Training, Prompt Behavior, and End-to-End Dataflow
+# Các họ LLM hiện đại: Kiến trúc, huấn luyện, hành vi với prompt và luồng dữ liệu đầu-cuối
 
-**Compared families:** OpenAI GPT, Anthropic Claude, Google Gemini, Alibaba Qwen, and Meta Llama
-**Research date:** 2026-07-20
-**Audience:** Software engineers, ML engineers, and AI researchers
+**Các họ được so sánh:** OpenAI GPT, Anthropic Claude, Google Gemini, Alibaba Qwen và Meta Llama
+**Ngày nghiên cứu:** 2026-07-20
+**Đối tượng độc giả:** Kỹ sư phần mềm, kỹ sư ML và nhà nghiên cứu AI
 
 ---
 
-## 1. Executive conclusion
+## 1. Kết luận tổng quan
 
-The newest large-model families are **more similar at the neural-block level than their product behavior suggests**.
+Các họ mô hình lớn mới nhất **giống nhau ở cấp độ neural block hơn nhiều so với những gì hành vi sản phẩm của chúng thể hiện**.
 
-Most still depend on a Transformer-like autoregressive backbone and reuse a relatively small set of proven components:
+Phần lớn vẫn dựa vào backbone tự hồi quy kiểu Transformer và tái sử dụng một tập hợp tương đối nhỏ các thành phần đã được kiểm chứng:
 
-- rotary or rotary-derived positional encoding;
-- grouped or shared key/value attention;
-- gated feed-forward layers;
+- positional encoding dạng rotary hoặc dẫn xuất từ rotary;
+- attention key/value theo nhóm hoặc dùng chung;
+- các lớp feed-forward có cổng;
 - pre-normalization;
-- dense or sparse Mixture-of-Experts layers;
-- KV caching and optimized attention kernels;
-- autoregressive next-token generation.
+- các lớp Mixture-of-Experts dense hoặc sparse;
+- KV caching và các attention kernel được tối ưu;
+- sinh token tiếp theo theo kiểu tự hồi quy.
 
-The important differences increasingly appear elsewhere:
+Các khác biệt quan trọng ngày càng xuất hiện ở những nơi khác:
 
-1. **Pretraining data and curriculum**
-2. **Multimodal pretraining strategy**
-3. **Post-training objectives**
-4. **Reasoning and test-time-compute policies**
-5. **Tool-use and agent training**
-6. **Safety and preference optimization**
-7. **Product routing, memory, retrieval, and orchestration**
-8. **Serving configuration and decoding defaults**
+1. **Dữ liệu và curriculum pretraining**
+2. **Chiến lược pretraining đa phương thức**
+3. **Mục tiêu post-training**
+4. **Chính sách reasoning và test-time compute**
+5. **Huấn luyện sử dụng công cụ và agent**
+6. **Tối ưu an toàn và preference**
+7. **định tuyến sản phẩm, bộ nhớ, truy xuất và điều phối**
+8. **Cấu hình serving và giá trị decoding mặc định**
 
-This explains a common observation:
+Điều này giải thích một quan sát phổ biến:
 
-> Two models can have broadly similar Transformer components but react very differently to the same prompt.
+> Hai mô hình có thể có các thành phần Transformer nhìn chung tương tự nhau nhưng phản ứng rất khác nhau với cùng một prompt.
 
-The neural backbone determines the model's basic representational and computational capacity. Pretraining determines what patterns and knowledge it acquires. Post-training determines how it behaves as an assistant. The runtime determines when it reasons, searches, calls tools, asks questions, refuses, or continues autonomously.
+Neural backbone quyết định năng lực biểu diễn và tính toán cơ bản của mô hình. Pretraining quyết định các pattern và tri thức mà mô hình tiếp thu. Post-training quyết định cách mô hình hành xử như một trợ lý. Runtime quyết định khi nào mô hình reasoning, tìm kiếm, gọi công cụ, đặt câu hỏi, từ chối hoặc tiếp tục một cách tự chủ.
 
-A useful conceptual decomposition is:
+Một cách phân rã khái niệm hữu ích là:
 
 ```text
-Observed model behavior
+Hành vi mô hình quan sát được
 =
-base architecture
-+ pretraining distribution
-+ multimodal training
-+ post-training objectives
-+ reasoning policy
-+ tool runtime
+kiến trúc cơ sở
++ phân phối pretraining
++ huấn luyện đa phương thức
++ mục tiêu post-training
++ chính sách reasoning
++ runtime công cụ
 + system prompt
-+ decoding configuration
-+ safety layers
-+ product memory/retrieval
++ cấu hình decoding
++ các lớp an toàn
++ bộ nhớ/truy xuất của sản phẩm
 ```
 
-For modern frontier assistants, the final eight terms often explain more of the visible difference than whether the block uses ordinary RoPE, partial RoPE, GQA, or a particular MoE router.
+Đối với các trợ lý frontier hiện đại, tám hạng tử cuối thường giải thích nhiều khác biệt quan sát được hơn so với việc block sử dụng RoPE thông thường, partial RoPE, GQA hay một MoE router cụ thể.
 
 ---
 
-## 2. Scope and latest model snapshots
+## 2. Phạm vi và snapshot các mô hình mới nhất
 
-Public documentation is uneven. Qwen and Llama expose model weights and many architecture parameters. OpenAI, Anthropic, and Google disclose considerably more about capabilities, deployment, training categories, and safety than about exact block-level internals.
+Tài liệu công khai không đồng đều. Qwen và Llama công khai weight mô hình cùng nhiều tham số kiến trúc. OpenAI, Anthropic và Google công bố nhiều hơn đáng kể về năng lực, triển khai, các hạng mục huấn luyện và an toàn so với phần nội bộ chính xác ở cấp độ block.
 
-| Family           | Latest practical snapshot prioritized here                                                                                       | What is publicly inspectable                                                                                                                                           |
+| Họ | Snapshot thực tiễn mới nhất được ưu tiên tại đây | Những gì có thể kiểm tra công khai |
 | ---------------- | -------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **GPT**    | GPT-5.6 Sol, Terra, and Luna                                                                                                     | Product routing, reasoning controls, tools, context limits, training-data categories, reasoning RL, safety stack; exact Transformer internals remain undisclosed       |
-| **Claude** | Claude Sonnet 5 and Claude Fable 5                                                                                               | Adaptive-thinking behavior, tokenizer change, prompt behavior, training-data categories, Constitutional AI alignment; exact block architecture remains undisclosed     |
-| **Gemini** | Gemini 3.5 Flash, Gemini 3.1 Pro, and Deep Think                                                                                 | Native multimodality, thinking levels, tool interfaces, context limits, broad safety/post-training methods; detailed current block internals remain mostly undisclosed |
-| **Qwen**   | Qwen3.7-Max as the newest hosted agent model; Qwen3.6-35B-A3B and Qwen3.6-27B as the newest technically inspectable open weights | Detailed configs, hybrid attention, MoE routing, vision tower, context, reasoning mode, sampling, deployment                                                           |
-| **Llama**  | Llama 4 Maverick and Scout                                                                                                       | Model weights, MoE scale, early multimodal fusion, context, training-token estimates, post-training sequence, tokenizer family                                         |
+| **GPT** | GPT-5.6 Sol, Terra và Luna | định tuyến sản phẩm, điều khiển reasoning, công cụ, giới hạn context, các hạng mục dữ liệu huấn luyện, reasoning RL, safety stack; phần nội bộ chính xác của Transformer vẫn chưa được công bố |
+| **Claude** | Claude Sonnet 5 và Claude Fable 5 | Hành vi adaptive thinking, thay đổi tokenizer, hành vi với prompt, các hạng mục dữ liệu huấn luyện, alignment bằng Constitutional AI; kiến trúc block chính xác vẫn chưa được công bố |
+| **Gemini** | Gemini 3.5 Flash, Gemini 3.1 Pro và Deep Think | Đa phương thức native, thinking level, giao diện công cụ, giới hạn context, các phương pháp safety/post-training tổng quát; phần nội bộ chi tiết của block hiện tại phần lớn vẫn chưa được công bố |
+| **Qwen** | Qwen3.7-Max là mô hình agent hosted mới nhất; Qwen3.6-35B-A3B và Qwen3.6-27B là các open weight mới nhất có thể kiểm tra về mặt kỹ thuật | Cấu hình chi tiết, hybrid attention, định tuyến MoE, vision tower, context, chế độ reasoning, sampling, triển khai |
+| **Llama** | Llama 4 Maverick và Scout | Trọng số mô hình, quy mô MoE, early multimodal fusion, context, ước tính token huấn luyện, chuỗi post-training, họ tokenizer |
 
-### Disclosure legend
+### Chú giải mức độ công bố
 
-- **Disclosed:** stated in official model documentation or configuration.
-- **Family-level:** documented for an earlier or underlying generation, but not guaranteed unchanged.
-- **Unspecified:** not publicly documented.
-- **Inference:** plausible engineering interpretation, not an official claim.
+- **Đã công bố:** được nêu trong tài liệu hoặc cấu hình chính thức của mô hình.
+- **Cấp độ họ:** được ghi nhận cho một thế hệ trước hoặc thế hệ nền tảng, nhưng không đảm bảo là không thay đổi.
+- **Không nêu rõ:** không được công khai trong tài liệu.
+- **Suy luận:** diễn giải kỹ thuật hợp lý, không phải tuyên bố chính thức.
 
 ---
 
-## 3. Brief shared foundation
+## 3. Nền tảng chung tóm lược
 
-A simplified modern autoregressive model still resembles:
+Một mô hình tự hồi quy hiện đại được đơn giản hóa vẫn có dạng:
 
 ```mermaid
 flowchart LR
-    A[Input text and optional media] --> B[Tokenization and modality encoders]
-    B --> C[Unified sequence of embeddings]
-    C --> D[Repeated model blocks]
-    D --> E[Final normalization]
+    A[Văn bản đầu vào và media tùy chọn] --> B[Tokenization và các modality encoder]
+    B --> C[Chuỗi embedding hợp nhất]
+    C --> D[Các model block lặp lại]
+    D --> E[Normalization cuối]
     E --> F[Language-model head]
-    F --> G[Next-token distribution]
-    G --> H[Sampling or constrained decoding]
-    H --> I[Generated response or tool call]
+    F --> G[Phân phối token tiếp theo]
+    G --> H[Sampling hoặc constrained decoding]
+    H --> I[Phản hồi được sinh hoặc lệnh gọi công cụ]
 ```
 
-A conventional block is approximately:
+Một block thông thường có dạng gần đúng:
 
 ```mermaid
 flowchart TD
     X[Residual stream] --> N1[Pre-normalization]
-    N1 --> ATT[Attention or hybrid sequence module]
-    ATT --> R1[Residual addition]
+    N1 --> ATT[Attention hoặc hybrid sequence module]
+    ATT --> R1[Phép cộng residual]
     R1 --> N2[Pre-normalization]
-    N2 --> FFN[Dense FFN or routed MoE]
-    FFN --> R2[Residual addition]
+    N2 --> FFN[Dense FFN hoặc routed MoE]
+    FFN --> R2[Phép cộng residual]
 ```
 
-The exact implementation varies, but this pattern remains recognizable across many families.
+Chi tiết triển khai khác nhau, nhưng pattern này vẫn có thể nhận ra ở nhiều họ.
 
 ---
 
-# Part I — Architecture comparison
+# Phần I — So sánh kiến trúc
 
-## 4. High-level architecture comparison
+## 4. So sánh kiến trúc ở mức tổng quan
 
-| Subsystem             | GPT-5.6                                                      | Claude 5                                              | Gemini 3.x                                                                | Qwen3.6                                                                                                          | Llama 4                                                               |
+| Phân hệ | GPT-5.6 | Claude 5 | Gemini 3.x | Qwen3.6 | Llama 4 |
 | --------------------- | ------------------------------------------------------------ | ----------------------------------------------------- | ------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
-| Core generative style | Autoregressive reasoning system; internal blocks unspecified | Autoregressive assistant; internal blocks unspecified | Natively multimodal reasoning model; exact current block type unspecified | Autoregressive native multimodal model                                                                           | Autoregressive native multimodal model                                |
-| Dense vs MoE          | Unspecified                                                  | Unspecified                                           | Unspecified for current Gemini 3.x                                        | Dense 27B and sparse 35B-A3B variants                                                                            | Sparse MoE                                                            |
-| Attention             | Unspecified                                                  | Unspecified                                           | Unspecified                                                               | Hybrid sequence stack: three linear-attention layers followed by one full-attention layer; GQA in full attention | Attention plus MoE; Scout uses iRoPE-related long-context design      |
-| Positional encoding   | Unspecified                                                  | Unspecified                                           | Unspecified                                                               | Partial multimodal RoPE, interleaved multimodal sections, large RoPE base                                        | RoPE/iRoPE family                                                     |
-| FFN activation        | Unspecified                                                  | Unspecified                                           | Unspecified                                                               | SiLU-gated expert path; vision tower uses GELU variant                                                           | Not fully specified in current public launch material                 |
-| Normalization         | Unspecified                                                  | Unspecified                                           | Unspecified                                                               | RMSNorm                                                                                                          | Not fully specified publicly for Llama 4 launch                       |
-| Multimodal fusion     | Product supports image/file input; internals unspecified     | Image and document input; internals unspecified       | Native text-image-audio-video processing                                  | Native vision-language checkpoint with explicit vision tower and multimodal RoPE                                 | Early fusion of vision and text into a shared backbone                |
-| Tool use              | First-class built-in and custom tools                        | First-class tools and MCP ecosystem                   | Function calls, search, code execution, computer use                      | Model and Qwen-Agent/Qwen-Code ecosystem                                                                         | Usually supplied by the deployment runtime or Llama Stack             |
-| Reasoning control     | Reasoning levels and routed system behavior                  | Adaptive thinking and effort levels                   | Thinking levels and Deep Think                                            | Thinking on by default; can be disabled through serving parameters                                               | No single universal product-level reasoning controller in raw weights |
-| Open weights          | No                                                           | No                                                    | No for Gemini                                                             | Yes, Apache 2.0 for open variants                                                                                | Yes, under Llama Community License                                    |
+| Kiểu sinh cốt lõi | Hệ thống reasoning tự hồi quy; không nêu rõ các block nội bộ | Trợ lý tự hồi quy; không nêu rõ các block nội bộ | Mô hình reasoning đa phương thức native; không nêu rõ loại block chính xác hiện tại | Mô hình đa phương thức native tự hồi quy | Mô hình đa phương thức native tự hồi quy |
+| Dense so với MoE | Không nêu rõ | Không nêu rõ | Không nêu rõ đối với Gemini 3.x hiện tại | Các biến thể dense 27B và sparse 35B-A3B | Sparse MoE |
+| Attention | Không nêu rõ | Không nêu rõ | Không nêu rõ | Hybrid sequence stack: ba lớp linear attention, sau đó là một lớp full attention; GQA trong full attention | Attention kết hợp MoE; Scout sử dụng thiết kế long-context liên quan đến iRoPE |
+| Positional encoding | Không nêu rõ | Không nêu rõ | Không nêu rõ | Partial multimodal RoPE, các phân đoạn đa phương thức xen kẽ, RoPE base lớn | Họ RoPE/iRoPE |
+| Activation của FFN | Không nêu rõ | Không nêu rõ | Không nêu rõ | Expert path có cổng SiLU; vision tower sử dụng biến thể GELU | Chưa được nêu đầy đủ trong tài liệu ra mắt công khai hiện tại |
+| Normalization | Không nêu rõ | Không nêu rõ | Không nêu rõ | RMSNorm | Chưa được nêu đầy đủ công khai cho lần ra mắt Llama 4 |
+| Multimodal fusion | Sản phẩm hỗ trợ đầu vào ảnh/file; không nêu rõ phần nội bộ | Đầu vào ảnh và tài liệu; không nêu rõ phần nội bộ | Xử lý text-image-audio-video native | Checkpoint vision-language native với vision tower và multimodal RoPE tường minh | Early fusion của biểu diễn hình ảnh và văn bản vào một backbone dùng chung |
+| Sử dụng công cụ | Công cụ tích hợp sẵn và công cụ tùy chỉnh là thành phần hạng nhất | Công cụ hạng nhất và hệ sinh thái MCP | Function call, tìm kiếm, thực thi code, sử dụng máy tính | Mô hình và hệ sinh thái Qwen-Agent/Qwen-Code | Thường do deployment runtime hoặc Llama Stack cung cấp |
+| Điều khiển reasoning | Các reasoning level và hành vi hệ thống được định tuyến | Adaptive thinking và các effort level | Thinking level và Deep Think | Thinking bật mặc định; có thể tắt qua tham số serving | Không có một bộ điều khiển reasoning cấp sản phẩm phổ quát duy nhất trong raw weight |
+| Open weight | Không | Không | Không đối với Gemini | Có, Apache 2.0 cho các biến thể mở | Có, theo Llama Community License |
 
-The strongest architecture departure among the newest inspectable models is Qwen3.6's move from a standard all-full-attention stack to a **hybrid recurrent/linear-attention and full-attention stack**. This is more structurally significant than merely changing from MHA to GQA.
+Thay đổi kiến trúc mạnh nhất trong số các mô hình mới nhất có thể kiểm tra là việc Qwen3.6 chuyển từ stack full attention tiêu chuẩn ở mọi lớp sang **stack hybrid recurrent/linear attention và full attention**. Về mặt cấu trúc, điều này đáng kể hơn việc chỉ chuyển từ MHA sang GQA.
 
 ---
 
-## 5. GPT-5.6: publicly visible system architecture
+## 5. GPT-5.6: kiến trúc hệ thống quan sát được công khai
 
-OpenAI does not disclose whether GPT-5.6 uses a dense network, MoE, GQA, MLA, RoPE, or another internal combination.
+OpenAI không công bố GPT-5.6 sử dụng mạng dense, MoE, GQA, MLA, RoPE hay một tổ hợp nội bộ nào khác.
 
-The public architecture is better understood at the **system level**:
+Kiến trúc công khai được hiểu rõ hơn ở **cấp độ hệ thống**:
 
 ```mermaid
 flowchart LR
-    U[User request] --> R[Model and reasoning router]
-    R -->|Fast or routine| F[Lower-cost path]
-    R -->|Complex| S[GPT-5.6 Sol reasoning path]
-    S --> E[Reasoning effort selection]
-    F --> T[Tool decision]
+    U[Yêu cầu của người dùng] --> R[Router mô hình và reasoning]
+    R -->|Nhanh hoặc thông thường| F[Đường xử lý chi phí thấp hơn]
+    R -->|Phức tạp| S[Đường reasoning GPT-5.6 Sol]
+    S --> E[Lựa chọn reasoning effort]
+    F --> T[Quyết định dùng công cụ]
     E --> T
-    T -->|No tool| D[Generate answer]
-    T -->|Tool required| X[Web, files, code, computer, functions]
+    T -->|Không dùng công cụ| D[Sinh câu trả lời]
+    T -->|Cần công cụ| X[Web, file, code, máy tính, function]
     X --> T
-    D --> O[Final response]
+    D --> O[Phản hồi cuối]
 ```
 
-### Architecturally noticeable characteristics
+### Các đặc điểm đáng chú ý về mặt kiến trúc
 
-- The deployed product behaves as a **system of model choices and reasoning levels**, not simply one fixed forward pass.
-- Reasoning effort changes the amount of hidden deliberation and often the willingness to use tools.
-- The API exposes explicit control over reasoning and output verbosity.
-- Tool calls may run sequentially or in parallel.
-- Prompt caching and long-context handling are part of the effective architecture even though they are not neural layers.
+- Sản phẩm được triển khai hoạt động như một **hệ thống các lựa chọn mô hình và reasoning level**, không đơn thuần là một forward pass cố định.
+- Reasoning effort làm thay đổi lượng suy xét ẩn và thường cả mức độ sẵn sàng sử dụng công cụ.
+- API cung cấp khả năng kiểm soát tường minh đối với reasoning và độ dài đầu ra.
+- Các lệnh gọi công cụ có thể chạy tuần tự hoặc song song.
+- Prompt caching và xử lý long-context là một phần của kiến trúc hiệu dụng dù chúng không phải neural layer.
 
-### Design implication
+### Hàm ý thiết kế
 
-For GPT, the key optimization surface is often:
+Đối với GPT, bề mặt tối ưu hóa chính thường là:
 
 ```text
-router + reasoning budget + tools + prompt cache + agent orchestration
+router + ngân sách reasoning + công cụ + prompt cache + điều phối agent
 ```
 
-rather than direct access to attention or MoE configuration.
+thay vì truy cập trực tiếp vào cấu hình attention hoặc MoE.
 
 ---
 
-## 6. Claude Sonnet 5 and Fable 5: behavior-centered architecture
+## 6. Claude Sonnet 5 và Fable 5: kiến trúc lấy hành vi làm trung tâm
 
-Anthropic also does not publish the exact Transformer block design of current Claude models.
+Anthropic cũng không công bố thiết kế Transformer block chính xác của các mô hình Claude hiện tại.
 
-The publicly observable system is dominated by:
+Hệ thống có thể quan sát công khai chủ yếu được định hình bởi:
 
 - adaptive thinking;
-- effort levels;
-- long-context document processing;
-- tool use;
-- persistent agent workflows;
-- Constitutional-AI-shaped behavior;
-- safety routing for high-risk requests.
+- các effort level;
+- xử lý tài liệu long-context;
+- sử dụng công cụ;
+- workflow agent bền vững;
+- hành vi được định hình bởi Constitutional AI;
+- định tuyến an toàn cho các yêu cầu rủi ro cao.
 
 ```mermaid
 flowchart LR
-    U[Text, image, or document] --> Tok[Claude tokenizer and media ingestion]
-    Tok --> AT[Adaptive-thinking controller]
-    AT --> M[Claude model]
-    M --> Q{Need evidence or action?}
-    Q -->|No| O[Compose response]
-    Q -->|Yes| Tools[Tools, search, code, computer, MCP]
+    U[Văn bản, hình ảnh hoặc tài liệu] --> Tok[Claude tokenizer và nhập media]
+    Tok --> AT[Bộ điều khiển adaptive thinking]
+    AT --> M[Mô hình Claude]
+    M --> Q{Cần bằng chứng hoặc hành động?}
+    Q -->|Không| O[Soạn phản hồi]
+    Q -->|Có| Tools[Công cụ, tìm kiếm, code, máy tính, MCP]
     Tools --> M
-    M --> Safe[Constitution and safety behavior]
+    M --> Safe[Constitution và hành vi an toàn]
     Safe --> O
 ```
 
-### Sonnet 5-specific prompt behavior
+### Hành vi với prompt riêng của Sonnet 5
 
-Anthropic documents several behavior changes:
+Anthropic ghi nhận một số thay đổi về hành vi:
 
-- Response length adapts to task complexity.
-- Instructions are interpreted more literally.
-- Lower effort levels strongly limit how far the model goes beyond the explicit request.
-- Adaptive thinking is enabled by default.
-- Higher effort increases tool use and self-verification.
-- A new tokenizer can produce roughly 30% more tokens than Sonnet 4.6 for equivalent text, depending on content.
-- Non-default temperature, top-p, and top-k controls are not accepted for Sonnet 5; style should be controlled through instructions.
+- Độ dài phản hồi thích ứng với độ phức tạp của tác vụ.
+- Chỉ dẫn được diễn giải sát nghĩa hơn.
+- Effort level thấp giới hạn mạnh mức độ mô hình đi xa hơn yêu cầu tường minh.
+- Adaptive thinking được bật mặc định.
+- Effort cao hơn làm tăng việc sử dụng công cụ và tự kiểm chứng.
+- Tùy nội dung, tokenizer mới có thể tạo nhiều hơn khoảng 30% token so với Sonnet 4.6 cho văn bản tương đương.
+- Sonnet 5 không chấp nhận các điều khiển temperature, top-p và top-k khác mặc định; nên kiểm soát style qua chỉ dẫn.
 
-### Design implication
+### Hàm ý thiết kế
 
-Claude's practical behavior is highly affected by:
+Hành vi thực tiễn của Claude chịu ảnh hưởng lớn bởi:
 
 ```text
 effort level
-+ explicit task scope
-+ positive examples
-+ context structure
-+ constitutional alignment
++ phạm vi tác vụ tường minh
++ ví dụ tích cực
++ cấu trúc context
++ alignment theo hiến pháp
 ```
 
-A vague instruction such as "be conservative" may be followed more literally than expected.
+Một chỉ dẫn mơ hồ như "hãy thận trọng" có thể được tuân theo sát nghĩa hơn dự kiến.
 
 ---
 
-## 7. Gemini 3.5 Flash and Gemini 3.1 Pro
+## 7. Gemini 3.5 Flash và Gemini 3.1 Pro
 
-Google describes Gemini as a **natively multimodal reasoning family**. Current models can ingest combinations of:
+Google mô tả Gemini là một **họ reasoning đa phương thức native**. Các mô hình hiện tại có thể tiếp nhận tổ hợp của:
 
-- text;
-- images;
+- văn bản;
+- hình ảnh;
 - video;
-- audio;
-- PDFs;
-- large code repositories.
+- âm thanh;
+- PDF;
+- repository code lớn.
 
-The latest public product documentation does not provide full details on the current attention, MoE, FFN, or positional-encoding design.
+Tài liệu sản phẩm công khai mới nhất không cung cấp đầy đủ chi tiết về thiết kế attention, MoE, FFN hoặc positional encoding hiện tại.
 
 ```mermaid
 flowchart LR
-    I[Text, image, audio, video, PDF] --> P[Native multimodal preprocessing and packing]
-    P --> C[Unified long-context representation]
-    C --> G[Gemini reasoning model]
-    G --> L[Thinking-level controller]
-    L --> Q{Need a tool?}
-    Q -->|Search| S[Google Search grounding]
-    Q -->|Compute| X[Code execution]
-    Q -->|External action| F[Function or computer use]
+    I[Văn bản, hình ảnh, âm thanh, video, PDF] --> P[tiền xử lý và đóng gói đa phương thức native]
+    P --> C[Biểu diễn long-context hợp nhất]
+    C --> G[Mô hình reasoning Gemini]
+    G --> L[Bộ điều khiển thinking level]
+    L --> Q{Cần công cụ?}
+    Q -->|Tìm kiếm| S[Grounding bằng Google Search]
+    Q -->|Tính toán| X[Thực thi code]
+    Q -->|Hành động bên ngoài| F[Sử dụng function hoặc máy tính]
     S --> G
     X --> G
     F --> G
-    G --> O[Text response]
+    G --> O[Phản hồi văn bản]
 ```
 
-### Architecturally noticeable characteristics
+### Các đặc điểm đáng chú ý về mặt kiến trúc
 
-- Multimodality is not presented as an optional adapter added after text training; it is a central family-level design.
-- Gemini 3.5 Flash is based on a reasoning foundation and exposes thinking levels.
-- The model's runtime tightly integrates search, code execution, structured outputs, and computer use.
-- Google's deployment is optimized around TPU infrastructure, JAX, and ML Pathways.
-- Gemini model behavior is strongly conditioned by context ordering: Google recommends putting large context first and the final task at the end.
+- Đa phương thức không được trình bày dưới dạng adapter tùy chọn được thêm vào sau khi huấn luyện văn bản; nó là một thiết kế thiết kế trung tâm ở cấp độ họ.
+- Gemini 3.5 Flash dựa trên nền tảng reasoning và thể hiện thinking level.
+- runtime của mô hình tích hợp chặt chẽ tìm kiếm, code execution, structured output và computer use.
+- deployment của Google được tối ưu hóa dựa trên cơ sở hạ tầng TPU, JAX và ML Pathways.
+- Hành vi của mô hình Gemini bị điều chỉnh mạnh mẽ bởi thứ tự context: Google khuyên bạn nên đặt context lớn trước và tác vụ cuối cùng ở cuối.
 
-### Prompting implication
+### Hàm ý prompt
 
-Gemini 3 models generally prefer:
+Các mô hình Gemini 3 thường thích:
 
-- concise instructions;
-- explicit constraints;
-- stable default sampling;
-- large context before the question;
-- explicit requests for verbosity.
+- hướng dẫn ngắn gọn;
+- những hạn chế rõ ràng;
+- mặc định ổn định sampling;
+- context lớn trước câu hỏi;
+- yêu cầu rõ ràng về độ chi tiết.
 
-Very elaborate prompt-engineering scaffolds can cause unnecessary over-analysis.
+Scaffolding kỹ thuật prompt rất phức tạp có thể gây ra sự phân tích quá mức không cần thiết.
 
 ---
 
-## 8. Qwen3.6: the most inspectable current architecture
+## 8. Qwen3.6: kiến trúc dễ kiểm tra nhất hiện nay
 
-The latest open Qwen3.6 models are natively multimodal and expose detailed configuration.
+Các mô hình Qwen3.6 mở mới nhất có multimodal native và hiển thị cấu hình chi tiết.
 
 ### 8.1 Qwen3.6-35B-A3B
 
-Key official configuration values include:
+Các giá trị cấu hình chính thức quan trọng bao gồm:
 
-| Property                           |                            Value |
+| Thuộc tính | Giá trị |
 | ---------------------------------- | -------------------------------: |
-| Total parameters                   |                Approximately 35B |
-| Active parameters                  |                 Approximately 3B |
-| Hidden layers                      |                               40 |
-| Experts                            |                              256 |
-| Experts selected per token         |                                8 |
-| Full-attention interval            |               Every fourth layer |
-| Full-attention Q heads             |                               16 |
-| KV heads                           |                                2 |
-| Attention head dimension           |                              256 |
-| Native maximum position embeddings |                          262,144 |
-| Vocabulary                         |                          248,320 |
-| Vision tower depth                 |                               27 |
-| Vision patch size                  |                               16 |
-| Temporal patch size                |                                2 |
-| Native dtype                       |                             BF16 |
-| Additional prediction head         | One multi-token-prediction layer |
+| Tổng tham số | Khoảng 35B |
+| Tham số hoạt động | Khoảng 3B |
+| Lớp ẩn | 40 |
+| chuyên gia | 256 |
+| Các chuyên gia được chọn theo token | 8 |
+| Chu kỳ full attention | Mỗi lớp thứ tư |
+| Số Q head của full attention | 16 |
+| Đầu KV | 2 |
+| Kích thước attention head | 256 |
+| Số position embedding native tối đa | 262,144 |
+| Từ vựng | 248,320 |
+| Độ sâu Vision tower | 27 |
+| Kích thước vision patch | 16 |
+| Kích thước temporal patch | 2 |
+| dtype native | BF16 |
+| Đầu dự đoán bổ sung | Một lớp dự đoán đa token |
 
-The layer schedule is approximately:
+Lịch các lớp có dạng gần đúng:
 
 ```text
 Linear/recurrent attention
 Linear/recurrent attention
 Linear/recurrent attention
 Full GQA attention
-(repeat)
+(lặp lại)
 ```
 
-The model combines:
+Mô hình kết hợp:
 
-- gated linear/recurrent sequence processing for most layers;
-- periodic full attention for global interaction;
-- sparse expert routing;
+- xử lý chuỗi tuyến tính/recurrent có cổng cho hầu hết các lớp;
+- full attention định kỳ cho tương tác toàn cục;
+- định tuyến sparse expert;
 - multimodal RoPE;
-- a native vision encoder;
-- multi-token prediction support.
+- vision encoder native;
+- Hỗ trợ multi-token prediction.
 
 ```mermaid
 flowchart LR
-    T[Text] --> Tok[248k-vocabulary tokenizer]
-    Img[Images or video] --> ViT[27-layer vision tower]
-    Tok --> Pack[Interleaved multimodal sequence]
+    T[Văn bản] --> Tok[248k-từ vựng tokenizer]
+    Img[Hình ảnh hoặc video] --> ViT[vision tower 27 lớp]
+    Tok --> Pack[Chuỗi multimodal xen kẽ]
     ViT --> Pack
     Pack --> L1[Linear attention]
     L1 --> L2[Linear attention]
     L2 --> L3[Linear attention]
     L3 --> FA[Full grouped-query attention]
     FA --> Router[MoE router]
-    Router --> E[8 of 256 experts plus shared expert path]
-    E --> Next[Repeat hybrid block pattern]
-    Next --> Think[Thinking or direct-response policy]
-    Think --> Out[Text or tool-call tokens]
+    Router --> E[8 trong số 256 chuyên gia cộng với đường dẫn expert được chia sẻ]
+    E --> Next[Lặp lại mô hình khối hybrid]
+    Next --> Think[Thinking hoặc chính sách phản hồi trực tiếp]
+    Think --> Out[Token cuộc gọi văn bản hoặc công cụ]
 ```
 
-### Why this matters
+### Tại sao điều này lại quan trọng
 
-Compared with a standard full-attention Transformer:
+So với attention Transformer đầy đủ tiêu chuẩn:
 
-- recurrent or linear layers reduce long-context cost;
-- periodic full attention restores global token interaction;
-- sparse experts increase parameter capacity without activating all weights;
-- low KV-head count reduces cache memory;
-- multimodal RoPE encodes temporal and spatial axes;
-- multi-token prediction can improve training efficiency and decoding support.
+- recurrent hoặc các lớp tuyến tính giảm chi phí long-context;
+- full attention định kỳ khôi phục tương tác token toàn cầu;
+- Các chuyên gia sparse tăng dung lượng tham số mà không cần kích hoạt tất cả các weight;
+- số lượng đầu KV thấp làm giảm cache;
+- multimodal RoPE mã hóa trục thời gian và không gian;
+- multi-token prediction có thể cải thiện hiệu quả huấn luyện và hỗ trợ decoding.
 
-### Qwen3.6 prompt behavior
+### Hành vi với prompt của Qwen3.6
 
-- Thinking is enabled by default.
-- Non-thinking mode is selected using serving or chat-template parameters.
-- Qwen3.6 no longer relies on Qwen3's `/think` and `/no_think` soft switch.
-- Historical reasoning traces can optionally be preserved for multi-turn agents.
-- Qwen publishes different recommended sampling settings for general reasoning, precise coding, and non-thinking responses.
-- Greedy decoding is generally discouraged for reasoning variants because it can produce repetition or degraded behavior.
+- Thinking được bật theo mặc định.
+- Chế độ Non-thinking được chọn bằng cách sử dụng các tham số serving hoặc chat template.
+- Qwen3.6 không còn dựa vào soft switch `/think` và `/no_think` của Qwen3 nữa.
+- Dấu vết reasoning lịch sử có thể được lưu giữ tùy ý cho các agent nhiều lượt.
+- Qwen xuất bản các cài đặt sampling được đề xuất khác nhau cho reasoning chung, coding chính xác và phản hồi non-thinking.
+- greedy decoding thường không được khuyến khích đối với các biến thể reasoning vì nó có thể tạo ra hành vi lặp lại hoặc xuống cấp.
 
-This makes Qwen unusually transparent about the connection between architecture, decoding, and observed behavior.
+Điều này làm cho Qwen minh bạch một cách bất thường về mối liên hệ giữa kiến trúc, decoding và hành vi quan sát được.
 
 ---
 
-## 9. Llama 4 Maverick and Scout
+## 9. Llama 4 Maverick và Scout
 
-Llama 4 is an open-weight, natively multimodal MoE family.
+Llama 4 là họ multimodal MoE có weight mở.
 
-| Variant  | Active parameters | Total parameters | Experts | Context |
+| Biến thể | Tham số hoạt động | Tổng tham số | chuyên gia | Context |
 | -------- | ----------------: | ---------------: | ------: | ------: |
-| Scout    |               17B |             109B |      16 |     10M |
-| Maverick |               17B |             400B |     128 |      1M |
+| Scout | 17B | 109B | 16 | 10M |
+| Maverick | 17B | 400B | 128 | 1M |
 
-### Major design features
+### Đặc điểm thiết kế chính
 
-- autoregressive generation;
-- MoE routing;
-- early fusion of visual and text representations;
-- MetaCLIP-derived vision processing;
-- large context;
-- tokenizer derived from the TikToken family;
-- iRoPE-related long-context design in Scout.
+- sinh tự hồi quy;
+- định tuyến MoE;
+- early fusion giữa hình ảnh và văn bản;
+- Xử lý vision dựa trên MetaCLIP;
+- context lớn;
+- tokenizer có nguồn gốc từ họ TikToken;
+- thiết kế long-context liên quan đến iRoPE trong Scout.
 
 ```mermaid
 flowchart LR
-    T[Text] --> Tok[TikToken-derived tokenizer]
-    I[Images] --> V[MetaCLIP-derived vision encoder]
+    T[Văn bản] --> Tok[TikToken có nguồn gốc từ tokenizer]
+    I[Hình ảnh] --> V[MetaCLIP có nguồn gốc từ vision encoder]
     Tok --> Fusion[Early fusion]
     V --> Fusion
-    Fusion --> B[Shared multimodal backbone]
+    Fusion --> B[Backbone multimodal được chia sẻ]
     B --> R[MoE router]
-    R --> X[Shared and routed experts]
-    X --> A[Attention and long-context processing]
-    A --> O[Text or code tokens]
+    R --> X[Các chuyên gia được chia sẻ và định tuyến]
+    X --> A[Xử lý Attention và long-context]
+    A --> O[Token văn bản hoặc code]
 ```
 
-### Important practical distinction
+### Sự khác biệt thực tế quan trọng
 
-Llama is a weight release rather than one fixed assistant product. Therefore, "Llama behavior" depends heavily on:
+Llama là một sản phẩm phát hành weight chứ không phải một sản phẩm trợ lý cố định. Vì vậy, "hành vi của Llama" phụ thuộc rất nhiều vào:
 
-- the exact checkpoint;
-- the chat template;
+- checkpoint chính xác;
+- chat template;
 - system prompt;
 - quantization;
 - inference engine;
 - tool wrapper;
 - safety model;
-- fine-tune or adapter;
+- fine-tune hoặc adapter;
 - retrieval system;
-- decoding parameters.
+- Tham số decoding.
 
-A hosted Llama service and a local Llama checkpoint can feel like different assistants even when they share the same base weights.
+Dịch vụ Llama được lưu trữ và Llama checkpoint cục bộ có thể giống như những trợ lý khác nhau ngay cả khi chúng có cùng weight cơ bản.
 
 ---
 
-# Part II — Why prompting feels different
+# Phần II-Tại sao cùng một prompt lại cho cảm giác khác biệt
 
-## 10. High-level behavioral comparison
+## 10. So sánh hành vi mức tổng quan
 
-These are documented tendencies and engineering implications, not universal personality labels.
+Đây là những xu hướng được ghi nhận và hàm ý kỹ thuật, không phải là nhãn tính cách phổ quát.
 
-| Dimension               | GPT-5.6                                                                  | Claude Sonnet 5                                                | Gemini 3.x                                                    | Qwen3.6                                                           | Llama 4                                                                                |
+| Khía cạnh | GPT-5.6 | Claude Sonnet 5 | Gemini 3.x | Qwen3.6 | Llama 4 |
 | ----------------------- | ------------------------------------------------------------------------ | -------------------------------------------------------------- | ------------------------------------------------------------- | ----------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| Default interaction     | Highly steerable, productized, often proactive in agent tasks            | Literal, scope-sensitive, adaptive depth                       | Direct and concise; optimized for structured multimodal tasks | Reasoning-first by default                                        | Depends strongly on deployment                                                         |
-| Reasoning control       | Explicit reasoning levels                                                | Adaptive thinking plus effort                                  | Thinking levels / Deep Think                                  | Enable or disable thinking in serving configuration               | Usually implemented by prompt or external runtime                                      |
-| Verbosity               | Explicit verbosity control and prompt instructions                       | Calibrates length to complexity; prompt for fixed style        | Concise by default; request detail explicitly                 | Can become long because reasoning is enabled                      | Highly sampling and fine-tune dependent                                                |
-| Tool behavior           | Strong built-in tool orchestration                                       | More tool use at higher effort; self-verification tendency     | Search/code/function tools are tightly integrated             | Strong agent/coding orientation; framework-dependent              | External runtime usually controls tools                                                |
-| Instruction literalness | Strong instruction following, but may proactively complete broader tasks | Particularly literal; scope must be explicit                   | Prefers direct, unambiguous instructions                      | Usually responds best to explicit mode and sampling configuration | Varies by fine-tune                                                                    |
-| Long context prompting  | Can use file search, caching, and long native context                    | Strong document workflows; quoting first can improve grounding | Put context first and task last                               | Native 262K open configuration; local memory cost matters         | Scout advertises extreme context; actual retrieval quality depends on serving and task |
-| Safety behavior         | Safe-completion and layered monitors                                     | Constitution-shaped and conversation-level risk reasoning      | Policy-conditioned with product filters                       | Depends on official checkpoint and deployment guardrails          | Safety is often a separate Llama Guard/runtime layer                                   |
-| Reproducibility         | Stable API controls, but proprietary updates                             | Stable effort interface; no custom sampling on Sonnet 5        | Defaults recommended; altering sampling may hurt reasoning    | High control over weights and decoding                            | Highest control, but also highest behavioral variance                                  |
+| Tương tác mặc định | Có tính định hướng cao, được sản phẩm hóa, thường chủ động trong các tác vụ agent | Sát nghĩa, nhạy cảm với phạm vi, độ sâu thích ứng | Trực tiếp và ngắn gọn; được tối ưu hóa cho các tác vụ multimodal có cấu trúc | Reasoning-đầu tiên theo mặc định | Phụ thuộc nhiều vào deployment |
+| Điều khiển Reasoning | Reasoning level rõ ràng | Adaptive thinking cộng với effort | Thinking level/Deep Think | Bật hoặc tắt thinking trong cấu hình serving | Thường được triển khai bởi prompt hoặc runtime bên ngoài |
+| Độ dài | Kiểm soát điều khiển verbosity tường minh và hướng dẫn prompt | Điều chỉnh độ dài theo độ phức tạp; prompt cho kiểu cố định | Ngắn gọn theo mặc định; yêu cầu chi tiết một cách rõ ràng | Có thể trở nên dài vì reasoning được bật | Phụ thuộc nhiều vào sampling và fine-tune |
+| Hành vi công cụ | Điều phối công cụ tích hợp mạnh mẽ | Sử dụng nhiều công cụ hơn ở effort cao hơn; xu hướng tự xác minh | Các công cụ tìm kiếm/mã/function được tích hợp chặt chẽ | Định hướng coding/agent mạnh mẽ; phụ thuộc vào framework | runtime bên ngoài thường điều khiển các công cụ |
+| Sát nghĩa của hướng dẫn | Tuân theo hướng dẫn mạnh mẽ nhưng có thể chủ động hoàn thành các tác vụ rộng hơn | Đặc biệt sát nghĩa; phạm vi phải rõ ràng | Thích hướng dẫn trực tiếp, rõ ràng | Thường đáp ứng tốt nhất với chế độ rõ ràng và cấu hình sampling | Thay đổi theo fine-tune |
+| Prompt context dài | Có thể sử dụng tìm kiếm file, cache và native context dài | Quy trình làm việc tài liệu mạnh mẽ; trích dẫn đầu tiên có thể cải thiện grounding | Đặt context lên hàng đầu và tác vụ cuối cùng | Cấu hình mở Native 262K; vấn đề chi phí bộ nhớ cục bộ | Scout quảng cáo context cực lớn; chất lượng retrieval thực tế phụ thuộc vào serving và tác vụ |
+| Hành vi an toàn | Safe completion và các bộ giám sát phân lớp | Rủi ro ở cấp độ hội thoại và reasoning rủi ro ở cấp hội thoại theo hiến pháp | Chính sách có điều kiện với các bộ lọc sản phẩm | Phụ thuộc vào guardrail checkpoint và deployment chính thức | An toàn thường là lớp Llama Guard/runtime riêng biệt |
+| Độ tái lập | Điều khiển API ổn định nhưng cập nhật độc quyền | Giao diện effort ổn định; không có sampling tùy chỉnh trên Sonnet 5 | Mặc định được đề xuất; thay đổi sampling có thể làm giảm chất lượng reasoning | Kiểm soát weight cao và decoding | Kiểm soát cao nhất nhưng cũng có sự khác biệt về hành vi cao nhất |
 
 ---
 
-## 11. What a user notices with the same prompt
+## 11. Người dùng nhận thấy điều gì với cùng một prompt
 
-### Example prompt
-
-```text
-Review this repository.
-
-Find all defects that could cause incorrect behavior, test failures,
-security problems, misleading output, or maintainability risks.
-
-Do not modify files yet.
-
-For each issue provide:
-- file and line
-- severity
-- confidence
-- explanation
-- minimal fix
-
-Use tools when useful. Verify uncertain claims.
-```
-
-### GPT-5.6 tendency
-
-A high-reasoning GPT configuration is likely to:
-
-1. create a short plan;
-2. inspect repository structure;
-3. search multiple files;
-4. run tests or static checks when tools are available;
-5. report findings in the requested structure;
-6. sometimes continue proactively until the repository has been broadly covered.
-
-The prompt should explicitly state whether the model may run commands, install dependencies, or stop after a fixed number of findings. GPT's agentic training can otherwise encourage broader autonomous completion.
-
-### Claude Sonnet 5 tendency
-
-Claude is likely to interpret each filter literally.
-
-If the prompt said only "report serious issues," Claude may investigate lower-severity problems but omit them from the final response. The improved version above explicitly defines what counts and asks for all findings with severity and confidence.
-
-At low effort, Claude may scope itself narrowly. At high or xhigh effort, it is more likely to use tools, verify findings, and inspect more of the repository.
-
-### Gemini 3 tendency
-
-Gemini generally benefits from a direct prompt with the repository context first and the final task last.
-
-It often produces a compact, structured answer unless the user requests extensive explanation. A complex old-style prompt containing repeated motivational language, many redundant planning rules, and multiple conflicting personas can cause over-analysis.
-
-For long codebases, the preferred arrangement is:
+### Ví dụ prompt
 
 ```text
-[repository or retrieved context]
+Xem lại repository này.
 
-Based on the repository above, perform the following review:
-[precise requirements]
+Tìm tất cả các lỗi có thể gây ra hành vi không chính xác, lỗi kiểm thử,
+vấn đề bảo mật, đầu ra sai lệch hoặc rủi ro về khả năng bảo trì.
+
+Chưa sửa đổi file.
+
+Đối với mỗi vấn đề cung cấp:
+- file và dòng
+- mức độ nghiêm trọng
+- độ tin cậy
+- lời giải thích
+- bản sửa tối thiểu
+
+Sử dụng các công cụ khi hữu ích. Xác minh các tuyên bố không chắc chắn.
 ```
 
-### Qwen3.6 tendency
+### Xu hướng GPT-5.6
 
-Qwen3.6 will normally reason before answering unless thinking is disabled.
+Cấu hình GPT reasoning cao có khả năng:
 
-A local or API deployment may expose a reasoning block, parse it separately, or hide it. Repository-level work benefits from preserving reasoning across turns, but this increases context usage and can retain earlier mistakes.
+1. tạo một kế hoạch ngắn;
+2. kiểm tra cấu trúc repository;
+3. tìm kiếm nhiều file;
+4. chạy kiểm thử hoặc kiểm tra tĩnh khi có sẵn công cụ;
+5. báo cáo kết quả trong cấu trúc được yêu cầu;
+6. đôi khi tiếp tục chủ động cho đến khi kho được bao phủ rộng rãi.
 
-Sampling configuration matters more visibly than with tightly managed closed APIs. Incorrect sampling can produce repetition, malformed tool calls, or unnecessary reasoning.
+prompt phải nêu rõ liệu mô hình có thể chạy lệnh, cài đặt các dependency hay dừng sau một số lần phát hiện cố định hay không. Mặt khác, huấn luyện agent của GPT có thể khuyến khích việc hoàn thành tự chủ rộng rãi hơn.
 
-### Llama 4 tendency
+### Xu hướng Claude Sonnet 5
 
-No single answer can characterize Llama 4 without specifying the runtime.
+Claude có khả năng diễn giải từng bộ lọc sát nghĩa.
 
-A carefully deployed Maverick checkpoint with:
+Nếu prompt chỉ nói "báo cáo các vấn đề nghiêm trọng", Claude có thể điều tra các vấn đề ở mức độ nghiêm trọng thấp hơn nhưng loại bỏ chúng khỏi phản hồi cuối cùng. Phiên bản cải tiến ở trên xác định rõ ràng những gì được tính và yêu cầu mọi phát hiện đều nghiêm túc và đáng tin cậy.
 
-- the correct chat template;
-- deterministic structured-output constraints;
-- an agent loop;
+Ở mức effort thấp, Claude có thể có phạm vi hẹp. Ở mức cao hoặc xhigh effort, nó có nhiều khả năng sử dụng các công cụ, xác minh các phát hiện và kiểm tra repository nhiều hơn.
+
+### Xu hướng Gemini 3
+
+Gemini thường được hưởng lợi từ prompt trực tiếp với repository context đầu tiên và tác vụ cuối cùng là cuối cùng.
+
+Nó thường đưa ra câu trả lời ngắn gọn, có cấu trúc trừ khi người dùng yêu cầu giải thích chi tiết. Một prompt kiểu cũ phức tạp chứa ngôn ngữ động lực lặp đi lặp lại, nhiều quy tắc lập kế hoạch dư thừa và nhiều tính cách xung đột có thể gây ra tình trạng phân tích quá mức.
+
+Đối với các codebase dài, cách sắp xếp ưu tiên là:
+
+```text
+[repository hoặc context được truy xuất]
+
+Dựa trên repository ở trên, hãy thực hiện đánh giá sau:
+[yêu cầu chính xác]
+```
+
+### Xu hướng Qwen3.6
+
+Qwen3.6 thường sẽ suy luận trước khi trả lời trừ khi thinking bị tắt.
+
+Một cục bộ hoặc API deployment có thể hiển thị khối reasoning, phân tích cú pháp riêng biệt hoặc ẩn nó. Công việc ở cấp repository được hưởng lợi từ việc bảo toàn reasoning qua các lượt, nhưng điều này làm tăng mức sử dụng context và có thể giữ lại các lỗi trước đó.
+
+Cấu hình Sampling quan trọng hơn rõ ràng so với các API đóng được quản lý chặt chẽ. sampling không chính xác có thể tạo ra sự lặp lại, lệnh gọi công cụ không đúng định dạng hoặc reasoning không cần thiết.
+
+### Xu hướng Llama 4
+
+Không có câu trả lời duy nhất nào có thể mô tả Llama 4 mà không chỉ định runtime.
+
+Maverick checkpoint được triển khai cẩn thận với:
+
+- chat template đúng;
+- các ràng buộc structured output xác định;
+- vòng lặp agent;
 - retrieval;
 - Llama Guard;
-- tuned sampling;
+- điều chỉnh sampling;
 
-can behave like a polished coding assistant.
+có thể hoạt động giống như một trợ lý coding tinh tế.
 
-The same weights with an incorrect template or aggressive quantization can show weaker instruction following, malformed tool calls, or inconsistent response style.
+Các weight tương tự với chat template không chính xác hoặc quantization quá mạnh có thể hiển thị hướng dẫn sau yếu hơn, lệnh gọi công cụ không đúng định dạng hoặc kiểu phản hồi không nhất quán.
 
 ---
 
-## 12. Prompt adaptation matrix
+## 12. Ma trận thích ứng Prompt
 
-| Goal                           | GPT                                                       | Claude                                                   | Gemini                                                   | Qwen                                                | Llama                                                            |
+| Mục tiêu | GPT | Claude | Gemini | Qwen | Llama |
 | ------------------------------ | --------------------------------------------------------- | -------------------------------------------------------- | -------------------------------------------------------- | --------------------------------------------------- | ---------------------------------------------------------------- |
-| More reasoning                 | Raise reasoning effort                                    | Raise effort to high/xhigh/max                           | Raise thinking level or use Deep Think                   | Enable thinking; use recommended reasoning sampling | Add an external reasoning loop or use a reasoning fine-tune      |
-| Less latency                   | Lower reasoning and verbosity                             | Lower effort or disable thinking                         | Lower thinking level; use Flash                          | Disable thinking; use non-thinking sampling         | Use smaller/quantized weights and shorter generation             |
-| More exhaustive review         | Ask it not to stop early and define coverage              | Explicitly request every issue, including low confidence | Define exhaustive categories and request detailed output | Enable thinking and define stopping criteria        | Use multi-pass agent scaffolding                                 |
-| Better long-document grounding | Use file search/citations and explicit source constraints | Ask for supporting quotes before synthesis               | Put context first, question last; use grounding          | Chunk or use long context with evidence extraction  | External RAG is often safer than relying only on nominal context |
-| Stable JSON                    | Use structured outputs/schema                             | Give schema and examples                                 | Use structured output API                                | Constrain grammar/schema in serving engine          | Use grammar-constrained decoding                                 |
-| Creative prose                 | Raise verbosity and define voice                          | Give positive style examples                             | Explicitly request conversational/detail level           | Use non-thinking or controlled sampling for style   | Fine-tune/system-prompt and tune sampling                        |
+| Thêm reasoning | Tăng reasoning effort | Nâng effort lên high/ xhigh/max | Tăng cấp độ thinking hoặc sử dụng Deep Think | Kích hoạt thinking; sử dụng reasoning sampling được đề xuất | Thêm vòng lặp reasoning bên ngoài hoặc sử dụng reasoning fine-tune |
+| Độ trễ ít hơn | Giảm reasoning và verbosity | Hạ effort hoặc tắt thinking | Mức thinking thấp hơn; sử dụng Flash | Vô hiệu hóa thinking; sử dụng non-thinking sampling | Sử dụng weight nhỏ hơn/đã quantize và generation ngắn hơn |
+| Đánh giá toàn diện hơn | Yêu cầu nó không dừng lại sớm và xác định mức độ bao phủ | Yêu cầu rõ ràng mọi vấn đề, kể cả mức độ tin cậy thấp | Xác định danh mục đầy đủ và yêu cầu đầu ra chi tiết | Kích hoạt thinking và xác định tiêu chí dừng | Sử dụng scaffolding agent nhiều lượt |
+| Tài liệu dài tốt hơn grounding | Sử dụng tìm kiếm/trích dẫn file và các ràng buộc nguồn rõ ràng | Yêu cầu trích dẫn hỗ trợ trước khi tổng hợp | Đặt context trước, câu hỏi cuối cùng; sử dụng grounding | Cắt nhỏ hoặc sử dụng context dài có trích xuất bằng chứng | RAG bên ngoài thường an toàn hơn việc chỉ dựa vào context danh nghĩa |
+| JSON ổn định | Sử dụng structured output/schema | Đưa ra schema và ví dụ | Sử dụng structured output API | Ràng buộc grammar/schema trong công cụ serving | Sử dụng decoding bị ràng buộc về grammar |
+| Văn xuôi sáng tạo | Nâng cao độ chi tiết và xác định giọng văn | Đưa ra ví dụ về phong cách tích cực | Yêu cầu rõ ràng mức độ đàm thoại/chi tiết | Sử dụng non-thinking hoặc sampling được điều khiển để điều khiển phong cách | Fine-tune /system- prompt và điều chỉnh sampling |
 
 ---
 
-## 13. Why behavior differs even when the backbone is similar
+## 13. Tại sao hành vi lại khác ngay cả khi backbone giống nhau
 
-### 13.1 Different preference targets
+### 13.1 Các mục tiêu ưu tiên khác nhau
 
-Post-training optimizes different ideas of a "good answer":
+Post-training tối ưu hóa các ý tưởng khác nhau về một "câu trả lời hay":
 
-- accurate and action-oriented;
-- concise and efficient;
-- cautious and constitutionally compliant;
-- exhaustive and research-oriented;
-- tool-using and autonomous;
-- conversational and emotionally calibrated.
+- chính xác và có định hướng hành động;
+- ngắn gọn và hiệu quả;
+- thận trọng và tuân thủ Constitutional AI;
+- toàn diện và có định hướng nghiên cứu;
+- sử dụng công cụ và tự chủ;
+- đàm thoại và được hiệu chỉnh về cảm xúc.
 
-These objectives can conflict.
+Những mục tiêu này có thể xung đột.
 
-For example:
+Ví dụ:
 
 ```text
-maximum helpfulness
-vs.
-minimum unsupported claims
-vs.
-minimum latency
-vs.
-maximum task completion
-vs.
-minimum safety risk
+mức độ hữu ích tối đa
+so với
+số tuyên bố không có căn cứ ở mức tối thiểu
+so với
+độ trễ tối thiểu
+so với
+mức độ hoàn thành tác vụ tối đa
+so với
+rủi ro an toàn tối thiểu
 ```
 
-A model trained to maximize task completion may proactively take more steps. A model trained for literal compliance may avoid doing anything not explicitly requested.
+Một mô hình được huấn luyện để tối đa hóa khả năng hoàn thành tác vụ có thể chủ động thực hiện nhiều bước hơn. Một mô hình được huấn luyện để tuân thủ sát nghĩa có thể tránh làm bất cứ điều gì không được yêu cầu rõ ràng.
 
-### 13.2 Different reasoning policies
+### 13.2 Các chính sách reasoning khác nhau
 
-The base model does not automatically decide reasoning cost in the same way across products.
+Mô hình cơ sở không tự động quyết định chi phí reasoning theo cách giống nhau giữa các sản phẩm.
 
-- GPT exposes reasoning levels and model routing.
-- Claude uses adaptive thinking and effort.
-- Gemini uses thinking levels and specialized Deep Think.
-- Qwen can emit a reasoning trace by default.
-- Llama relies on the chosen checkpoint and runtime.
+- GPT hiển thị các cấp độ reasoning và định tuyến mô hình.
+- Claude sử dụng adaptive thinking và effort.
+- Gemini sử dụng thinking level và Deep Think chuyên dụng.
+- Qwen có thể phát ra reasoning trace theo mặc định.
+- Llama dựa trên checkpoint và runtime đã chọn.
 
-### 13.3 Different tool policies
+### 13.3 Chính sách công cụ khác nhau
 
-The model may have learned:
+Mô hình có thể đã học được:
 
-- when to search;
-- when to calculate;
-- when to call code execution;
-- how many tools to call;
-- whether to verify tool output;
-- whether to continue after partial success;
-- how to recover from tool errors.
+- khi nào cần tìm kiếm;
+- khi nào cần tính toán;
+- khi nào nên gọi code execution;
+- có bao nhiêu công cụ để gọi;
+- có xác minh đầu ra của công cụ hay không;
+- có nên tiếp tục sau khi thành công một phần hay không;
+- cách khắc phục lỗi công cụ.
 
-These are post-training properties as much as architecture properties.
+Đây là các thuộc tính post-training cũng như các thuộc tính kiến trúc.
 
-### 13.4 Different safety objectives
+### 13.4 Mục tiêu an toàn khác nhau
 
-Safety training changes more than refusals. It can affect:
+Huấn luyện an toàn thay đổi nhiều hơn là từ chối. Nó có thể ảnh hưởng đến:
 
-- uncertainty language;
-- amount of explanation;
-- whether benign adjacent information is included;
-- willingness to infer user intent;
-- conversation-level risk tracking;
-- requirements for confirmation before external actions.
+- ngôn ngữ không chắc chắn;
+- số lượng giải thích;
+- liệu có bao gồm thông tin liền kề lành tính hay không;
+- sẵn sàng suy luận ý định của người dùng;
+- theo dõi rủi ro ở cấp độ cuộc trò chuyện;
+- yêu cầu xác nhận trước khi hành động bên ngoài.
 
-### 13.5 Different product prompts
+### 13.5 Prompt sản phẩm khác nhau
 
-A commercial assistant typically receives hidden system and developer instructions defining:
+Trợ lý thương mại thường nhận được các system prompt và developer instruction ẩn xác định:
 
-- tone;
-- tool use;
-- date awareness;
-- citation rules;
-- safety;
-- memory;
-- formatting;
+- giọng điệu;
+- sử dụng công cụ;
+- nhận biết ngày tháng;
+- quy tắc trích dẫn;
+- sự an toàn;
+- bộ nhớ;
+- định dạng;
 - browsing;
-- action confirmations.
+- xác nhận trước hành động.
 
-Therefore, comparing raw models and chat products is not equivalent.
+Vì vậy, việc so sánh mô hình thô và sản phẩm chat là không tương đương.
 
 ---
 
-# Part III — Pretraining comparison
+# Phần III-So sánh Pretraining
 
-## 14. What pretraining controls
+## 14. pretraining điều khiển những gì
 
-Pretraining primarily determines:
+Pretraining chủ yếu xác định:
 
-- broad knowledge;
-- linguistic fluency;
-- multilingual coverage;
-- code familiarity;
-- mathematical and scientific pattern recognition;
-- multimodal representations;
+- kiến thức rộng;
+- sự lưu loát về ngôn ngữ;
+- độ bao phủ đa ngôn ngữ;
+- mức độ quen thuộc với code;
+- nhận diện pattern toán học và khoa học;
+- biểu diễn multimodal;
 - in-context learning;
-- long-context behavior;
-- latent capabilities that post-training can later elicit.
+- Hành vi long-context;
+- những khả năng tiềm ẩn mà post-training sau này có thể khơi gợi ra.
 
-A simplified pretraining pipeline is:
+Một pipeline pretraining đơn giản hóa là:
 
 ```mermaid
 flowchart LR
-    A[Raw web, books, code, media, licensed and synthetic data]
-    --> B[Filtering, safety filtering, deduplication]
-    B --> C[Quality scoring and domain classification]
-    C --> D[Mixture and curriculum construction]
-    D --> E[Tokenization and multimodal packing]
-    E --> F[Large-scale next-token or multimodal prediction]
-    F --> G[Base model]
+    A[Web thô, sách, code, media, dữ liệu được cấp phép và dữ liệu synthetic]
+    --> B[Lọc, lọc an toàn, khử trùng lặp]
+    B --> C[Chấm điểm chất lượng và phân loại domain]
+    C --> D[Xây dựng hỗn hợp dữ liệu và curriculum]
+    D --> E[Tokenization và đóng gói multimodal]
+    E --> F[Dự đoán next-token hoặc multimodal quy mô lớn]
+    F --> G[Mô hình cơ sở]
 ```
 
-The major competitive advantage is often hidden in stages B-D rather than in the loss equation itself.
+Lợi thế cạnh tranh chính thường ẩn giấu trong giai đoạn B-D hơn là trong chính hàm loss.
 
 ---
 
-## 15. Pretraining comparison table
+## 15. Bảng so sánh Pretraining
 
-| Family     | Publicly stated data categories                                                                                  |                                                Public scale | Multimodal approach                                                     | Distillation/synthetic data                                                                              | Main uncertainty                                          |
+| Họ | Các danh mục dữ liệu được công bố công khai | Quy mô công khai | Cách tiếp cận Multimodal | Distillation/dữ liệu synthetic | Bất định chính |
 | ---------- | ---------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------: | ----------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
-| GPT-5.6    | Public internet, third-party partnerships, user/human-trainer/researcher-provided or generated information       |                                               Not disclosed | Supports vision and files; exact pretraining mixture undisclosed        | Generated data is included in stated categories                                                          | Exact token count, modality mix, architecture, curriculum |
-| Claude 5   | Public internet, public and private datasets, synthetic data from other models                                   |                                               Not disclosed | Text and image input; exact multimodal curriculum undisclosed           | Explicitly includes synthetic model-generated data                                                       | Token count, data proportions, architecture               |
-| Gemini 3.x | Current model cards inherit data details from underlying Gemini 3 foundations; family is natively multimodal     |                            Not disclosed for current models | Text, image, video, audio, PDFs, and code are first-class inputs        | Google reports human and critic feedback in post-training; exact pretraining synthetic share undisclosed | Exact data composition and architecture                   |
-| Qwen3.6    | Built on Qwen3.5's native multimodal foundation; earlier Qwen3 disclosed large multilingual corpora              | Qwen3 disclosed 36T tokens; Qwen3.6 exact count undisclosed | Early-fusion multimodal training and native vision-language checkpoints | Strong-to-weak distillation and large-scale synthetic/agent training are important family techniques     | Exact Qwen3.6 token count and mixture                     |
-| Llama 4    | Public, licensed, and Meta product/service data, including publicly shared content and interactions with Meta AI |                                   Scout ~40T; Maverick ~22T | Multimodal pretraining with early fusion                                | Behemoth teacher generated distillation targets for student models                                       | Exact mixture proportions and filtering details           |
+| GPT-5.6 | Internet công cộng, quan hệ đối tác của bên thứ ba, thông tin do người dùng/người huấn luyện/nhà nghiên cứu cung cấp hoặc tạo ra | Không được tiết lộ | Hỗ trợ vision và file; Hỗn hợp pretraining chính xác chưa được tiết lộ | Dữ liệu được tạo được bao gồm trong các danh mục đã nêu | Số lượng token chính xác, hỗn hợp modality, kiến trúc, curriculum |
+| Claude 5 | Internet công cộng, bộ dữ liệu công cộng và riêng tư, dữ liệu tổng hợp từ các mô hình khác | Không được tiết lộ | Nhập văn bản và hình ảnh; curriculum multimodal chính xác chưa được tiết lộ | Rõ ràng bao gồm dữ liệu tổng hợp do mô hình tạo | Số lượng Token, tỷ lệ dữ liệu, kiến trúc |
+| Gemini 3.x | Thẻ mô hình hiện tại kế thừa chi tiết dữ liệu từ nền tảng Gemini 3 cơ bản; họ thực chất là multimodal | Không được tiết lộ cho các mô hình hiện tại | Văn bản, hình ảnh, video, âm thanh, PDF và mã là những đầu vào hạng nhất | Google báo cáo phản hồi của con người và critic trong post-training; tỷ lệ dữ liệu synthetic trong pretraining chính xác chưa được tiết lộ | Thành phần và kiến trúc dữ liệu chính xác |
+| Qwen3.6 | Được xây dựng trên nền tảng native multimodal của Qwen3.5; Qwen3 trước đó đã tiết lộ kho dữ liệu đa ngôn ngữ lớn | Qwen3 tiết lộ 36T token; Số lượng chính xác của Qwen3.6 chưa được tiết lộ | Huấn luyện multimodal bằng early fusion và checkpoint vision-language native | Distillation từ mạnh đến yếu và huấn luyện tổng hợp/agent quy mô lớn là những kỹ thuật họ quan trọng | Số lượng và hỗn hợp Qwen3.6 token chính xác |
+| Llama 4 | Dữ liệu sản phẩm/dịch vụ công khai, được cấp phép và Meta, bao gồm nội dung và tương tác được chia sẻ công khai với Meta AI | Scout ~40T; Maverick ~22T | Multimodal pretraining với fusion sớm | Teacher Behemoth tạo ra mục tiêu chưng cất cho student model | Tỷ lệ hỗn hợp chính xác và chi tiết lọc |
 
 ---
 
 ## 16. GPT pretraining
 
-OpenAI states that GPT-5.6 uses diverse datasets including:
+OpenAI tuyên bố rằng GPT-5.6 sử dụng các bộ dữ liệu đa dạng bao gồm:
 
-- publicly available internet information;
-- information accessed through third-party partnerships;
-- information provided or generated by users, human trainers, and researchers.
+- thông tin internet có sẵn công khai;
+- thông tin được truy cập thông qua quan hệ đối tác của bên thứ ba;
+- thông tin được cung cấp hoặc tạo ra bởi người dùng, người huấn luyện và nhà nghiên cứu.
 
-OpenAI also reports:
+OpenAI cũng báo cáo:
 
-- personal-information reduction;
-- quality filtering;
-- sensitive-content filtering;
-- safety classifiers in the data pipeline.
+- giảm thông tin cá nhân;
+- lọc chất lượng;
+- lọc nội dung nhạy cảm;
+- phân loại an toàn trong pipeline dữ liệu.
 
-What remains undisclosed:
+Những gì vẫn chưa được tiết lộ:
 
-- total tokens;
-- parameter count;
-- modality proportions;
-- code percentage;
-- synthetic-data percentage;
-- deduplication thresholds;
-- curriculum phases;
-- exact tokenizer;
-- training compute.
+- tổng số token;
+- số lượng tham số;
+- tỷ lệ phương thức;
+- tỷ lệ mã;
+- tỷ lệ phần trăm dữ liệu tổng hợp;
+- ngưỡng khử trùng lặp;
+- các giai đoạn curriculum;
+- chính xác tokenizer;
+- tính toán huấn luyện.
 
-### Likely practical consequence
+### Hậu quả thực tế có thể xảy ra
 
-OpenAI's competitive differentiation cannot be reconstructed from the public architecture because much of it lies in data selection, synthetic-data generation, reinforcement-learning environments, and production feedback loops.
+Sự khác biệt mang tính cạnh tranh của OpenAI không thể được xây dựng lại từ kiến trúc công cộng vì phần lớn nó nằm ở việc lựa chọn dữ liệu, tạo dữ liệu tổng hợp, môi trường reinforcement learning và các vòng phản hồi sản xuất.
 
 ---
 
 ## 17. Claude pretraining
 
-Anthropic describes Claude Fable 5 and Mythos 5 as pretrained on a proprietary mixture of:
+Anthropic mô tả Claude Fable 5 và Mythos 5 được huấn luyện trước trên hỗn hợp độc quyền của:
 
-- public internet information;
-- public datasets;
-- private datasets;
-- synthetic data generated by other models.
+- thông tin internet công cộng;
+- bộ dữ liệu công cộng;
+- bộ dữ liệu riêng tư;
+- dữ liệu tổng hợp được tạo ra bởi các mô hình khác.
 
-Anthropic explicitly mentions:
+Anthropic đề cập rõ ràng:
 
-- deduplication;
-- classification;
-- data cleaning and filtering.
+- khử trùng lặp;
+- phân loại;
+- làm sạch và lọc dữ liệu.
 
-The company does not publish token count or architecture.
+Công ty không công bố số lượng hoặc kiến trúc token.
 
-### Distinctive emphasis
+### Điểm nhấn đặc biệt
 
-Claude's public differentiation begins after base pretraining, but the data policy also matters. Anthropic states that current training uses a carefully filtered proprietary mix and then substantial post-training to align behavior with Claude's constitution.
+Sự phân biệt công khai của Claude bắt đầu sau cơ sở pretraining, nhưng chính sách dữ liệu cũng có vấn đề. Anthropic tuyên bố rằng chương trình huấn luyện hiện tại sử dụng kết hợp độc quyền được lọc cẩn thận và sau đó là post-training đáng kể để điều chỉnh hành vi phù hợp với constitution của Claude.
 
 ---
 
 ## 18. Gemini pretraining
 
-Gemini's major pretraining difference is its **native multimodality**.
+Sự khác biệt chính của Gemini pretraining là ** tính đa phương thức của native**.
 
-Rather than treating image or audio understanding only as a late adapter, the family is trained to process combinations of:
+Thay vì chỉ coi khả năng hiểu hình ảnh hoặc âm thanh là adapter muộn, dòng adapter được huấn luyện để xử lý các kết hợp của:
 
-- text;
-- code;
-- images;
-- audio;
+- chữ;
+- mã số;
+- hình ảnh;
+- âm thanh;
 - video;
-- documents.
+- tài liệu.
 
-Google's model cards disclose hardware and software choices more readily than exact data composition:
+Thẻ mô hình của Google tiết lộ các lựa chọn phần cứng và phần mềm dễ dàng hơn thành phần dữ liệu chính xác:
 
-- TPU training;
+- huấn luyện TPU;
 - JAX;
 - ML Pathways;
-- multimodal processing.
+- Xử lý multimodal.
 
-### Practical consequence
+### Hậu quả thực tế
 
-Gemini tends to be designed around multimodal context as one combined problem. This can affect:
+Gemini có xu hướng được thiết kế xung quanh multimodal context như một bài toán kết hợp. Điều này có thể ảnh hưởng đến:
 
-- cross-modal referencing;
-- long-video analysis;
-- document-image understanding;
-- audio plus visual reasoning;
-- tool use grounded in multimodal evidence.
+- tham chiếu đa phương thức;
+- phân tích video dài;
+- hiểu biết về hình ảnh tài liệu;
+- âm thanh và hình ảnh reasoning;
+- việc sử dụng công cụ dựa trên bằng chứng multimodal.
 
 ---
 
 ## 19. Qwen pretraining
 
-Qwen has disclosed substantially more than most closed vendors.
+Qwen đã tiết lộ nhiều hơn đáng kể so với hầu hết các nhà cung cấp mô hình đóng.
 
-Qwen3 reported:
+Qwen3 đã báo cáo:
 
-- 36 trillion pretraining tokens;
-- 119 languages and dialects;
-- a mixture of web, code, mathematical, scientific, multilingual, and synthetic data;
-- multi-stage pretraining and context extension;
-- dense and MoE model families.
+- 36 nghìn tỷ token pretraining;
+- 119 ngôn ngữ và thổ ngữ;
+- sự kết hợp của dữ liệu web, code, toán học, khoa học, đa ngôn ngữ và tổng hợp;
+- phần mở rộng pretraining và context nhiều giai đoạn;
+- Họ model dense và MoE.
 
-Qwen3.5 later emphasized:
+Qwen3.5 sau đó đã nhấn mạnh:
 
-- early-fusion training on trillions of multimodal tokens;
-- 201 languages and dialects;
-- hybrid architecture;
-- near-text-only efficiency for multimodal training;
-- large-scale agent environments.
+- huấn luyện early-fusion về hàng nghìn tỷ token multimodal;
+- 201 ngôn ngữ và phương ngữ;
+- Kiến trúc hybrid;
+- hiệu quả gần như chỉ có văn bản cho việc huấn luyện multimodal;
+- môi trường agent quy mô lớn.
 
-Qwen3.6 inherits the native multimodal foundation but does not publicly provide an exact new token total.
+Qwen3.6 kế thừa nền tảng native multimodal nhưng không công khai tổng số token mới chính xác.
 
-### Practical consequence
+### Hậu quả thực tế
 
-Qwen's strengths in multilingual work, coding, native vision, and deployability are strongly connected to data mixture and training infrastructure, not just its expert count.
+Điểm mạnh của Qwen trong công việc đa ngôn ngữ, coding, native vision và khả năng triển khai được kết nối chặt chẽ với cơ sở hạ tầng huấn luyện và hỗn hợp dữ liệu, không chỉ số lượng expert của nó.
 
 ---
 
 ## 20. Llama 4 pretraining
 
-Meta provides unusually concrete scale data:
+Meta cung cấp dữ liệu quy mô cụ thể một cách bất thường:
 
-- Scout: approximately 40T multimodal tokens;
-- Maverick: approximately 22T multimodal tokens.
+- Scout: khoảng 40T token multimodal;
+- Maverick: khoảng 22T token multimodal.
 
-The data mixture includes:
+Hỗn hợp dữ liệu bao gồm:
 
-- publicly available data;
-- licensed data;
-- information from Meta products and services;
-- publicly shared Facebook and Instagram posts;
-- interactions with Meta AI.
+- dữ liệu có sẵn công khai;
+- dữ liệu được cấp phép;
+- thông tin từ các sản phẩm và dịch vụ của Meta;
+- các bài đăng được chia sẻ công khai trên Facebook và Instagram;
+- tương tác với Meta AI.
 
-The knowledge cutoff is reported as August 2024.
+Knowledge cutoff được báo cáo là vào tháng 8 năm 2024.
 
-### Distillation
+### Chưng cất
 
-Meta used the much larger Behemoth teacher to create distillation targets for student training.
+Meta sử dụng teacher Behemoth lớn hơn nhiều để tạo ra các mục tiêu chưng cất cho việc huấn luyện student.
 
-This illustrates an increasingly common pattern:
+Điều này minh họa một mô hình ngày càng phổ biến:
 
 ```mermaid
 flowchart LR
-    T[Large teacher model] --> L[Logits, rationales, or target outputs]
-    D[Additional training data] --> L
-    L --> S[Smaller student model]
-    S --> E[Evaluate and filter]
+    T[Mô hình teacher lớn] --> L[Logit, rationale hoặc đầu ra mục tiêu]
+    D[Dữ liệu huấn luyện bổ sung] --> L
+    L --> S[Student model nhỏ hơn]
+    S --> E[Đánh giá và lọc]
     E --> S
 ```
 
-The student's architecture may be smaller or sparser, while much of its quality comes from teacher-generated supervision.
+Kiến trúc của student có thể nhỏ hơn hoặc sparse hơn, trong khi phần lớn chất lượng của nó đến từ supervision do teacher tạo ra.
 
 ---
 
-# Part IV — Post-training comparison
+# Phần IV-So sánh Post-training
 
-## 21. What post-training controls
+## 21. post-training điều khiển những gì
 
-Post-training turns a base predictor into an assistant.
+Post-training biến công cụ dự đoán cơ sở thành trợ lý.
 
-It controls:
+Nó kiểm soát:
 
 - instruction following;
-- conversational style;
-- reasoning persistence;
-- tool calls;
-- planning;
-- safety;
-- uncertainty expression;
-- refusal boundaries;
+- phong cách đàm thoại;
+- mức độ bền bỉ khi reasoning;
+- lệnh gọi công cụ;
+- lập kế hoạch;
+- sự an toàn;
+- cách biểu đạt độ bất định;
+- ranh giới từ chối;
 - structured output;
-- task completion;
-- coding-agent behavior;
-- multi-turn consistency.
+- hoàn thành tác vụ;
+- hành vi coding agent;
+- tính nhất quán nhiều lượt.
 
-A generalized pipeline is:
+Một pipeline tổng quát là:
 
 ```mermaid
 flowchart LR
-    B[Pretrained base model]
-    --> SFT[Supervised fine-tuning]
-    SFT --> Pref[Preference or critique data]
-    Pref --> RM[Reward model, judge, or verifier]
-    RM --> RL[RL, online RL, GRPO, RLAIF, or related optimization]
-    RL --> Tool[Tool and agent environment training]
-    Tool --> Safe[Safety alignment and adversarial training]
-    Safe --> Eval[Evaluation, red teaming, deployment simulation]
-    Eval --> Final[Production model]
+    B[Mô hình cơ sở được huấn luyện trước]
+    --> SFT[fine-tuning được giám sát]
+    SFT --> Pref[Dữ liệu ưu tiên hoặc phê bình]
+    Pref --> RM[Reward model, judge hoặc người xác minh]
+    RM --> RL[RL, RL trực tuyến, GRPO, RLAIF hoặc tối ưu hóa có liên quan]
+    RL --> Tool[Đào tạo về công cụ và môi trường agent]
+    Tool --> Safe[Liên kết an toàn và adversarial training]
+    Safe --> Eval[Đánh giá, red teaming, mô phỏng deployment]
+    Eval --> Final[Mô hình sản xuất]
 ```
 
-Modern systems often repeat this loop several times.
+Các hệ thống hiện đại thường lặp lại vòng lặp này nhiều lần.
 
 ---
 
-## 22. Post-training comparison table
+## 22. Bảng so sánh Post-training
 
-| Family      | Publicly documented core                                                            | Reasoning optimization                                               | Preference/alignment approach                                          | Tool/agent training                                                  | Safety emphasis                                                                                        |
+| Họ | Cốt lõi được ghi chép công khai | Tối ưu reasoning | Cách tiếp cận preference/alignment | Huấn luyện công cụ/agent | Trọng tâm an toàn |
 | ----------- | ----------------------------------------------------------------------------------- | -------------------------------------------------------------------- | ---------------------------------------------------------------------- | -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| GPT-5.6     | Reasoning models trained through reinforcement learning; additional safety training | RL teaches longer reasoning, strategy changes, and error recognition | Human and synthetic supervision details not fully published            | Strong coding, computer-use, and tool-agent training                 | Safe completions, model-level safety training, monitors, activation classifiers, deployment simulation |
-| Claude 5    | Substantial post-training aligned with Claude's constitution                        | Adaptive thinking and effort control                                 | Constitutional AI, human feedback, AI feedback, reinforcement learning | Agentic coding, search, tools, MCP, long-running workflows           | Conversation-level risk reasoning and constitution-based behavior                                      |
-| Gemini 3.x  | SFT, reinforcement learning from human and critic feedback, policy training         | Thinking levels and Deep Think                                       | Human and critic feedback                                              | Search, code execution, functions, computer use, long-horizon agents | Dataset filtering, conditional pretraining, policy tuning, product filters, red teaming                |
-| Qwen3.x/3.6 | Multi-stage reasoning and general-assistant post-training; scaled agent RL          | Thinking/non-thinking behavior and reasoning RL                      | SFT plus RL-family methods; open fine-tuning ecosystem                 | Million-agent environments, coding agents, tool use                  | Model and deployment guardrails; more responsibility falls on deployer for open weights                |
-| Llama 4     | Lightweight SFT → online RL → lightweight DPO                                     | Hard-prompt online RL and teacher distillation                       | DPO for response-quality corner cases                                  | Multimodal online RL and continuous difficulty filtering             | Llama Guard, Prompt Guard, red teaming, deployer-controlled safety stack                               |
+| GPT-5.6 | Các mô hình Reasoning được huấn luyện thông qua reinforcement learning; huấn luyện an toàn bổ sung | RL dạy reasoning dài hơn, thay đổi chiến lược và nhận dạng lỗi | Chi tiết giám sát con người và tổng hợp chưa được công bố đầy đủ | Mã hóa, sử dụng máy tính và công cụ mạnh mẽ- Đào tạo agent | Hoàn thành an toàn, huấn luyện an toàn ở cấp độ mô hình, bộ giám sát, activation classifier kích hoạt, mô phỏng deployment |
+| Claude 5 | post-training đáng kể phù hợp với hiến pháp của Claude | Điều khiển Adaptive thinking và effort | Constitutional AI, phản hồi của con người, phản hồi của AI, reinforcement learning | Agentic coding, tìm kiếm, công cụ, MCP, quy trình làm việc dài hạn | Rủi ro ở cấp độ hội thoại reasoning và hành vi dựa trên hiến pháp |
+| Gemini 3.x | SFT, reinforcement learning từ phản hồi của con người và critic, huấn luyện chính sách | Thinking level và Deep Think | Phản hồi của con người và nhà phê bình | Tìm kiếm, code execution, function, computer use, agent có tầm nhìn dài | Lọc tập dữ liệu, pretraining có điều kiện, điều chỉnh chính sách, bộ lọc sản phẩm, nhóm đỏ |
+| Qwen3. x/3.6 | reasoning đa tầng và trợ lý chung post-training; chia tỷ lệ agent RL | Hành vi Thinking/non-thinking và reasoning RL | SFT cộng với RL -các phương pháp họ; hệ sinh thái fine-tuning mở | Môi trường hàng triệu agent, coding agent, sử dụng công cụ | Model và guardrail deployment; người triển khai có nhiều trách nhiệm hơn đối với weight mở |
+| Llama 4 | SFT nhẹ → RL trực tuyến → DPO nhẹ | Hard-prompt trực tuyến RL và sự chưng cất của teacher | DPO dành cho các edge case có chất lượng phản hồi | Multimodal RL trực tuyến và lọc độ khó liên tục | Llama Guard, Prompt Guard, red teaming, safety stack do người triển khai kiểm soát |
 
 ---
 
 ## 23. GPT post-training
 
-OpenAI explicitly states that reasoning models are trained to reason through reinforcement learning.
+OpenAI tuyên bố rõ ràng rằng các mô hình reasoning được huấn luyện để suy luận thông qua reinforcement learning.
 
-The models learn to:
+Mô hình học cách:
 
-- think before answering;
-- try alternative strategies;
-- identify mistakes;
-- refine intermediate reasoning;
-- follow model policies.
+- suy nghĩ trước khi trả lời;
+- thử các chiến lược thay thế;
+- xác định sai sót;
+- tinh chỉnh reasoning trung gian;
+- tuân theo model policy.
 
-GPT-5.6 also adds several safety-oriented mechanisms:
+GPT-5.6 cũng bổ sung một số cơ chế hướng đến an toàn:
 
-- training against policy-violating output;
-- synthetic, semi-synthetic, red-team, and production-derived safety examples;
-- deployment simulations over representative traffic;
-- monitoring;
-- activation classifiers for some higher-risk deployments;
-- actor-level enforcement and access controls.
+- huấn luyện chống đầu ra vi phạm chính sách;
+- ví dụ về an toàn tổng hợp, bán tổng hợp, red teaming và có nguồn gốc từ sản xuất;
+- Mô phỏng deployment trên lưu lượng đại diện;
+- giám sát;
+- phân loại kích hoạt cho một số triển khai có rủi ro cao hơn;
+- kiểm soát truy cập và thực thi cấp agent.
 
-### Visible behavioral result
+### Kết quả hành vi có thể nhìn thấy
 
-GPT often feels:
+GPT thường cảm thấy:
 
-- proactive;
-- tool-oriented;
-- highly steerable;
-- willing to plan and execute;
-- sensitive to reasoning-effort configuration.
+- chủ động;
+- định hướng công cụ;
+- có khả năng điều khiển cao;
+- sẵn sàng lập kế hoạch và thực hiện;
+- nhạy cảm với cấu hình reasoning-effort.
 
-These are post-training and system-level properties, not direct consequences of RoPE or GQA.
+Đây là các thuộc tính post-training và cấp hệ thống, không phải là hậu quả trực tiếp của RoPE hoặc GQA.
 
 ---
 
 ## 24. Claude post-training
 
-Claude's best-known distinction is Constitutional AI.
+Sự khác biệt nổi tiếng nhất của Claude là Constitutional AI.
 
-A simplified Constitutional AI process is:
+Quy trình Constitutional AI được đơn giản hóa là:
 
 ```mermaid
 flowchart LR
-    P[Prompt] --> A[Initial model response]
-    A --> C[Critique response using constitutional principles]
-    C --> R[Revise response]
-    R --> D[Create preference data]
-    D --> RL[Reinforcement learning from AI and human feedback]
-    RL --> M[Aligned Claude model]
+    P[Prompt] --> A[Phản hồi mô hình ban đầu]
+    A --> C[Phản hồi phê bình sử dụng các nguyên tắc hiến pháp]
+    C --> R[Chỉnh sửa phản hồi]
+    R --> D[Tạo dữ liệu ưu tiên]
+    D --> RL[Học tập tăng cường từ AI và phản hồi của con người]
+    RL --> M[Mô hình Claude được căn chỉnh]
 ```
 
-The constitution acts as a written target for:
+Hiến pháp hoạt động như một mục tiêu bằng văn bản cho:
 
-- helpfulness;
-- honesty;
-- harmlessness;
-- respect for user autonomy;
-- calibrated behavior.
+- sự hữu ích;
+- trung thực;
+- sự vô hại;
+- tôn trọng Mức độ tự chủ của người dùng;
+- hành vi được hiệu chỉnh.
 
-Claude 5 also exposes adaptive thinking. Instead of requiring a fixed manual reasoning-token budget, the model decides how much reasoning is useful within the selected effort level.
+Claude 5 cũng hiển thị adaptive thinking. Thay vì yêu cầu ngân sách reasoning-token thủ công cố định, mô hình sẽ quyết định mức reasoning hữu ích trong cấp độ effort đã chọn.
 
-### Visible behavioral result
+### Kết quả hành vi có thể nhìn thấy
 
-Claude often feels:
+Claude thường cảm thấy:
 
-- deliberate;
-- literal;
-- scope-aware;
-- careful about cumulative multi-turn risk;
-- strong at long-running document and coding workflows;
-- sensitive to whether the prompt explicitly asks for exhaustive or proactive behavior.
+- cân nhắc kỹ;
+- sát nghĩa;
+- nhạy với phạm vi;
+- cẩn thận về rủi ro tích lũy nhiều lượt;
+- mạnh về quy trình coding và tài liệu dài hạn;
+- nhạy cảm với việc prompt có yêu cầu rõ ràng về hành vi toàn diện hay chủ động hay không.
 
 ---
 
 ## 25. Gemini post-training
 
-Google documents a family of safety and alignment methods including:
+Google ghi lại một nhóm các phương pháp an toàn và căn chỉnh bao gồm:
 
 - supervised fine-tuning;
-- reinforcement learning from human feedback;
-- reinforcement learning from critic feedback;
-- conditional pretraining;
-- safety policies and desiderata;
-- product-level filtering;
-- automated and human red teaming.
+- reinforcement learning từ phản hồi của con người;
+- reinforcement learning từ phản hồi của nhà phê bình;
+- có điều kiện pretraining;
+- chính sách và desiderata về an toàn;
+- lọc cấp độ sản phẩm;
+- red teaming tự động và con người.
 
-Thinking levels control quality, latency, and cost.
+Các mức Thinking kiểm soát chất lượng, độ trễ và chi phí.
 
-Gemini's agent training is closely tied to:
+Chương trình huấn luyện agent của Gemini gắn chặt với:
 
 - Google Search grounding;
 - code execution;
@@ -963,980 +963,980 @@ Gemini's agent training is closely tied to:
 - computer use;
 - multimodal reasoning.
 
-### Visible behavioral result
+### Kết quả hành vi có thể nhìn thấy
 
-Gemini often feels:
+Gemini thường cảm thấy:
 
-- direct;
-- efficient;
-- optimized for multimodal context;
-- comfortable with tool-backed factual and computational work;
-- less responsive to unnecessarily complicated prompt theatrics than to clear structure.
+- trực tiếp;
+- có hiệu quả;
+- được tối ưu hóa cho multimodal context;
+- thoải mái với công việc tính toán và thực tế được hỗ trợ bởi công cụ;
+- ít phản ứng hơn với thủ thuật prompt phức tạp không cần thiết hơn là cấu trúc rõ ràng.
 
 ---
 
 ## 26. Qwen post-training
 
-The Qwen3 technical report described a four-stage flagship post-training pipeline:
+Báo cáo kỹ thuật Qwen3 mô tả pipeline post-training hàng đầu bốn giai đoạn:
 
-1. long-chain-of-thought cold start;
-2. reasoning reinforcement learning;
-3. thinking-mode fusion through supervised fine-tuning;
-4. general-domain reinforcement learning.
+1. khởi tạo lạnh bằng chuỗi suy luận dài;
+2. reinforcement learning cho reasoning;
+3. hợp nhất chế độ thinking thông qua fine-tuning được giám sát;
+4. reinforcement learning cho miền tổng quát.
 
-Qwen3.5 and Qwen3.6 extend the family toward native multimodal agents and scaled agent environments.
+Qwen3.5 và Qwen3.6 mở rộng họ hướng tới các agent native multimodal và môi trường agent mở rộng.
 
-Qwen3.6 adds:
+Qwen3.6 cho biết thêm:
 
-- default thinking;
-- explicit non-thinking deployment mode;
-- optional historical-thinking preservation;
-- coding and repository-level agent improvements.
+- mặc định thinking;
+- chế độ non-thinking deployment rõ ràng;
+- tùy chọn tùy chọn giữ lại thinking history;
+- cải tiến coding và agent cấp repository.
 
-### Visible behavioral result
+### Kết quả hành vi có thể nhìn thấy
 
-Qwen often feels:
+Qwen thường cảm thấy:
 
-- highly capable for its active parameter count;
-- reasoning-heavy by default;
-- strongly affected by sampling and template settings;
-- flexible for local deployment;
-- less behaviorally uniform across hosts than closed services.
+- có khả năng cao về số lượng tham số hoạt động của nó;
+- thiên về reasoning theo mặc định;
+- bị ảnh hưởng mạnh mẽ bởi sampling và thiết lập template;
+- linh hoạt cho deployment cục bộ;
+- hành vi kém đồng nhất trên các máy chủ hơn so với các dịch vụ đóng.
 
 ---
 
 ## 27. Llama 4 post-training
 
-Meta publicly describes the Llama 4 Maverick pipeline as:
+Meta mô tả công khai đường dẫn Llama 4 Maverick như sau:
 
 ```text
-lightweight SFT
-→ online reinforcement learning
-→ lightweight DPO
+SFT nhẹ
+→ reinforcement learning trực tuyến
+→ DPO nhẹ
 ```
 
-Meta found that excessive SFT and DPO could over-constrain exploration during RL. Its response was to:
+Meta nhận thấy rằng SFT và DPO quá mức có thể hạn chế quá mức việc khám phá trong RL. Phản hồi của nó là:
 
-- remove more than half of examples judged too easy;
-- train on harder examples;
-- use multimodal online RL;
-- continuously filter prompts by difficulty;
-- use lightweight DPO for response-quality corner cases.
+- loại bỏ hơn một nửa số ví dụ được đánh giá là quá dễ;
+- huấn luyện trên các ví dụ khó hơn;
+- sử dụng multimodal trực tuyến RL;
+- liên tục lọc prompt theo độ khó;
+- sử dụng DPO nhẹ cho các edge case có chất lượng phản hồi.
 
-The unreleased Behemoth teacher used an even more RL-heavy recipe, with strong pruning of easy SFT data and hard-prompt curricula.
+Giáo viên Behemoth chưa được phát hành đã sử dụng một công thức RL thậm chí còn nặng hơn, với việc cắt tỉa mạnh mẽ dữ liệu SFT dễ và curriculum prompt khó.
 
-### Visible behavioral result
+### Kết quả hành vi có thể nhìn thấy
 
-Llama 4's official instruct checkpoints reflect Meta's alignment recipe, but the final user experience varies because the deployer can replace or augment nearly every runtime component.
+Các instruct checkpoint chính thức của Llama 4 phản ánh công thức căn chỉnh của Meta, nhưng trải nghiệm người dùng cuối cùng sẽ khác nhau vì người triển khai có thể thay thế hoặc tăng cường gần như mọi thành phần runtime.
 
 ---
 
-# Part V — End-to-end sample dataflow
+# Phần V-Luồng dữ liệu mô hình từ đầu đến cuối
 
-## 28. Shared example task
+## 28. Tác vụ ví dụ chung
 
-Assume the user provides:
+Giả sử người dùng cung cấp:
 
 ```text
-Inputs:
-- a 300-page system-design PDF;
-- one architecture diagram;
-- a repository containing implementation code;
-- the instruction:
+Đầu vào:
+- bản PDF thiết kế hệ thống dài 300 trang;
+- một sơ đồ kiến trúc;
+- một repository chứa code triển khai;
+- hướng dẫn:
 
-"Find the three most important differences between the documented
-architecture and the implementation. Verify each claim using the files.
-Then propose a migration plan with risks and tests."
+"Tìm ba điểm khác biệt quan trọng nhất giữa tài liệu
+kiến trúc và implementation. Xác minh từng claim bằng cách sử dụng các file.
+Sau đó đề xuất một migration plan với rủi ro và kiểm thử. "
 ```
 
 ---
 
-## 29. GPT-5.6 dataflow
+## 29. Luồng dữ liệu GPT-5.6
 
 ```mermaid
 flowchart TD
-    U[Prompt, PDF, image, repository] --> Ingest[File and image ingestion]
-    Ingest --> Router[Choose model and reasoning path]
+    U[Prompt, PDF, hình ảnh, repository] --> Ingest[Tiếp nhận file và hình ảnh]
+    Ingest --> Router[Chọn mô hình và đường dẫn reasoning]
     Router --> Sol[GPT-5.6 Sol]
-    Sol --> Plan[Hidden reasoning and task plan]
-    Plan --> Retrieve[File search and repository inspection]
-    Retrieve --> Verify[Cross-check PDF, image, and code]
-    Verify --> Code[Optional code execution or tests]
-    Code --> Synthesize[Rank differences and build migration plan]
-    Synthesize --> Safe[Safety and action-confirmation checks]
-    Safe --> O[Final report]
+    Sol --> Plan[reasoning ẩn và kế hoạch tác vụ]
+    Plan --> Retrieve[Tìm kiếm file và kiểm tra repository]
+    Retrieve --> Verify[Kiểm tra chéo PDF, hình ảnh và mã]
+    Verify --> Code[code execution tùy chọn hoặc các kiểm thử]
+    Code --> Synthesize[Xếp hạng sự khác biệt và xây dựng migration plan]
+    Synthesize --> Safe[Kiểm tra xác nhận an toàn và hành động]
+    Safe --> O[Báo cáo cuối cùng]
 ```
 
-The main differentiator is the routed tool-using system. Exact image encoder and Transformer internals are not public.
+Điểm khác biệt chính là hệ thống sử dụng công cụ được định tuyến. Bộ mã hóa hình ảnh chính xác và nội bộ Transformer không được công khai.
 
 ---
 
-## 30. Claude Sonnet 5 dataflow
+## 30. Luồng dữ liệu Claude Sonnet 5
 
 ```mermaid
 flowchart TD
-    U[Prompt, PDF, image, repository] --> Tok[New tokenizer and document ingestion]
-    Tok --> Effort[Adaptive thinking at selected effort]
-    Effort --> Extract[Locate and quote relevant evidence]
-    Extract --> Tools[Repository tools, search, code, or computer]
-    Tools --> Compare[Compare claims across all sources]
-    Compare --> Constitution[Constitutional and safety behavior]
-    Constitution --> O[Structured report]
+    U[Prompt, PDF, hình ảnh, repository] --> Tok[tokenizer mới và nhập tài liệu]
+    Tok --> Effort[Adaptive thinking tại effort đã chọn]
+    Effort --> Extract[Tìm và trích dẫn bằng chứng liên quan]
+    Extract --> Tools[Công cụ lưu trữ, tìm kiếm, mã hoặc máy tính]
+    Tools --> Compare[So sánh các claim trên tất cả các nguồn]
+    Compare --> Constitution[Hành vi hợp hiến và an toàn]
+    Constitution --> O[Báo cáo có cấu trúc]
 ```
 
-A strong Claude prompt should explicitly say whether to:
+Claude prompt mạnh sẽ nói rõ liệu có nên:
 
-- inspect every relevant file;
-- quote evidence;
-- report uncertain discrepancies;
-- stop after three final differences or list all candidates first.
+- kiểm tra mọi file liên quan;
+- trích dẫn bằng chứng;
+- báo cáo những khác biệt không chắc chắn;
+- dừng lại sau ba điểm khác biệt cuối cùng hoặc liệt kê tất cả các ứng cử viên trước.
 
 ---
 
-## 31. Gemini 3.5/3.1 dataflow
+## 31. Luồng dữ liệu Gemini 3.5/3.1
 
 ```mermaid
 flowchart TD
-    Context[PDF, diagram, repository context] --> Pack[Native multimodal packing]
-    Pack --> Task[Task instruction placed at the end]
-    Task --> Think[Thinking-level controller]
-    Think --> G[Gemini reasoning backbone]
-    G --> Search[Optional grounding/search]
-    G --> Exec[Optional code execution]
-    G --> Func[Repository or external functions]
+    Context[PDF, sơ đồ, repository context] --> Pack[Đóng gói Native multimodal]
+    Pack --> Task[Hướng dẫn tác vụ được đặt ở cuối]
+    Task --> Think[Bộ điều khiển cấp Thinking]
+    Think --> G[Backbone Gemini reasoning]
+    G --> Search[grounding tùy chọn /tìm kiếm]
+    G --> Exec[Tùy chọn code execution]
+    G --> Func[Repository hoặc function bên ngoài]
     Search --> G
     Exec --> G
     Func --> G
-    G --> O[Concise evidence-backed report]
+    G --> O[Báo cáo ngắn gọn dựa trên bằng chứng]
 ```
 
-The prompt should place the large data context before the final question.
+prompt nên đặt dữ liệu lớn context trước câu hỏi cuối cùng.
 
 ---
 
-## 32. Qwen3.6 dataflow
+## 32. Luồng dữ liệu Qwen3.6
 
 ```mermaid
 flowchart TD
-    Txt[Text and code tokens] --> Pack[Multimodal token sequence]
-    Vis[Diagram and document images] --> Vision[Vision tower]
+    Txt[Token văn bản và mã] --> Pack[Chuỗi Multimodal token]
+    Vis[Sơ đồ và hình ảnh tài liệu] --> Vision[Vision tower]
     Vision --> Pack
-    Pack --> Hybrid[3 linear-attention layers]
-    Hybrid --> Full[1 full GQA layer]
-    Full --> Route[MoE routing]
-    Route --> Experts[8 of 256 experts]
-    Experts --> Repeat[Repeat over 40 layers]
-    Repeat --> Think[Default reasoning mode]
-    Think --> Agent[Qwen Code or tool runtime]
-    Agent --> Verify[Tests and cross-source checks]
-    Verify --> O[Final report]
+    Pack --> Hybrid[3 lớp tuyến tính- attention]
+    Hybrid --> Full[1 lớp GQA đầy đủ]
+    Full --> Route[định tuyến MoE]
+    Route --> Experts[8 trong số 256 chuyên gia]
+    Experts --> Repeat[Lặp lại hơn 40 lớp]
+    Repeat --> Think[Chế độ reasoning mặc định]
+    Think --> Agent[Qwen-Code hoặc công cụ runtime]
+    Agent --> Verify[Kiểm tra và đối chiếu chéo nguồn]
+    Verify --> O[Báo cáo cuối cùng]
 ```
 
-In a local deployment, the inference engine must correctly implement:
+Trong deployment cục bộ, inference engine phải triển khai chính xác:
 
-- multimodal preprocessing;
-- reasoning parsing;
+- tiền xử lý multimodal;
+- Phân tích cú pháp reasoning;
 - chat template;
-- MoE kernels;
-- hybrid-attention state;
-- KV and recurrent-state caching.
+- MoE kernel;
+- trạng thái hybrid attention;
+- Bộ nhớ đệm trạng thái KV và recurrent.
 
 ---
 
-## 33. Llama 4 dataflow
+## 33. Luồng dữ liệu Llama 4
 
 ```mermaid
 flowchart TD
-    Txt[Prompt and repository text] --> Tok[Tokenizer]
-    Img[Diagram or PDF images] --> Vision[Vision encoder]
+    Txt[Prompt và văn bản repository] --> Tok[Tokenizer]
+    Img[Sơ đồ hoặc hình ảnh PDF] --> Vision[Vision encoder]
     Tok --> Early[Early multimodal fusion]
     Vision --> Early
-    Early --> MoE[MoE shared backbone]
-    MoE --> Long[Scout or Maverick context processing]
-    Long --> Runtime[External agent and retrieval runtime]
-    Runtime --> Guard[Optional Llama Guard and policy layer]
-    Guard --> O[Final report]
+    Early --> MoE[Backbone MoE dùng chung]
+    MoE --> Long[Xử lý Scout hoặc Maverick context]
+    Long --> Runtime[agent bên ngoài và retrieval runtime bên ngoài]
+    Runtime --> Guard[Lớp chính sách và bảo vệ Llama tùy chọn]
+    Guard --> O[Báo cáo cuối cùng]
 ```
 
-Unlike the closed products, the agent, search, repository tooling, and safety stack are commonly supplied by the application developer.
+Không giống như các sản phẩm đóng, agent, công cụ tìm kiếm, repository và safety stack thường được nhà phát triển ứng dụng cung cấp.
 
 ---
 
-# Part VI — Which differences matter most?
+# Phần VI-Sự khác biệt nào quan trọng nhất?
 
-## 34. Relative importance by use case
+## 34. Tầm quan trọng tương đối theo trường hợp sử dụng
 
-The percentages below are conceptual, not measured universal constants.
+Tỷ lệ phần trăm dưới đây mang tính khái niệm, không phải là hằng số phổ quát được đo lường.
 
-### General chat assistant
+### Trợ lý trò chuyện chung
 
 ```text
-Post-training and behavior policy      35%
-Pretraining data and quality           30%
-Product system and tools               20%
-Architecture and scale                 15%
+Post-training và chính sách hành vi 35%
+Dữ liệu và chất lượng Pretraining 30%
+Hệ thống sản phẩm và công cụ 20%
+Kiến trúc và quy mô 15%
 ```
 
-### Long-context document analysis
+### Phân tích tài liệu Long-context
 
 ```text
-Context training and data curriculum   30%
-Retrieval/context packing              25%
-Post-training for grounding            20%
-Attention architecture                 15%
-Serving and caching                    10%
+Chương trình huấn luyện và dữ liệu Context 30%
+Retrieval/context đóng gói 25%
+Post-training cho grounding 20%
+Kiến trúc Attention 15%
+Serving và cache 10%
 ```
 
-### Coding agent
+### Agentic coding
 
 ```text
-Agent/tool post-training               30%
-Code pretraining data                  25%
-Runtime and environment                20%
+Agent /công cụ post-training 30%
+Dữ liệu code trong pretraining 25%
+Runtime và môi trường 20%
 Reasoning RL                           15%
-Architecture                           10%
+Kiến trúc 10%
 ```
 
-### Local deployment
+### deployment cục bộ
 
 ```text
-Architecture and active parameters     30%
-Quantization and inference engine      25%
-Post-training checkpoint quality       20%
-Prompt template and sampling           15%
-Data mixture                           10%
+Kiến trúc và tham số hoạt động 30%
+Quantization và inference engine 25%
+Post-training checkpoint chất lượng 20%
+Prompt template và sampling 15%
+Hỗn hợp dữ liệu 10%
 ```
 
-Architecture matters more for local deployment because it determines memory, throughput, and kernel compatibility. Post-training matters more for how pleasant and reliable the assistant feels.
+Kiến trúc quan trọng hơn đối với deployment cục bộ vì nó xác định bộ nhớ, thông lượng và khả năng tương thích của kernel. Post-training quan trọng hơn ở việc trợ lý cảm thấy dễ chịu và đáng tin cậy như thế nào.
 
 ---
 
-## 35. The most important training differences
+## 35. Sự khác biệt quan trọng nhất trong huấn luyện
 
-### Pretraining differences are mainly about capability supply
+### Sự khác biệt của Pretraining chủ yếu là về khả năng cung cấp
 
-Pretraining decides whether the model has learned enough examples of:
+Pretraining quyết định xem mô hình đã học đủ các ví dụ về:
 
 - source code;
-- mathematical proofs;
-- multilingual conversation;
-- legal and scientific writing;
-- diagrams;
+- chứng minh toán học;
+- đàm thoại đa ngôn ngữ;
+- văn bản pháp lý và khoa học;
+- sơ đồ;
 - video;
-- audio;
-- tool traces;
-- long documents.
+- âm thanh;
+- dấu vết công cụ;
+- tài liệu dài.
 
-### Post-training differences are mainly about capability selection
+### Sự khác biệt của Post-training chủ yếu nằm ở việc lựa chọn khả năng
 
-Post-training decides:
+Post-training quyết định:
 
-- which latent capability is used;
-- how long the model reasons;
-- whether it searches;
-- when it refuses;
-- whether it asks for confirmation;
-- whether it reports uncertainty;
-- how it formats the answer;
-- how aggressively it completes the task.
+- khả năng tiềm ẩn nào được sử dụng;
+- mô hình reasoning trong bao lâu;
+- liệu nó có tìm kiếm hay không;
+- khi nó từ chối;
+- liệu nó có yêu cầu xác nhận hay không;
+- liệu nó có báo cáo sự không chắc chắn hay không;
+- nó định dạng câu trả lời như thế nào;
+- nó hoàn thành tác vụ một cách tích cực như thế nào.
 
-A base model may "know" how to solve a task but fail as an assistant because the post-training policy does not reliably elicit that capability.
+Một mô hình cơ sở có thể "biết" cách giải quyết một tác vụ nhưng không thành công với vai trò trợ lý vì chính sách post-training không gợi ra khả năng đó một cách đáng tin cậy.
 
 ---
 
-## 36. Does architecture still matter?
+## 36. Kiến trúc có còn quan trọng không?
 
-Yes, especially for:
+Có, đặc biệt đối với:
 
-- training stability;
+- sự ổn định huấn luyện;
 - active compute;
-- memory bandwidth;
-- KV-cache size;
-- long-context cost;
-- multimodal fusion;
-- local deployment;
-- expert specialization;
-- serving throughput.
+- băng thông bộ nhớ;
+- kích thước KV cache;
+- chi phí long-context;
+- Fusion multimodal;
+- deployment cục bộ;
+- mức độ chuyên môn hóa của expert;
+- Thông lượng serving.
 
-Examples:
+Ví dụ:
 
-- Qwen3.6's hybrid linear/full attention changes long-context compute.
-- Qwen3.6's 3B active parameters change inference cost despite 35B total capacity.
-- Llama 4's MoE provides high total capacity with 17B active parameters.
-- Llama 4 Scout's long-context design changes the intended context regime.
-- Early multimodal fusion changes where visual-language interaction occurs.
+- Qwen3.6 tuyến tính/ full attention của Qwen3.6 thay đổi tính toán long-context.
+- Các tham số hoạt động 3B của Qwen3.6 thay đổi chi phí suy luận mặc dù tổng công suất là 35B.
+- MoE của Llama 4 cung cấp tổng công suất cao với 17B tham số hoạt động.
+- thiết kế long-context của Llama 4 Scout thay đổi chế độ context dự kiến.
+- Sự kết hợp multimodal ban đầu thay đổi khi xảy ra tương tác ngôn ngữ hình ảnh.
 
-However, these choices do not directly tell you whether the model will be concise, cautious, proactive, literal, or good at tool use. Those are mostly training and system properties.
-
----
-
-# Part VII — A fair cross-model testing protocol
-
-## 37. Why casual comparisons are unreliable
-
-A user comparing chat applications may unintentionally compare:
-
-- different model sizes;
-- different reasoning levels;
-- browsing enabled on one and disabled on another;
-- different system prompts;
-- different memory;
-- different context truncation;
-- different tool permissions;
-- different sampling;
-- different safety policies.
-
-The result may say more about the product wrapper than the model.
+Tuy nhiên, những lựa chọn này không trực tiếp cho bạn biết liệu mô hình sẽ ngắn gọn, thận trọng, chủ động, sát nghĩa hay sử dụng công cụ tốt. Đó chủ yếu là các thuộc tính huấn luyện và hệ thống.
 
 ---
 
-## 38. Recommended experiment
+# Phần VII-Giao thức thử nghiệm đa mô hình công bằng
 
-For each model:
+## 37. Tại sao những so sánh thông thường lại không đáng tin cậy
 
-1. Use the closest equivalent capability tier.
-2. Disable web and tools for a pure-model test.
-3. Repeat with tools enabled for a system test.
-4. Match reasoning budget by observed latency/token usage, not by parameter name.
-5. Use default vendor-recommended sampling.
-6. Disable memory and personalization.
-7. Provide identical source context.
-8. Use a strict output schema.
-9. Run at least 20-100 prompts per category.
-10. Score correctness, instruction compliance, citation validity, latency, cost, and token use separately.
+Người dùng so sánh các ứng dụng chat có thể vô tình so sánh:
 
-### Evaluation dimensions
+- kích cỡ mô hình khác nhau;
+- các cấp độ reasoning khác nhau;
+- browsing được kích hoạt trên một và bị vô hiệu hóa trên một cái khác;
+- prompt hệ thống khác nhau;
+- bộ nhớ khác nhau;
+- cách cắt ngắn context khác nhau;
+- quyền công cụ khác nhau;
+- sampling khác nhau;
+- chính sách an toàn khác nhau.
 
-| Metric                | What it measures                                                             |
+Kết quả có thể nói lên nhiều điều về lớp vỏ sản phẩm hơn là về mô hình.
+
+---
+
+## 38. Thí nghiệm được đề xuất
+
+Đối với mỗi mô hình:
+
+1. Sử dụng cấp năng lực tương đương gần nhất.
+2. Tắt web và các công cụ để kiểm tra mô hình thuần túy.
+3. Lặp lại với các công cụ được kích hoạt để kiểm tra hệ thống.
+4. So khớp ngân sách reasoning theo độ trễ quan sát được/mức sử dụng token chứ không phải theo tên tham số.
+5. Sử dụng sampling mặc định do nhà cung cấp đề xuất.
+6. Vô hiệu hóa bộ nhớ và cá nhân hóa.
+7. Cung cấp nguồn giống hệt context.
+8. Sử dụng một schema đầu ra nghiêm ngặt.
+9. Chạy ít nhất 20-100 prompt cho mỗi danh mục.
+10. Tính chính xác của điểm số, sự tuân thủ hướng dẫn, tính hợp lệ của trích dẫn, độ trễ, chi phí và việc sử dụng token riêng biệt.
+
+### Khía cạnh đánh giá
+
+| Metric | Nó đo lường những gì |
 | --------------------- | ---------------------------------------------------------------------------- |
-| Task accuracy         | Whether the answer is correct                                                |
-| Coverage/recall       | Whether all important findings are surfaced                                  |
-| Precision             | Whether reported findings are valid                                          |
-| Instruction following | Whether format and constraints are obeyed                                    |
-| Grounding             | Whether claims are supported by provided evidence                            |
-| Tool success          | Whether calls are valid and recover from errors                              |
-| Autonomy              | Whether the model completes multi-step work without unnecessary intervention |
-| Overreach             | Whether it takes actions beyond permission                                   |
-| Calibration           | Whether confidence matches correctness                                       |
-| Latency               | Time to first token and total completion                                     |
-| Cost                  | Input, output, thinking, and tool cost                                       |
-| Reproducibility       | Variance across repeated runs                                                |
+| Độ chính xác của tác vụ | Liệu câu trả lời có đúng không |
+| Coverage/recall | Liệu tất cả những phát hiện quan trọng có được hiển thị hay không |
+| Độ chính xác | Liệu những phát hiện được báo cáo có hợp lệ hay không |
+| Instruction following | Định dạng và các ràng buộc có được tuân thủ hay không |
+| Grounding | Liệu các tuyên bố có được hỗ trợ bởi bằng chứng được cung cấp hay không |
+| Mức độ thành công của công cụ | Lệnh gọi có hợp lệ và khôi phục sau lỗi hay không |
+| Mức độ tự chủ | Liệu mô hình có hoàn thành công việc nhiều bước mà không có sự can thiệp không cần thiết hay không |
+| Vượt quá thẩm quyền | Liệu nó có thực hiện hành động vượt quá sự cho phép hay không |
+| Calibration | Liệu độ tin cậy có phù hợp với tính chính xác hay không |
+| Độ trễ | Thời gian đến token đầu tiên và tổng thời gian hoàn thành |
+| Chi phí | Chi phí đầu vào, đầu ra, thinking và chi phí công cụ |
+| Độ tái lập | Phương sai qua các lần chạy lặp lại |
 
 ---
 
-# Part VIII — Practical selection guidance
+# Phần VIII-Hướng dẫn lựa chọn thực tế
 
-## 39. Choose GPT when
+## 39. Chọn GPT khi
 
-- you need a highly integrated proprietary agent system;
-- you need strong built-in tools and computer use;
-- reasoning and verbosity controls are valuable;
-- predictable managed deployment matters more than architecture transparency.
+- bạn cần một hệ thống agent độc quyền có tính tích hợp cao;
+- bạn cần các công cụ tích hợp mạnh mẽ và computer use;
+- reasoning và các điều khiển chi tiết có giá trị;
+- deployment được quản lý có thể dự đoán được quan trọng hơn tính minh bạch của kiến trúc.
 
-## 40. Choose Claude when
+## 40. Chọn Claude khi
 
-- long-running coding or document workflows are central;
-- literal instruction following and explicit scope are desirable;
-- adaptive effort and strong long-context workflows matter;
-- Constitutional-AI-style behavior fits the application.
+- quy trình coding hoặc tài liệu dài hạn là trung tâm;
+- hướng dẫn sát nghĩa và phạm vi rõ ràng là điều mong muốn;
+- adaptive effort và workflow long-context mạnh là quan trọng và long-context mạnh mẽ;
+- Hành vi theo phong cách AI hợp hiến phù hợp với ứng dụng.
 
-## 41. Choose Gemini when
+## 41. Chọn Gemini khi
 
-- images, video, audio, PDFs, and text must be processed together;
-- Google Search and code execution are useful;
-- long-context multimodal analysis is central;
-- low-latency agentic execution through Flash is important.
+- hình ảnh, video, âm thanh, PDF và văn bản phải được xử lý cùng nhau;
+- Google Search và code execution rất hữu ích;
+- Phân tích long-context multimodal là trung tâm;
+- việc thực thi agent có độ trễ thấp thông qua Flash là rất quan trọng.
 
-## 42. Choose Qwen when
+## 42. Chọn Qwen khi
 
-- open weights and Apache licensing matter;
-- you need strong capability at low active parameter counts;
-- local multimodal deployment is required;
-- architecture transparency and inference control are important;
-- multilingual and agentic coding capability are priorities.
+- weight mở và giấy phép Apache là yêu cầu;
+- bạn cần khả năng mạnh mẽ với số lượng tham số hoạt động thấp;
+- bắt buộc phải có multimodal deployment cục bộ;
+- tính minh bạch của kiến trúc và kiểm soát suy luận là quan trọng;
+- khả năng mã hóa đa ngôn ngữ và agent là những ưu tiên.
 
-## 43. Choose Llama when
+## 43. Chọn Llama khi
 
-- ecosystem breadth and customization matter;
-- you want to fine-tune or modify an open-weight family;
-- extreme context experimentation is required;
-- you are prepared to engineer the prompt template, safety layer, retrieval, tools, and serving stack.
+- độ rộng hệ sinh thái và khả năng tùy biến là quan trọng;
+- bạn muốn fine-tune hoặc sửa đổi họ weight mở;
+- cần phải có thử nghiệm context cực độ;
+- bạn đã sẵn sàng để thiết kế prompt template, lớp an toàn, retrieval, các công cụ và ngăn xếp serving.
 
 ---
 
-# 44. Final answer to the central question
+# 44. Câu trả lời cuối cùng cho câu hỏi trọng tâm
 
-The current frontier is not composed of five completely different neural paradigms.
+Bức tranh frontier hiện tại không bao gồm năm neural model hoàn toàn khác nhau.
 
-It is closer to:
+Nó gần hơn với:
 
 ```text
-a converged Transformer-family foundation
+một nền tảng kiến trúc kiểu Transformer đang hội tụ
 +
-different scaling and sparsity strategies
+chiến lược mở rộng quy mô và sparse khác nhau
 +
-very different data pipelines
+pipeline dữ liệu rất khác nhau
 +
-very different post-training objectives
+các mục tiêu post-training rất khác nhau
 +
-very different reasoning and tool systems
+reasoning và hệ thống công cụ rất khác nhau
 ```
 
-The architecture differences are real, particularly in Qwen3.6 and Llama 4. But the most noticeable differences when users prompt GPT, Claude, Gemini, Qwen, and Llama usually come from:
+Sự khác biệt về kiến trúc là có thật, đặc biệt là trong Qwen3.6 và Llama 4. Nhưng điểm khác biệt dễ nhận thấy nhất khi người dùng prompt GPT, Claude, Gemini, Qwen, và Llama thường đến từ:
 
 1. post-training;
-2. reasoning policy;
-3. tool orchestration;
-4. safety alignment;
-5. system prompts;
-6. data mixture;
-7. decoding defaults.
+2. Chính sách reasoning;
+3. điều phối công cụ;
+4. căn chỉnh an toàn;
+5. prompt của hệ thống;
+6. hỗn hợp dữ liệu;
+7. decoding mặc định.
 
-Therefore:
+Vì thế:
 
-> The neural modules explain efficiency and capacity.
-> Training and system design explain most of the assistant's visible behavior.
+> Các mô-đun thần kinh giải thích hiệu quả và năng lực.
+> thiết kế hệ thống và huấn luyện giải thích hầu hết các hành vi có thể nhìn thấy được của trợ lý.
 
 ---
 
-# Sources
+# Nguồn
 
 ## OpenAI
 
-- [S1] GPT-5.6 launch: https://openai.com/index/gpt-5-6/
-- [S2] GPT-5.6 system card: https://deploymentsafety.openai.com/gpt-5-6
-- [S3] GPT-5 for developers and prompting behavior: https://openai.com/index/introducing-gpt-5-for-developers/
-- [S4] OpenAI model catalog: https://developers.openai.com/api/docs/models
-- [S5] Practical GPT-5 guide: https://openai.com/business/guides-and-resources/a-practical-guide-to-building-with-ai/
+- [S1] Ra mắt GPT-5.6: https://openai.com/index/gpt-5-6/
+- [S2] System card GPT-5.6: https://deploymentsafety.openai.com/gpt-5-6
+- [S3] GPT-5 dành cho nhà phát triển và hành vi prompt: https://openai.com/index/introducing-gpt-5-for-developers/
+- [S4] Danh mục mô hình OpenAI: https://developers.openai.com/api/docs/models
+- [S5] Hướng dẫn thực hành GPT-5: https://openai.com/business/guides-and-resources/a-practical-guide-to-building-with-ai/
 
 ## Anthropic
 
-- [S6] Claude Sonnet 5 prompting guide: https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prompting-claude-sonnet-5
-- [S7] Claude prompting best practices: https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/claude-prompting-best-practices
-- [S8] Anthropic Transparency Hub: https://www.anthropic.com/transparency/model-report
-- [S9] Constitutional AI paper: https://www.anthropic.com/research/constitutional-ai-harmlessness-from-ai-feedback
-- [S10] Claude's constitution: https://www.anthropic.com/constitution
+- [S6] Hướng dẫn prompt Claude Sonnet 5: https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prompting-claude-sonnet-5
+- [S7] Claude prompt các phương pháp hay nhất: https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/claude-prompting-best-practices
+- [S8] Trung tâm minh bạch Anthropic: https://www.anthropic.com/transparency/model-report
+- [S9] Paper Constitutional AI: https://www.anthropic.com/research/constitutional-ai-harmlessness-from-ai-feedback
+- [S10] Constitution của Claude: https://www.anthropic.com/constitution
 
 ## Google
 
-- [S11] Gemini 3 prompt strategies: https://ai.google.dev/gemini-api/docs/prompting-strategies
-- [S12] Gemini 3 developer guide: https://ai.google.dev/gemini-api/docs/gemini-3
-- [S13] Gemini 3.5 Flash model card: https://deepmind.google/models/model-cards/gemini-3-5-flash/
-- [S14] Gemini 3.1 Pro model card: https://deepmind.google/models/model-cards/gemini-3-1-pro
-- [S15] Gemini 2.5 technical report: https://arxiv.org/abs/2507.06261
-- [S16] Gemini 1 report and post-training overview: https://deepmind.google/gemini/gemini_1_report.pdf
+- [S11] Gemini 3 chiến lược prompt: https://ai.google.dev/gemini-api/docs/prompting-strategies
+- [S12] Hướng dẫn dành cho nhà phát triển Gemini 3: https://ai.google.dev/gemini-api/docs/gemini-3
+- [S13] Thẻ mô hình Gemini 3.5 Flash: https://deepmind.google/models/model-cards/gemini-3-5-flash/
+- [S14] Thẻ mô hình Gemini 3.1 Pro: https://deepmind.google/models/model-cards/gemini-3-1-pro
+- [S15] Báo cáo kỹ thuật Gemini 2.5: https://arxiv.org/abs/2507.06261
+- [S16] Báo cáo Gemini 1 và tổng quan về post-training: https://deepmind.google/gemini/gemini_1_report.pdf
 
 ## Qwen
 
-- [S17] Qwen3.6 official repository: https://github.com/QwenLM/Qwen3.6
-- [S18] Qwen3.6-35B-A3B model card: https://huggingface.co/Qwen/Qwen3.6-35B-A3B
-- [S19] Qwen3.6-35B-A3B configuration: https://huggingface.co/Qwen/Qwen3.6-35B-A3B/blob/main/config.json
-- [S20] Qwen3 technical report: https://arxiv.org/abs/2505.09388
-- [S21] Qwen3.5 announcement: https://qwen.ai/blog?id=qwen3.5
-- [S22] Qwen3.7 announcement: https://qwen.ai/blog?id=qwen3.7
+- [S17] Kho lưu trữ chính thức của Qwen3.6: https://github.com/QwenLM/Qwen3.6
+- [S18] Thẻ mô hình Qwen3.6-35B-A3B: https://huggingface.co/Qwen/Qwen3.6-35B-A3B
+- [S19] Cấu hình Qwen3.6-35B-A3B: https://huggingface.co/Qwen/Qwen3.6-35B-A3B/blob/main/config.json
+- [S20] Báo cáo kỹ thuật Qwen3: https://arxiv.org/abs/2505.09388
+- [S21] Thông báo Qwen3.5: https://qwen.ai/blog?id=qwen3.5
+- [S22] Thông báo Qwen3.7: https://qwen.ai/blog?id=qwen3.7
 
 ## Meta
 
-- [S23] Llama 4 launch and post-training: https://ai.meta.com/blog/llama-4-multimodal-intelligence/
-- [S24] Llama model repository: https://github.com/meta-llama/llama-models
-- [S25] Llama 4 Maverick model card: https://huggingface.co/meta-llama/Llama-4-Maverick-17B-128E
-- [S26] Llama 4 model collection: https://huggingface.co/collections/meta-llama/llama-4
+- [S23] Ra mắt Llama 4 và post-training: https://ai.meta.com/blog/llama-4-multimodal-intelligence/
+- [S24] Kho lưu trữ mô hình Llama: https://github.com/meta-llama/llama-models
+- [S25] Thẻ mô hình Llama 4 Maverick: https://huggingface.co/meta-llama/Llama-4-Maverick-17B-128E
+- [S26] Bộ sưu tập mô hình Llama 4: https://huggingface.co/collections/meta-llama/llama-4
 
 ---
 
-## Notes on uncertainty
+## Lưu ý về sự không chắc chắn
 
-- Closed vendors can change internal architecture without documenting it.
-- A current product may route between multiple models.
-- Hosted behavior includes hidden system prompts and safety layers.
-- Context-window size does not guarantee equal information retrieval at every position.
-- Benchmark scores should not be treated as direct predictors of a specific application.
-- Practical behavior should be validated on an application-specific evaluation se
+- Các nhà cung cấp mô hình đóng có thể thay đổi kiến trúc nội bộ mà không cần ghi lại nó.
+- Một sản phẩm hiện tại có thể định tuyến giữa nhiều mô hình.
+- Hành vi trên dịch vụ hosted bao gồm các prompt hệ thống ẩn và các lớp an toàn.
+- Kích thước context window không đảm bảo khả năng retrieval như nhau ở mọi vị trí.
+- Benchmark không nên được coi là yếu tố dự đoán trực tiếp cho một ứng dụng cụ thể.
+- Hành vi thực tế phải được xác nhận dựa trên đánh giá dành riêng cho ứng dụng
 
-# Latest Major LLM Families Compared
+# So sánh các họ LLM lớn mới nhất
 
-## Executive summary
+## Tóm tắt điều hành
 
-The newest mainstream LLM families have converged on a few visible product-level traits: very long context windows, multimodal inputs, explicit reasoning controls, and tighter integration with tools or agent loops. GPT-5.6, Claude 5, Gemini 3.x, Qwen3, and Llama 4 all present themselves as models for coding, knowledge work, or agentic execution rather than as plain chatbots. But they diverge sharply in what they disclose. OpenAI, Anthropic, and Google now publish rich product, safety, and deployment documentation while leaving many block-level architectural choices unspecified publicly. By contrast, Qwen and Llama publish much more of the technical substrate: expert counts, head counts, positional strategies, training-token counts, and concrete post-training recipes. citeturn25view0turn24view3turn37view2turn28view3turn30view3turn31view0
+Các dòng LLM chính thống mới nhất đã hội tụ một số đặc điểm ở cấp độ sản phẩm có thể nhìn thấy: cửa sổ context rất dài, đầu vào multimodal, điều khiển reasoning rõ ràng và tích hợp chặt chẽ hơn với các công cụ hoặc vòng lặp agent. GPT-5.6, Claude 5, Gemini 3.x, Qwen3 và Llama 4 đều thể hiện mình là mô hình để mã hóa, công việc tri thức hoặc thực thi agent thay vì là các chatbot đơn giản. Nhưng họ khác nhau rõ rệt về những gì họ tiết lộ. OpenAI, Anthropic và Google hiện xuất bản tài liệu phong phú về sản phẩm, an toàn và deployment trong khi vẫn để lại nhiều lựa chọn kiến trúc cấp khối không được chỉ định công khai. Ngược lại, Qwen và Llama xuất bản nhiều nền tảng kỹ thuật hơn: số lượng expert, số lượng đầu người, chiến lược vị trí, số lượng huấn luyện- token và các công thức post-training cụ thể. citeturn25view0turn24view3turn37view2turn28view3turn30view3turn31view0
 
-The most important family-level difference is no longer just “better benchmark X.” It is *how* capability is packaged. OpenAI’s GPT-5 is publicly framed as a routed system with fast and deeper-thinking submodels and an API-facing Sol/Terra/Luna tiering system. Anthropic’s current differentiation centers on adaptive thinking, long-running agents, and safety routing for high-risk domains. Google’s Gemini 3.x emphasizes native multimodality, 1M-token contexts, and strong tool-enabled agentic workflows, with Deep Think as a specialized reasoning mode built atop Gemini 3.1 Pro. Qwen’s current flagship remains the most transparent open-weight family in this comparison, combining MoE and dense lines, explicit thinking-budget control, and a multimodal sibling line with disclosed visual-fusion upgrades. Meta’s Llama 4 is the clearest case of an open-weight frontier family built around early-fusion multimodality and MoE efficiency, with Scout optimized for extreme context and Maverick for higher-quality general multimodal work. citeturn17view1turn35view3turn24view3turn22view0turn37view3turn40view0turn33view3turn34view1turn31view0turn30view3
+Sự khác biệt quan trọng nhất ở cấp độ họ không còn chỉ là “điểm chuẩn X tốt hơn”. Đó là khả năng *làm thế nào* được đóng gói. GPT-5 của OpenAI được đóng framework công khai dưới dạng một hệ thống được định tuyến với các mô hình con thinking nhanh và sâu hơn cũng như hệ thống phân tầng Sol/Terra/Luna đối mặt với API. Sự khác biệt hiện tại của Anthropic tập trung vào adaptive thinking, các agent hoạt động lâu dài và định tuyến an toàn cho các miền có rủi ro cao. Gemini 3.x của Google nhấn mạnh tính đa phương thức của native, bối cảnh 1M- token và các quy trình làm việc agent hỗ trợ công cụ mạnh mẽ, với Deep Think là chế độ reasoning chuyên biệt được xây dựng trên Gemini 3.1 Pro. Flagship hiện tại của Qwen vẫn là dòng sản phẩm có weight mở minh bạch nhất trong so sánh này, kết hợp các dòng MoE và dense, kiểm soát ngân sách thinking rõ ràng và một dòng anh chị em multimodal với các nâng cấp kết hợp hình ảnh được công bố. Llama 4 của Meta là trường hợp rõ ràng nhất về dòng biên giới có weight mở được xây dựng dựa trên đa phương thức kết hợp sớm và hiệu quả MoE, với Scout được tối ưu hóa cho context và Maverick cực cao để làm việc multimodal chung chất lượng cao hơn. citeturn17view1turn35view3turn24view3turn22view0turn37view3turn40view0turn33view3turn34view1turn31view0turn30view3
 
-Across the five families, several similarities are now stable enough to matter in practice. All are optimized for tool use or agentic workflows; all support multimodal or at least vision-heavy use cases at the product surface; all offer long context well beyond the old 32K–128K range; and all have invested substantially in post-training to shape behavior, not just raw pretraining scale. The differences are in where each vendor puts its engineering bets: OpenAI on routed reasoning plus tool-rich productivity; Anthropic on persistent, high-context agents and Constitutional-AI-style alignment; Google on integrated multimodality and agentic execution; Qwen on controllable reasoning and open deployment flexibility; and Meta on efficient open-weight multimodality with extreme context in Scout and strong quality-per-cost in Maverick. citeturn25view0turn17view1turn24view3turn39search1turn37view2turn40view0turn33view3turn31view0turn30view3
+Trong năm họ, một số điểm tương đồng hiện đã đủ ổn định để trở thành vấn đề quan trọng trong thực tế. Tất cả đều được tối ưu hóa cho việc sử dụng công cụ hoặc quy trình làm việc agent; tất cả đều hỗ trợ multimodal hoặc ít nhất là các trường hợp sử dụng nặng về thị giác ở bề mặt sản phẩm; tất cả đều cung cấp context dài vượt xa phạm vi 32K–128K cũ; và tất cả đều đã đầu tư đáng kể vào post-training để định hình hành vi, không chỉ thang đo pretraining thô. Sự khác biệt nằm ở chỗ mỗi nhà cung cấp đặt cược kỹ thuật của mình: OpenAI trên reasoning được định tuyến cộng với năng suất phong phú về công cụ; Anthropic dựa trên các agent context bền bỉ, có chỉ số cao và sự liên kết theo phong cách Hiến pháp-AI; Google về thực thi đa phương thức và agent tích hợp; Qwen trên reasoning có thể điều khiển và deployment mở linh hoạt; và Meta về đa phương thức weight mở hiệu quả với context cực cao trong Scout và chất lượng trên mỗi chi phí mạnh mẽ trong Maverick. citeturn25view0turn17view1turn24view3turn39search1turn37view2turn40view0turn33view3turn31view0turn30view3
 
-## Scope and comparison criteria
+## Phạm vi và tiêu chí so sánh
 
-This report compares the **newest practically relevant public variants with usable primary documentation** as of **July 20, 2026**: **OpenAI GPT-5.6** (Sol/Terra/Luna), **Anthropic Claude Fable 5 and Sonnet 5**, **Google Gemini 3.1 Pro / Deep Think and 3.5 Flash**, **Qwen3-235B-A22B-2507 plus Qwen3-VL**, and **Meta Llama 4 Maverick / Scout**. I treat each as a *family snapshot*, because several vendors now expose multiple current tiers that share the same product generation but differ in cost, speed, or reasoning mode. Where a detail is absent from official documentation, I mark it **unspecified publicly** rather than infer it. citeturn35view3turn24view3turn37view2turn40view0turn27view2turn34view1turn30view3
+Báo cáo này so sánh **các biến thể công khai mới nhất có liên quan đến thực tế với tài liệu chính có thể sử dụng** kể từ **ngày 20 tháng 7 năm 2026**: **OpenAI GPT-5.6** (Sol/Terra/Luna), **Anthropic Claude Fable 5 và Sonnet 5**, **Google Gemini 3.1 Pro/Deep Think và 3.5 Flash**, ** Qwen3-235B-A22B-2507 cộng với Qwen3-VL** và **Meta Llama 4 Maverick/Scout**. Tôi coi mỗi cái như một *ảnh chụp nhanh họ*, vì một số nhà cung cấp hiện hiển thị nhiều cấp độ hiện tại có cùng thế hệ sản phẩm nhưng khác nhau về chi phí, tốc độ hoặc chế độ reasoning. Khi một chi tiết không có trong tài liệu chính thức, tôi đánh dấu nó **không được chỉ định công khai** thay vì suy luận nó. citeturn35view3turn24view3turn37view2turn40view0turn27view2turn34view1turn30view3
 
-Methodologically, the report prioritizes official release pages, API/model overviews, model cards, system cards, technical reports, and arXiv papers. For Qwen and Llama, the primary technical record is unusually rich, so architectural claims can be made at the block and training-recipe level. For GPT, Claude, and Gemini, the public record is much denser on product behavior, safety, and deployment than on internal transformer choices, so the analysis is correspondingly more conservative. citeturn28view3turn31view0turn25view0turn22view0turn37view2turn16view0
+Về mặt phương pháp, báo cáo ưu tiên các trang phát hành chính thức, tổng quan về API /mô hình, thẻ mô hình, system card, báo cáo kỹ thuật và tài liệu arXiv. Đối với Qwen và Llama, hồ sơ kỹ thuật cơ bản rất phong phú, do đó, các yêu cầu về kiến trúc có thể được đưa ra ở cấp độ khối và công thức huấn luyện. Đối với GPT, Claude và Gemini, hồ sơ công khai về hành vi, độ an toàn và deployment của sản phẩm dày đặc hơn nhiều so với các lựa chọn transformer nội bộ, do đó, việc phân tích tương ứng sẽ thận trọng hơn. citeturn28view3turn31view0turn25view0turn22view0turn37view2turn16view0
 
 ```mermaid
 timeline
-    title Recent family snapshots used in this report
-    2025 : Gemini 2.5 technical report
-         : Qwen3 technical report
-         : Llama 4 Scout and Maverick released
-    2026 : Gemini 3.1 Pro and Deep Think pages
-         : Gemini 3.5 Flash page
-         : Claude Fable 5 and Sonnet 5
-         : GPT-5.6 Sol Terra Luna
+    title Các snapshot họ mô hình gần đây được sử dụng trong báo cáo này
+    2025 : Báo cáo kỹ thuật Gemini 2.5
+         : Báo cáo kỹ thuật Qwen3
+         : Phát hành Llama 4 Scout và Maverick
+    2026 : Trang Gemini 3.1 Pro và Deep Think
+         : Trang Gemini 3.5 Flash
+         : Claude Fable 5 và Sonnet 5
+         : GPT-5.6 Sol, Terra, Luna
 ```
 
-The timeline above is limited to the family snapshots actually analyzed in the report, not every intermediate release. Gemini 2.5 is included because it is still Google’s newest public *technical report* with explicit discussion of architecture/training at the family level, while the newest 3.x pages mainly document capabilities and deployment. citeturn16view0turn37view2turn40view0turn24view3turn35view3turn28view3turn31view0
+Dòng thời gian ở trên được giới hạn ở các ảnh chụp nhanh dòng sản phẩm thực sự được phân tích trong báo cáo chứ không phải ở mọi bản phát hành trung gian. Gemini 2.5 được đưa vào vì đây vẫn là *báo cáo kỹ thuật* công khai mới nhất của Google với nội dung thảo luận rõ ràng về kiến trúc/huấn luyện ở cấp độ họ, trong khi các trang 3. x mới nhất chủ yếu ghi lại các khả năng và deployment. citeturn16view0turn37view2turn40view0turn24view3turn35view3turn28view3turn31view0
 
-## Comparative table
+## Bảng so sánh
 
-| Family snapshot                                             | Availability                                                                          | Architecture variant                                                                                                             | Attention and position engineering                                                                                                                                                                     | FFN and normalization                                                                                          | Tokenizer                                                                                            | Context and output                                                                                            | Multimodality and fusion                                                                                                                                    | Training and post-training highlights                                                                                                                                                                                            | Primary source basis                                                                   |
+| Ảnh chụp nhanh họ | sẵn có | Biến thể kiến trúc | Attention và kỹ thuật định vị | FFN và chuẩn hóa | Tokenizer | Context và đầu ra | Đa phương thức và hợp nhất | Điểm nổi bật về huấn luyện và post-training | Cơ sở nguồn chính |
 | ----------------------------------------------------------- | ------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| **OpenAI GPT-5.6** Sol / Terra / Luna                 | Proprietary via ChatGPT, Codex, and OpenAI API                                        | Publicly described as a routed GPT-5 system plus API tiers; dense vs MoE**unspecified publicly**                           | Attention type, Flash/sliding, and positional scheme**unspecified publicly**                                                                                                                     | Activation and normalization**unspecified publicly**                                                     | Design**unspecified publicly**                                                                 | 1.05M context, 128K max output                                                                                | Text and image input, text output; tools include functions, web search, file search, computer use                                                           | Routed between “main” and “thinking” behaviors; safe-completions; reasoning effort controls; multi-agent “ultra” on top of the family                                                                                      | citeturn17view1turn25view0turn35view0turn35view3                           |
-| **Anthropic Claude** Fable 5 / Sonnet 5               | Proprietary via Claude API, Bedrock, Google Cloud, Microsoft Foundry, Claude products | Internal transformer subtype**unspecified publicly**; product family differentiated by adaptive thinking and model tiering | Attention type and positional scheme**unspecified publicly**                                                                                                                                     | Activation and normalization**unspecified publicly**                                                     | Sonnet 5 uses a**new tokenizer**; tokenization design otherwise **unspecified publicly** | Fable 5, Opus 4.8, and Sonnet 5 each have 1M context and 128K max output                                      | Text and image input, text output; strong PDF/file document workflows; multimodal internals**unspecified publicly**                                   | Constitutional AI remains a defining alignment method for Claude broadly; Fable 5 is always adaptive-thinking; Sonnet 5 defaults to adaptive thinking and removes manual thinking budgets                                        | citeturn24view3turn22view0turn23view0turn39search1turn39search12         |
-| **Google Gemini 3.x** 3.1 Pro / Deep Think, 3.5 Flash | Proprietary via Gemini app, Gemini API, AI Studio, Enterprise surfaces                | Natively multimodal generative model family; decoder vs encoder-decoder**unspecified publicly**                            | Attention type, MoE status, and positional scheme for 3.x**unspecified publicly**; latest technical report with family-level details is still Gemini 2.5                                         | Activation and normalization**unspecified publicly**                                                     | **Unspecified publicly**                                                                       | 1M input, 64K output on 3.1 Pro and 3.5 Flash                                                                 | Text, image, video, audio, and PDF input; output text; publicly described as natively multimodal                                                            | 3.1 Deep Think is built on top of 3.1 Pro; 3.5 Flash emphasizes agentic coding and reasoning at low latency; function calling, search-as-a-tool, structured output, and code execution are first-class                           | citeturn37view2turn37view3turn40view0turn40view3turn16view0              |
-| **Qwen3** 235B-A22B-2507 and **Qwen3-VL**       | Open-weight, Apache 2.0; deployable via HF/vLLM/SGLang/local stacks                   | Causal language model family with both dense and MoE lines; flagship open model is 235B total / 22B active                       | GQA, RoPE, QK-Norm; RoPE base raised to 1,000,000 with ABF; YaRN and Dual Chunk Attention used for long-context extension; Qwen3-VL adds enhanced interleaved-MRoPE                                    | SwiGLU and RMSNorm with pre-norm                                                                               | Qwen BBPE tokenizer, vocab 151,669                                                                   | 235B-A22B-2507: 262,144 native and extendable to ~1.01M; Qwen3-VL: native 256K interleaved multimodal context | Qwen3-VL integrates ViT features with DeepStack and text-based timestamp alignment for video; text family supports`/think` and `/no_think` mode control | 36T-token pretraining over 119 languages; four-stage flagship post-training: long-CoT cold start, reasoning RL, thinking-mode fusion SFT, general-domain RL; strong-to-weak distillation for smaller models                      | citeturn27view2turn27view3turn28view0turn28view3turn33view0turn34view1 |
-| **Meta Llama 4** Maverick / Scout                     | Open-weight under Llama 4 Community License; downloadable from Meta and Hugging Face  | Auto-regressive MoE family with early fusion for native multimodality                                                            | Maverick uses alternating dense and MoE layers, shared + routed experts; Scout uses iRoPE with interleaved attention layers and inference-time attention temperature scaling for length generalization | Activation, normalization, and tokenizer specifics are**unspecified publicly** in the reviewed materials | **Unspecified publicly**                                                                       | Maverick: 1M context; Scout: 10M context                                                                      | Early-fusion multimodality into a unified backbone; MetaCLIP-derived vision encoder adapted to the LLM                                                      | Multimodal pretraining over very large token/image/video mixtures; Maverick post-training pipeline is lightweight SFT → online RL → lightweight DPO; both released as open-weight models, but with a non-OSI community license | citeturn30view3turn31view0turn29search6turn38news27                        |
+| **OpenAI GPT-5.6** Sol/Terra/Luna | Độc quyền thông qua ChatGPT, Codex và OpenAI API | Được mô tả công khai là hệ thống GPT-5 được định tuyến cộng với các bậc API; dense so với MoE **không được chỉ định công khai** | Loại Attention, sơ đồ Flash/trượt và vị trí **không được chỉ định công khai** | Kích hoạt và chuẩn hóa **không được chỉ định công khai** | thiết kế **không được chỉ định công khai** | Đầu ra 1,05M context, 128K max | Nhập văn bản và hình ảnh, xuất văn bản; công cụ bao gồm các function, tìm kiếm trên web, tìm kiếm file, computer use | Được định tuyến giữa các hành vi “chính” và “thinking”; hoàn thành an toàn; Bộ điều khiển reasoning effort; multi- agent “cực phẩm” hàng đầu trong họ | citeturn17view1turn25view0turn35view0turn35view3 |
+| **Anthropic Claude** Fable 5/Sonnet 5 | Độc quyền thông qua các sản phẩm Claude API, Bedrock, Google Cloud, Microsoft Foundry, Claude | Loại phụ transformer nội bộ **không được chỉ định công khai**; họ sản phẩm được phân biệt bởi adaptive thinking và phân cấp mô hình | Sơ đồ vị trí và loại Attention **không được chỉ định công khai** | Kích hoạt và chuẩn hóa **không được chỉ định công khai** | Sonnet 5 sử dụng **tokenizer mới**; thiết kế token khác **không được chỉ định công khai** | Fable 5, Opus 4.8 và Sonnet 5 đều có đầu ra 1M context và 128K max | Nhập văn bản và hình ảnh, xuất văn bản; quy trình làm việc tài liệu PDF/file mạnh mẽ; Nội bộ multimodal **không được chỉ định công khai** | Constitutional AI vẫn là phương pháp căn chỉnh xác định cho Claude nói chung; Fable 5 luôn có tính thích ứng- thinking; Sonnet 5 mặc định là adaptive thinking và loại bỏ ngân sách thinking thủ công | citeturn24view3turn22view0turn23view0turn39search1turn39search12 |
+| **Google Gemini 3.x** 3.1 Pro/Deep Think, 3.5 Flash | Độc quyền thông qua ứng dụng Gemini, Gemini API, AI Studio, Enterprise surface | Họ mô hình thế hệ multimodal nguyên bản; bộ giải mã và bộ mã hóa-giải mã **không được chỉ định công khai** | Loại Attention, trạng thái MoE và sơ đồ vị trí cho 3. x **không được chỉ định công khai**; báo cáo kỹ thuật mới nhất với chi tiết cấp độ họ vẫn là Gemini 2.5 | Kích hoạt và chuẩn hóa **không được chỉ định công khai** | **Không được chỉ định công khai** | Đầu vào 1M, đầu ra 64K trên 3.1 Pro và 3.5 Flash | Đầu vào văn bản, hình ảnh, video, âm thanh và PDF; văn bản đầu ra; được mô tả công khai là multimodal nguyên bản | 3.1 Deep Think được xây dựng dựa trên 3.1 Pro;3.5 Flash nhấn mạnh vào mã hóa agent và reasoning ở độ trễ thấp; function calling, công cụ tìm kiếm, structured output và code execution là hạng nhất | citeturn37view2turn37view3turn40view0turn40view3turn16view0 |
+| ** Qwen3** 235B-A22B-2507 và ** Qwen3-VL** | Trọng lượng mở, Apache 2.0; có thể triển khai thông qua ngăn xếp HF/ vLLM/SGLang/cục bộ | Họ mô hình ngôn ngữ nhân quả với cả hai dòng dense và MoE; mô hình mở hàng đầu có tổng cộng 235B/22B hoạt động | GQA, RoPE, QK-Norm; Cơ sở RoPE tăng lên 1.000.000 với ABF; YaRN và Dual Chunk Attention được sử dụng cho phần mở rộng long-context; Qwen3-VL bổ sung tính năng xen kẽ nâng cao- MRoPE | SwiGLU và RMSNorm với định mức trước | Qwen BBPE tokenizer, từ vựng 151,669 | 235B-A22B-2507: 262.144 native và có thể mở rộng tới ~1,01M; Qwen3-VL: native 256K xen kẽ multimodal context | Qwen3-VL tích hợp các tính năng ViT với DeepStack và căn chỉnh dấu thời gian dựa trên văn bản cho video; Họ văn bản hỗ trợ điều khiển chế độ `/think` và `/no_think` | 36T- token pretraining trên 119 ngôn ngữ; hạm bốn giai đoạn post-training: khởi động nguội CoT dài, reasoning RL, thinking -mode fusion SFT, RL miền chung; chưng cất mạnh đến yếu cho các mô hình nhỏ hơn | citeturn27view2turn27view3turn28view0turn28view3turn33view0turn34view1 |
+| **Meta Llama 4** Maverick/Scout | Trọng lượng mở theo Giấy phép Cộng đồng Llama 4; có thể tải xuống từ Meta và Hugging Face | Họ MoE tự động hồi quy với sự early fusion cho đa phương thức native | Maverick sử dụng các lớp dense và MoE xen kẽ, các chuyên gia được chia sẻ + định tuyến; Scout sử dụng iRoPE với các lớp attention xen kẽ và chia tỷ lệ attention temperature theo thời gian suy luận để khái quát hóa độ dài | Thông tin cụ thể về kích hoạt, chuẩn hóa và tokenizer **không được chỉ định công khai** trong các tài liệu được đánh giá | **Không được chỉ định công khai** | Maverick: 1M context; Scout: 10M context | Đa phương thức kết hợp sớm thành một backbone thống nhất; MetaCLIP vision encoder có nguồn gốc từ vision encoder được điều chỉnh phù hợp với LLM | Multimodal pretraining trên hỗn hợp token /hình ảnh/video rất lớn; Đường ống Maverick post-training có weight nhẹ SFT → RL trực tuyến → DPO nhẹ; cả hai đều được phát hành dưới dạng mô hình weight mở, nhưng có giấy phép cộng đồng không phải OSI | citeturn30view3turn31view0turn29search6turn38news27 |
 
-Two immediate patterns emerge from the table. First, the **open families disclose more of the actual transformer stack**: Qwen publishes GQA, RoPE, QK-Norm, RMSNorm, SwiGLU, tokenizer vocabulary, expert counts, and long-context engineering, while Llama 4 publishes MoE topology, early fusion, expert counts, context sizes, and post-training sequence. Second, the **closed families increasingly differentiate at the system and product layer**, not the block diagram layer: GPT-5.6 through routing and effort levels, Claude through adaptive thinking plus domain-specific safeguards, and Gemini through native multimodality, Deep Think, and broad tool surfaces. citeturn28view3turn33view0turn31view0turn17view1turn22view0turn37view3turn40view3
+Hai mô hình ngay lập tức xuất hiện từ bảng. Đầu tiên, **các họ mở tiết lộ nhiều hơn về ngăn xếp transformer thực tế**: Qwen xuất bản GQA, RoPE, QK-Norm, RMSNorm, SwiGLU, tokenizer từ vựng, số lượng expert và kỹ thuật long-context, trong khi Llama 4 xuất bảnCấu trúc liên kết MoE, fusion sớm, số lượng expert, kích thước context và trình tự post-training. Thứ hai, **các dòng đóng ngày càng khác biệt ở lớp hệ thống và sản phẩm**, chứ không phải ở lớp sơ đồ khối: GPT-5.6 thông qua định tuyến và các cấp độ effort, Claude đến adaptive thinking cộng với các biện pháp bảo vệ theo miền cụ thể và Gemini đến đa phương thức native, Deep Think và các bề mặt công cụ rộng. citeturn28view3turn33view0turn31view0turn17view1turn22view0turn37view3turn40view3
 
-## Family-by-family analysis
+## Phân tích theo từng họ
 
 ### OpenAI GPT
 
-OpenAI’s newest GPT family is best understood publicly as a **routed reasoning system** rather than a single monolithic transformer description. The GPT-5 system card says GPT-5 is “a unified system” combining a smart/fast model, a deeper reasoning model, and a real-time router that decides which to use based on conversation type, complexity, tool needs, and explicit intent. Separately, the current API model catalog exposes **GPT-5.6 Sol, Terra, and Luna** as durable tiers with the same 1.05M context window, 128K max output, image input, text output, and built-in tool support. OpenAI does **not** publicly specify whether these deployed models are dense or MoE, what attention variant they use, how positional encoding is handled, or what activation and normalization scheme they use. citeturn17view1turn25view0turn35view3
+Dòng GPT mới nhất của OpenAI được hiểu một cách công khai nhất là **hệ thống reasoning được định tuyến** thay vì một mô tả transformer nguyên khối duy nhất. System card GPT-5 cho biết GPT-5 là “một hệ thống hợp nhất” kết hợp mô hình thông minh/nhanh, mô hình reasoning sâu hơn và router thời gian thực quyết định sử dụng cái nào dựa trên loại hội thoại, độ phức tạp, nhu cầu công cụ và mục đích rõ ràng. Riêng biệt, danh mục mô hình API hiện tại hiển thị ** GPT-5.6 Sol, Terra và Luna** là các bậc bền bỉ với cùng cửa sổ context 1,05M, đầu ra 128K max, đầu vào hình ảnh, đầu ra văn bản và hỗ trợ công cụ tích hợp. OpenAI **không** chỉ định công khai liệu các mô hình được triển khai này là dense hay MoE, chúng sử dụng biến thể attention nào, cách xử lý mã hóa vị trí hoặc chúng sử dụng sơ đồ kích hoạt và chuẩn hóa nào. citeturn17view1turn25view0turn35view3
 
-What *is* specific about GPT right now is the product-layer compute policy. The official docs expose explicit reasoning levels from **none** through **max**, while the GPT-5.6 launch page adds **ultra**, described as coordinating multiple agents across parallel workstreams for harder work. This means GPT’s most visible innovation is less “new kind of transformer block” and more **dynamic allocation of deliberation and agent parallelism** over a long-context, tool-enabled base system. That is a real architectural distinction at deployment time, even if the internal neural architecture remains undisclosed. citeturn25view0turn35view3turn35view0
+Điều * cụ thể* về GPT hiện nay là chính sách điện toán lớp sản phẩm. Các tài liệu chính thức hiển thị các cấp độ reasoning rõ ràng từ **none** đến ** max**, trong khi trang khởi chạy GPT-5.6 bổ sung **siêu**, được mô tả là điều phối nhiều agent trên các luồng công việc song song để làm việc chăm chỉ hơn. Điều này có nghĩa là sự đổi mới rõ ràng nhất của GPT là ít “loại khối transformer mới” hơn và **phân bổ động của sự cân nhắc và tính song song của agent** trên long-context, hệ thống cơ sở hỗ trợ công cụ. Đó là một sự khác biệt thực sự về kiến trúc tại thời điểm deployment, ngay cả khi kiến trúc thần kinh bên trong vẫn chưa được tiết lộ. citeturn25view0turn35view3turn35view0
 
-On alignment and post-training, OpenAI’s current public materials emphasize **safe-completions**, reduced hallucinations, stronger instruction following, and lower sycophancy, but do not publish a GPT-5.6-specific RLHF or DPO recipe at the level Qwen or Llama disclose. The system card also shows a Preparedness-oriented deployment stance, including precautionary treatment of GPT-5-thinking in some bio/chem domains. In other words, OpenAI’s public transparency is strongest on **routing, guardrails, and evals**, weaker on **block-level internals**. citeturn17view1turn35view3
+Về căn chỉnh và post-training, các tài liệu công khai hiện tại của OpenAI nhấn mạnh **hoàn thành an toàn**, giảm ảo giác, tuân theo hướng dẫn mạnh mẽ hơn và giảm tính đồng bộ, nhưng không xuất bản công thức RLHF hoặc DPO dành riêng cho GPT-5.6 ở cấp độ Qwen hoặc Llama tiết lộ. System card cũng hiển thị quan điểm deployment thiên về Chuẩn bị sẵn sàng, bao gồm cả việc xử lý phòng ngừa GPT-5-thinking trong một số lĩnh vực sinh học/hóa học. Nói cách khác, tính minh bạch công khai của OpenAI mạnh nhất ở **định tuyến, guardrail và evals**, yếu hơn ở **nội bộ cấp khối**. citeturn17view1turn35view3
 
 ### Anthropic Claude
 
-Anthropic’s newest current family snapshot separates into **Fable 5** as the most capable widely released model and **Sonnet 5** as the faster, cheaper, mainstream tier. The models overview gives all three top Claude tiers—Fable 5, Opus 4.8, and Sonnet 5—a **1M-token context window** and **128K max output**, while Sonnet 5’s migration page adds a specifically documented tokenizer change and a shift to **adaptive thinking** as the default behavior. Anthropic’s public materials do not specify whether the model internals are dense or MoE, which attention pattern they use, or which normalization and activation stack they use. citeturn24view3turn22view0
+Ảnh chụp nhanh họ mới nhất của Anthropic được tách thành **Fable 5** là mô hình được phát hành rộng rãi có khả năng nhất và **Sonnet 5** là mô hình phổ thông, nhanh hơn, rẻ hơn. Phần tổng quan về mô hình cung cấp cả ba cấp Claude hàng đầu—Fable 5, Opus 4.8 và Sonnet 5—a **1M- token context window** và **đầu ra 128K max**, trong khi trang di chuyển của Sonnet 5 thêm một thay đổi tokenizer được ghi nhận cụ thể và chuyển sang ** adaptive thinking** làm hành vi mặc định. Các tài liệu công khai của Anthropic không chỉ rõ nội bộ của mô hình là dense hay MoE, mô hình attention nào họ sử dụng hoặc họ sử dụng ngăn xếp kích hoạt và chuẩn hóa nào. citeturn24view3turn22view0
 
-Claude’s distinctive public signature is therefore behavioral and alignment-centered. Fable 5 is presented as the tier for **days-long, long-running, asynchronous tasks**, especially coding and document-heavy knowledge work. It is also accompanied by special bio/cyber safeguards, with many high-risk prompts automatically routed down to Opus 4.8 rather than answered directly by Fable 5. Sonnet 5, meanwhile, is presented as a drop-in upgrade whose defaults are more agentic: adaptive thinking is on by default, manual thinking budgets are removed, and non-default sampling parameters are rejected. That is unusual among frontier APIs and suggests Anthropic is pushing users toward a narrower, more deterministic operational profile for its newest production models. citeturn23view0turn24view3turn22view0
+Do đó, chữ ký công khai đặc biệt của Claude tập trung vào hành vi và sự liên kết. Fable 5 được trình bày dưới dạng cấp độ cho **các tác vụ kéo dài nhiều ngày, chạy dài, không đồng bộ**, đặc biệt là công việc coding và chứa nhiều kiến thức về tài liệu. Nó cũng đi kèm với các biện pháp bảo vệ sinh học/mạng đặc biệt, với nhiều prompt có nguy cơ cao được tự động chuyển xuống Opus 4.8 thay vì được Fable 5 trả lời trực tiếp. Trong khi đó, Sonnet 5 được trình bày dưới dạng bản nâng cấp thả xuống có mặc định có tác dụng hơn: adaptive thinking được bật theo mặc định, ngân sách thinking thủ công bị xóa và các tham số sampling không mặc định bị từ chối. Điều đó là bất thường đối với các API biên giới và cho thấy Anthropic đang thúc đẩy người dùng hướng tới một hồ sơ hoạt động hẹp hơn, mang tính xác định hơn cho các mô hình sản xuất mới nhất của mình. citeturn23view0turn24view3turn22view0
 
-Anthropic also remains the clearest case where **alignment philosophy itself is a family differentiator**. Claude is explicitly associated with **Constitutional AI**, which Anthropic describes as supervised learning plus reinforcement learning guided by a set of principles rather than only by harmfulness labels from humans. The company’s current transparency materials still describe Constitutional AI as central to how Claude is aligned with human values during reinforcement learning. That makes Claude the family where post-training philosophy is most legible publicly, even though the base transformer architecture is not. citeturn39search1turn39search12turn39search2
+Anthropic cũng vẫn là trường hợp rõ ràng nhất trong đó **bản thân triết lý liên kết đã là yếu tố tạo ra sự khác biệt trong họ**. Claude được liên kết rõ ràng với ** Constitutional AI**, mà Anthropic mô tả là học tập có giám sát cộng với reinforcement learning được hướng dẫn bởi một bộ nguyên tắc thay vì chỉ bởi các nhãn có hại từ con người. Các tài liệu minh bạch hiện tại của công ty vẫn mô tả Constitutional AI là trọng tâm trong cách Claude phù hợp với các giá trị con người trong quá trình reinforcement learning. Điều đó làm cho Claude trở thành dòng sản phẩm có triết lý post-training dễ đọc nhất một cách công khai, mặc dù kiến trúc transformer cơ bản thì không. citeturn39search1turn39search12turn39search2
 
 ### Google Gemini
 
-Google’s newest public Gemini snapshot is bifurcated: **Gemini 3.1 Pro** remains the “best for complex tasks” and is the basis for **Gemini 3.1 Deep Think**, while **Gemini 3.5 Flash** is the newer fast frontier tier for agents and coding. The official model pages show both 3.1 Pro and 3.5 Flash at **1M input / 64K output**, with support for text, image, video, audio, and PDF input, plus function calling, structured output, search as a tool, and code execution. Deep Think is explicitly described as a specialized reasoning mode built on top of Gemini 3.1 Pro. citeturn37view2turn37view3turn40view0
+Ảnh chụp nhanh Gemini công khai mới nhất của Google được chia thành hai nhánh: ** Gemini 3.1 Pro** vẫn là “tốt nhất cho các tác vụ phức tạp” và là cơ sở cho ** Gemini 3.1 Deep Think**, trong khi ** Gemini 3.5 Flash** là cấp biên giới nhanh mới hơn dành cho các agent và mã hóa. Các trang mô hình chính thức hiển thị cả 3.1 Pro và 3.5 Flash ở **đầu vào 1M/đầu ra 64K**, hỗ trợ đầu vào văn bản, hình ảnh, video, âm thanh và PDF, cùng với function calling, structured output, tìm kiếm dưới dạng công cụ và code execution. Deep Think được mô tả rõ ràng là chế độ reasoning chuyên dụng được xây dựng dựa trên Gemini 3.1 Pro. citeturn37view2turn37view3turn40view0
 
-Architecturally, Google is currently less transparent than Qwen or Meta for the newest Gemini 3.x family. The current 3.x product pages do not publicly specify dense vs MoE, attention style, positional encoding, tokenizer design, normalization, or FFN activation. The newest detailed technical report in the public record is still **Gemini 2.5**, which describes the 2.x family as **natively multimodal**, with **>1M-token inputs**, thinking, and tool use. The outward behavior of Gemini 3.x strongly continues that trajectory, but a rigorous report should stop short of asserting continuity for undisclosed block-level choices. citeturn16view0turn37view2turn40view3
+Về mặt kiến trúc, Google hiện kém minh bạch hơn Qwen hoặc Meta đối với dòng Gemini 3.x mới nhất. Các trang sản phẩm 3. x hiện tại không chỉ định công khai dense so với MoE, kiểu attention, mã hóa vị trí, thiết kế tokenizer, chuẩn hóa hoặc kích hoạt FFN. Báo cáo kỹ thuật chi tiết mới nhất trong hồ sơ công khai vẫn là ** Gemini 2.5**, mô tả dòng 2. x là **multimodal** ban đầu **, với** >1M- token đầu vào **, thinking và cách sử dụng công cụ. Hành vi bên ngoài của Gemini 3.x tiếp tục quỹ đạo đó một cách mạnh mẽ, nhưng một báo cáo nghiêm ngặt sẽ không thể khẳng định tính liên tục đối với các lựa chọn cấp khối không được tiết lộ. citeturn16view0turn37view2turn40view3
 
-The clearest Gemini-specific differentiator is therefore **integrated multimodality plus agent execution**. Gemini 3.5 Flash is explicitly positioned for frontier agentic coding, multimodal understanding, long-horizon tasks, and multi-step problem solving, while the benchmark table on Google’s page shows it competitive or leading on several agentic and multimodal tasks relative to prior Gemini and some rival models. The practical takeaway is that Gemini’s family identity is no longer “a chat model with image support”; it is “a natively multimodal, tool-using, long-context agent platform,” even if the exact internal fusion stack is not publicly specified for 3.x. citeturn40view0turn40view3turn37view2
+Do đó, điểm khác biệt rõ ràng nhất của Gemini là **đa phương thức tích hợp cộng với việc thực thi agent**. Gemini 3.5 Flash được định vị rõ ràng cho mã hóa agent biên giới, hiểu biết về multimodal, các tác vụ có tầm nhìn dài và giải quyết vấn đề nhiều bước, trong khi bảng điểm chuẩn trên trang của Google cho thấy nó có tính cạnh tranh hoặc dẫn đầu trong một số tác vụ agent và multimodal so với Gemini trước đó và một số mô hình đối thủ. Bài học thực tế rút ra là danh tính họ của Gemini không còn là “chat template có hỗ trợ hình ảnh” nữa; nó là “một nền tảng multimodal nguyên bản, sử dụng công cụ, long-context agent,” ngay cả khi ngăn xếp hợp nhất nội bộ chính xác không được chỉ định công khai cho 3. x. citeturn40view0turn40view3turn37view2
 
 ### Qwen
 
-Qwen is the family in this set with the **richest public technical disclosure**. The Qwen3 technical report states that the dense line continues the Qwen2.5 stack of **GQA, SwiGLU, RoPE, and RMSNorm with pre-normalization**, while adding **QK-Norm** and removing QKV bias. It also publishes the MoE topology: the flagship **Qwen3-235B-A22B** has **128 experts with 8 activated experts per token**, and the family uses **byte-level BPE** with a **151,669-token vocabulary**. Public technical sources also disclose that Qwen3 was pretrained on **36T tokens across 119 languages and dialects**. citeturn28view0turn28view3turn33view2
+Qwen là họ trong bộ này có **công bố kỹ thuật công khai phong phú nhất**. Báo cáo kỹ thuật Qwen3 cho biết dòng dense tiếp tục ngăn xếp Qwen2.5 của ** GQA, SwiGLU, RoPE và RMSNorm với tính năng chuẩn hóa trước**, đồng thời thêm ** QK-Norm** và loại bỏ độ lệch QKV. Nó cũng xuất bản cấu trúc liên kết MoE: hàng đầu ** Qwen3-235B-A22B** có **128 chuyên gia với 8 chuyên gia được kích hoạt trên mỗi token** và dòng sử dụng **BPE cấp byte** với **151.669- token vốn từ vựng**. Các nguồn kỹ thuật công khai cũng tiết lộ rằng Qwen3 đã được huấn luyện trước trên **36T token trên 119 ngôn ngữ và phương ngữ**. citeturn28view0turn28view3turn33view2
 
-Qwen is also unusually precise about long-context engineering. The technical report says Qwen3 raises the RoPE base frequency from 10,000 to **1,000,000** using **ABF**, and introduces **YaRN** plus **Dual Chunk Attention** to increase inference-time sequence capacity. The updated **Qwen3-235B-A22B-2507** model card gives the open-weight flagship **262,144 native context**, extendable to about **1.01M tokens**, while the long-context instructions specify sparse-attention serving configurations and even the approximate memory footprint for true 1M-token use. This is considerably more concrete than what frontier closed vendors now publish. citeturn28view4turn27view2turn27view3
+Qwen cũng có độ chính xác bất thường về kỹ thuật long-context. Báo cáo kỹ thuật cho biết Qwen3 tăng tần số cơ sở RoPE từ 10.000 lên **1.000.000** bằng cách sử dụng **ABF** và giới thiệu ** YaRN** cộng với **Dual Chunk Attention** để tăng công suất chuỗi thời gian suy luận. Thẻ mô hình ** Qwen3-235B-A22B-2507** được cập nhật cung cấp hàng đầu có weight mở **262.144 native context**, có thể mở rộng tới khoảng **1,01 triệu token**, trong khi hướng dẫn long-context chỉ định cấu hình sparse-attention serving và thậm chí cả dung lượng bộ nhớ gần đúng chosử dụng đúng 1M- token. Điều này cụ thể hơn đáng kể so với những gì các nhà cung cấp đóng cửa ở biên giới công bố hiện nay. citeturn28view4turn27view2turn27view3
 
-Post-training is another area where Qwen is unusually explicit. Qwen3’s flagship recipe is a **four-stage** process: long-CoT cold start, reasoning RL, thinking-mode fusion via SFT, and general-domain RL. The family’s unusual user-facing differentiator is that it merges **thinking** and **non-thinking** into the same model, surfaced through **`/think`** and **`/no_think`** controls and a **thinking budget** mechanism. For smaller models, Qwen describes a strong-to-weak distillation path rather than repeating the full expensive flagship pipeline. citeturn33view0turn33view1turn33view3
+Post-training là một lĩnh vực khác mà Qwen tỏ ra rõ ràng một cách bất thường. Công thức hàng đầu của Qwen3 là một quy trình **bốn giai đoạn**: khởi động nguội CoT trong thời gian dài, reasoning RL, kết hợp chế độ thinking thông qua SFT và miền chung RL. Điểm khác biệt bất thường đối với người dùng của dòng này là nó hợp nhất ** thinking** và ** non-thinking** vào cùng một mô hình, hiển thị thông qua các điều khiển ** `/think`** và ** `/no_think`** và cơ chế ngân sách ** thinking**. Đối với các mô hình nhỏ hơn, Qwen mô tả lộ trình chưng cất từ mạnh đến yếu thay vì lặp lại toàn bộ quy trình chưng cất đắt tiền hàng đầu. citeturn33view0turn33view1turn33view3
 
-For multimodality, the newest Qwen sibling to know is **Qwen3-VL**. Its public docs and technical-report abstract describe **interleaved 256K multimodal context**, **enhanced interleaved-MRoPE**, **DeepStack** integration for multi-level ViT features, and **text-based timestamp alignment** for video understanding. That makes Qwen arguably the most transparent family here not only for text-only LLM internals, but also for multimodal fusion specifics. citeturn34view0turn34view1
+Đối với đa phương thức, anh chị em Qwen mới nhất cần biết là ** Qwen3-VL**. Các tài liệu công khai và bản tóm tắt báo cáo kỹ thuật của nó mô tả **xen kẽ 256K multimodal context**, **xen kẽ nâng cao- MRoPE**, **tích hợp DeepStack** cho các tính năng ViT đa cấp và **căn chỉnh dấu thời gian dựa trên văn bản** để hiểu video. Điều đó làm cho Qwen được cho là dòng minh bạch nhất ở đây không chỉ đối với nội bộ LLM chỉ có văn bản mà còn đối với các tham số cụ thể của hợp nhất multimodal. citeturn34view0turn34view1
 
 ### Meta Llama
 
-Llama 4’s public design is the clearest among the big Western open-weight families. Meta’s official release and model cards describe **Llama 4 Scout** and **Llama 4 Maverick** as **auto-regressive MoE** models with **early fusion** for native multimodality. Maverick is listed at **17B active / 400B total** with **128 experts**, while Scout is **17B active / 109B total** with **16 experts**. The public model card also exposes context and training-scale asymmetry: Scout targets **10M context** and about **40T tokens**, whereas Maverick targets **1M context** and about **22T tokens**. citeturn30view3turn31view0
+thiết kế công cộng của Llama 4 là rõ ràng nhất trong số các họ weight mở lớn của phương Tây. Thẻ mô hình và bản phát hành chính thức của Meta mô tả ** Llama 4 Scout** và ** Llama 4 Maverick** là **các mô hình MoE** tự động hồi quy ** với** kết hợp sớm ** cho đa phương thức native. Maverick được liệt kê ở mức** 17B hoạt động/tổng số 400B ** với** 128 chuyên gia **, trong khi Scout là** 17B hoạt động/tổng số 109B ** với** 16 chuyên gia **. Thẻ mô hình công khai cũng hiển thị context và sự bất đối xứng trong quy mô huấn luyện: Scout nhắm mục tiêu** 10 triệu context ** và khoảng** 40T token **, trong khi Maverick nhắm mục tiêu** 1 triệu context ** và khoảng** 22T token **. citeturn30view3turn31view0
 
-Meta also reveals more about the serving topology than most proprietary vendors do. The release blog says Maverick uses **alternating dense and MoE layers**, and that each token is sent to a **shared expert** plus one routed expert among 128. Scout, in contrast, is the family’s long-context research-heavy model: Meta describes an **iRoPE architecture** combining **interleaved attention layers without positional embeddings** in some layers, RoPE in most layers, and inference-time attention temperature scaling to improve length generalization. That makes Scout the most explicit long-context architecture experiment in this whole comparison. citeturn31view0
+Meta cũng tiết lộ nhiều hơn về cấu trúc liên kết serving so với hầu hết các nhà cung cấp độc quyền. Blog phát hành cho biết Maverick sử dụng **các lớp dense và MoE xen kẽ**, và mỗi lớp token được gửi đến **expert được chia sẻ** cộng với một expert được định tuyến trong số 128. Ngược lại, Scout là mô hình nghiên cứu long-context của dòng: Meta mô tả kiến trúc ** iRoPE** kết hợp **xen kẽCác lớp attention không có phần nhúng vị trí** trong một số lớp, RoPE trong hầu hết các lớp và attention temperature chia tỷ lệ theo thời gian suy luận để cải thiện khả năng khái quát hóa độ dài. Điều đó khiến Scout trở thành thử nghiệm kiến trúc long-context rõ ràng nhất trong toàn bộ cuộc so sánh này. citeturn31view0
 
-Llama 4’s post-training disclosure is also relatively strong. Meta says Maverick was post-trained using **lightweight SFT → online RL → lightweight DPO**, and that balancing modalities, reasoning, and conversational quality was a central problem. On multimodality, Meta emphasizes **early fusion** plus a **MetaCLIP-derived vision encoder** trained to adapt to the LLM, as well as image/video-still pretraining to support broad visual reasoning. The family therefore stands out as the most clearly documented case of **native multimodality in an open-weight frontier family**. citeturn31view0turn30view3
+Tiết lộ post-training của Llama 4 cũng tương đối mạnh mẽ. Meta cho biết Maverick đã được huấn luyện sau khi sử dụng **SFT nhẹ → RL trực tuyến → DPO nhẹ** và việc cân bằng các phương thức reasoning và chất lượng đàm thoại là vấn đề trọng tâm. Về đa phương thức, Meta nhấn mạnh **kết hợp sớm** cộng với ** MetaCLIP có nguồn gốc từ vision encoder** được huấn luyện để thích ứng với LLM, cũng như pretraining hình ảnh/video tĩnh để hỗ trợ reasoning hình ảnh rộng. Do đó, dòng này nổi bật là trường hợp được ghi chép rõ ràng nhất về ** đa phương thức native trong dòng biên giới có weight mở**. citeturn31view0turn30view3
 
-One caution is benchmark interpretation. Meta’s official blog highlighted an **experimental chat variant** of Maverick for LMArena, and later reporting showed that the leaderboard variant was not identical to the public release, which complicates direct transfer of some headline benchmark claims to the downloadable model. That does not negate the family’s technical innovations, but it does mean Llama 4’s public benchmark story deserves more scrutiny than its architecture story. citeturn31view0turn38news28
+Một sự thận trọng là giải thích điểm chuẩn. Blog chính thức của Meta đã nêu bật **biến thể trò chuyện thử nghiệm** của Maverick cho LMArena và báo cáo sau đó cho thấy biến thể bảng xếp hạng không giống với bản phát hành công khai, điều này làm phức tạp việc chuyển trực tiếp một số xác nhận điểm chuẩn tiêu đề sang mô hình có thể tải xuống. Điều đó không phủ nhận những đổi mới kỹ thuật của dòng sản phẩm này, nhưng điều đó có nghĩa là câu chuyện chuẩn công khai của Llama 4 xứng đáng được xem xét kỹ lưỡng hơn câu chuyện kiến trúc của nó. citeturn31view0turn38news28
 
-## Public dataflow walkthroughs
+## Hướng dẫn về luồng dữ liệu công khai
 
-### GPT family dataflow
+### Luồng dữ liệu dòng GPT
 
 ```mermaid
 flowchart LR
-    U[User text plus optional image or file] --> P[Parsing and tokenization<br/>image or file preprocessing unspecified publicly]
-    P --> R[GPT-5 router<br/>main path vs thinking path]
-    R --> E[Reasoning effort<br/>none to max or ultra]
-    E --> T[Tool loop<br/>functions web search file search computer use]
-    T --> D[Decoder generates final text tokens]
+    U[Văn bản người dùng cộng với hình ảnh hoặc file tùy chọn] --> P[Phân tích cú pháp và tokenxử lý trước hình ảnh hoặc file không được chỉ định công khai]
+    P --> R[GPT-5 routerđường dẫn chính so với đường dẫn thinking]
+    R --> E[Reasoning effortkhông có max hoặc cực]
+    E --> T[Vòng lặp công cụfunction tìm kiếm file web tìm kiếm computer use]
+    T --> D[Bộ giải mã tạo token văn bản cuối cùng]
 ```
 
-This diagram reflects only what OpenAI states publicly: a routed GPT-5 system, explicit effort controls, and built-in tool surfaces. OpenAI does **not** publicly document the image encoder path, attention kernels, or internal multimodal fusion mechanism for GPT-5.6. citeturn17view1turn25view0turn35view0
+Sơ đồ này chỉ phản ánh những gì OpenAI nêu công khai: hệ thống GPT-5 được định tuyến, các điều khiển effort rõ ràng và các bề mặt công cụ tích hợp. OpenAI **không** ghi lại công khai đường dẫn bộ mã hóa hình ảnh, hạt nhân attention hoặc cơ chế hợp nhất multimodal nội bộ cho GPT-5.6. citeturn17view1turn25view0turn35view0
 
-A concrete public-dataflow example is:
+Một ví dụ về luồng dữ liệu công khai cụ thể là:
 
-1. A user sends a long prompt plus an image or file.
-2. OpenAI tokenizes the text and processes the other input through an **unspecified publicly** pathway.
-3. The GPT-5 router decides whether the turn stays on the fast path or the deeper reasoning path; the selected reasoning level shapes how much additional deliberation the system uses.
-4. If needed, the model enters tool loops through functions, web search, file search, or computer use, then returns final text tokens. citeturn17view1turn25view0turn35view0
+1. Người dùng gửi prompt dài kèm theo hình ảnh hoặc file.
+2. OpenAI mã hóa văn bản và xử lý dữ liệu đầu vào khác thông qua đường dẫn **công khai không xác định**.
+3. GPT-5 router quyết định xem ngã rẽ vẫn đi trên đường nhanh hay đường reasoning sâu hơn; mức reasoning đã chọn sẽ định hình mức độ cân nhắc bổ sung mà hệ thống sử dụng.
+4. Nếu cần, mô hình sẽ nhập các vòng lặp công cụ thông qua các function, tìm kiếm trên web, tìm kiếm file hoặc computer use, sau đó trả về token văn bản cuối cùng. citeturn17view1turn25view0turn35view0
 
-### Claude family dataflow
+### Luồng dữ liệu dòng Claude
 
 ```mermaid
 flowchart LR
-    U[User text plus image or PDF] --> P[Tokenization and document or vision ingestion<br/>internal pathway unspecified publicly]
-    P --> A[Adaptive thinking<br/>always on for Fable 5 and Sonnet 5]
-    A --> S[Safety routing and policy checks]
-    S --> F[Possible fallback for some bio or cyber requests]
-    F --> O[Final text tokens]
+    U[Văn bản người dùng cộng với hình ảnh hoặc PDF] --> P[Token và nhập tài liệu hoặc tầm nhìncon đường nội bộ không được chỉ định công khai]
+    P --> A[luôn bật cho Fable 5 và Sonnet 5]
+    A --> S[Kiểm tra chính sách và định tuyến an toàn]
+    S --> F[Dự phòng có thể xảy ra đối với một số yêu cầu sinh học hoặc mạng]
+    F --> O[Token văn bản cuối cùng]
 ```
 
-The Claude dataflow is shaped publicly by **adaptive thinking** and **safeguard routing**, not by disclosed block-level internals. Anthropic says Fable 5 and Sonnet 5 run with adaptive thinking and that some high-risk Fable 5 bio/cyber prompts are routed to Opus 4.8. citeturn24view3turn22view0turn23view0
+Luồng dữ liệu Claude được định hình công khai bởi ** adaptive thinking** và **định tuyến bảo vệ**, không phải bởi nội bộ cấp khối được tiết lộ. Anthropic cho biết Fable 5 và Sonnet 5 chạy với adaptive thinking và một số prompt về sinh học/mạng của Fable 5 có rủi ro cao được chuyển đến Opus 4.8. citeturn24view3turn22view0turn23view0
 
-A concrete public-dataflow example is:
+Một ví dụ về luồng dữ liệu công khai cụ thể là:
 
-1. A user uploads a PDF with charts and asks for analysis.
-2. Claude ingests text plus the file or image through an internal pathway Anthropic does not specify publicly.
-3. The model runs adaptive thinking to decide how much reasoning to use, rather than depending on a manual token budget.
-4. If the request hits high-risk bio/cyber safeguards in Fable 5, the system may fallback; otherwise Claude returns text output. citeturn23view0turn22view0turn24view3
+1. Người dùng tải lên bản PDF có biểu đồ và yêu cầu phân tích.
+2. Claude nhập văn bản cùng với file hoặc hình ảnh thông qua đường dẫn nội bộ mà Anthropic không chỉ định công khai.
+3. Mô hình chạy adaptive thinking để quyết định số lượng reasoning sẽ sử dụng, thay vì phụ thuộc vào ngân sách token thủ công.
+4. Nếu yêu cầu chạm đến các biện pháp bảo vệ sinh học/mạng có rủi ro cao trong Fable 5, hệ thống có thể dự phòng; nếu không thì Claude trả về kết quả văn bản. citeturn23view0turn22view0turn24view3
 
-### Gemini family dataflow
+### Luồng dữ liệu dòng Gemini
 
 ```mermaid
 flowchart LR
-    U[Text image video audio or PDF] --> M[Native multimodal packing]
-    M --> G[Gemini 3.1 Pro or 3.5 Flash]
-    G --> D[Optional Deep Think or fast Flash reasoning path]
-    D --> T[Tool use<br/>function calling search code execution]
-    T --> O[Final text tokens]
+    U[Văn bản hình ảnh âm thanh video hoặc PDF] --> M[Đóng gói Native multimodal]
+    M --> G[Gemini 3.1 Pro hoặc 3.5 Flash]
+    G --> D[Đường dẫn Deep Think tùy chọn hoặc Flash reasoning nhanh]
+    D --> T[Sử dụng công cụfunction calling tìm kiếm code execution]
+    T --> O[Token văn bản cuối cùng]
 ```
 
-Google publicly describes Gemini as a **natively multimodal** family with long context and first-class tool use. The exact encoder/decoder separation and internal fusion stack for Gemini 3.x are not specified on the reviewed model pages, so the diagram stays at the product-mechanism level. citeturn16view0turn37view2turn37view3turn40view0
+Google mô tả công khai Gemini là dòng **multimodal** vốn có context lâu dài và sử dụng công cụ hạng nhất. Việc tách bộ mã hóa/giải mã chính xác và ngăn hợp nhất bên trong cho Gemini 3.x không được chỉ định trên các trang mô hình đã xem xét, do đó sơ đồ vẫn ở cấp cơ chế sản phẩm. citeturn16view0turn37view2turn37view3turn40view0
 
-A concrete public-dataflow example is:
+Một ví dụ về luồng dữ liệu công khai cụ thể là:
 
-1. A user provides a long prompt, a PDF, and a screenshot.
-2. Gemini 3.x ingests text plus multimodal inputs into a unified context window.
-3. The request goes either to Gemini 3.5 Flash for fast agentic execution or to Gemini 3.1 Pro / Deep Think when deeper reasoning is appropriate.
-4. The model can call functions, search, or code execution before returning text output. citeturn37view2turn37view3turn40view0turn40view3
+1. Người dùng cung cấp một prompt dài, một bản PDF và ảnh chụp màn hình.
+2. Gemini 3.x nhập văn bản cùng với đầu vào multimodal vào một cửa sổ context hợp nhất.
+3. Yêu cầu được chuyển tới Gemini 3.5 Flash để thực thi agent nhanh hoặc tới Gemini 3.1 Pro/Deep Think khi reasoning sâu hơn phù hợp.
+4. Mô hình có thể gọi các function, tìm kiếm hoặc code execution trước khi trả về đầu ra văn bản. citeturn37view2turn37view3turn40view0turn40view3
 
-### Qwen family dataflow
+### Luồng dữ liệu dòng Qwen
 
 ```mermaid
 flowchart LR
-    I[Image video and text] --> V[Vision stack with DeepStack in Qwen3-VL]
-    I --> X[BBPE text tokenizer]
-    V --> F[Interleaved multimodal sequence with enhanced MRoPE]
+    I[Hình ảnh video và văn bản] --> V[Ngăn xếp tầm nhìn với DeepStack trong Qwen3-VL]
+    I --> X[BBPE văn bản tokenizer]
+    V --> F[Chuỗi multimodal xen kẽ với MRoPE nâng cao]
     X --> F
-    F --> B[Dense or MoE decoder<br/>GQA RoPE QK-Norm RMSNorm SwiGLU]
-    B --> C[Thinking control<br/>/think /no_think and budget]
-    C --> O[Final text tokens]
+    F --> B[Bộ giải mã Dense hoặc MoEGQA RoPE QK-Norm RMSNorm SwiGLU]
+    B --> C[Điều khiển Thinking/think /no_think và ngân sách]
+    C --> O[Token văn bản cuối cùng]
 ```
 
-Unlike the closed families, Qwen’s public docs let us be fairly concrete here. The text line discloses GQA, RoPE, RMSNorm, SwiGLU, QK-Norm, and BBPE tokenization, while Qwen3-VL discloses enhanced interleaved-MRoPE, DeepStack, and text-based temporal alignment for video. citeturn28view3turn28view0turn34view0turn34view1
+Không giống như các họ khép kín, tài liệu công khai của Qwen cho phép chúng tôi khá cụ thể ở đây. Dòng văn bản tiết lộ token GQA, RoPE, RMSNorm, SwiGLU, QK-Norm và BBPE, trong khi Qwen3-VL tiết lộ tính năng xen kẽ nâng cao- MRoPE, DeepStack và căn chỉnh thời gian dựa trên văn bản cho video. citeturn28view3turn28view0turn34view0turn34view1
 
-A concrete public-dataflow example is:
+Một ví dụ về luồng dữ liệu công khai cụ thể là:
 
-1. A user sends an image and a question, or a long multilingual prompt.
-2. Qwen tokenizes text with its BBPE tokenizer; Qwen3-VL encodes image or video signals and merges them into an interleaved multimodal sequence.
-3. The dense or MoE decoder processes that sequence with GQA, RoPE-family position handling, RMSNorm, and SwiGLU.
-4. The user or chat template can force `/think` or `/no_think`, or use a reasoning budget, before the model emits final tokens. citeturn28view0turn28view3turn33view1turn34view1
+1. Người dùng gửi một hình ảnh và một câu hỏi hoặc một prompt dài đa ngôn ngữ.
+2. Qwen mã hóa văn bản bằng BBPE tokenizer; Qwen3-VL mã hóa tín hiệu hình ảnh hoặc video và hợp nhất chúng thành chuỗi multimodal xen kẽ.
+3. Bộ giải mã dense hoặc MoE xử lý trình tự đó với xử lý vị trí họ GQA, RoPE, RMSNorm và SwiGLU.
+4. Người dùng hoặc chat template có thể buộc `/think` hoặc `/no_think` hoặc sử dụng ngân sách reasoning trước khi mô hình phát ra token cuối cùng. citeturn28view0turn28view3turn33view1turn34view1
 
-### Llama family dataflow
+### Luồng dữ liệu dòng Llama
 
 ```mermaid
 flowchart LR
-    I[Image plus text] --> V[MetaCLIP-derived vision encoder]
-    T[Text tokens] --> F[Early fusion into unified backbone]
+    I[Hình ảnh cộng với văn bản] --> V[MetaCLIP có nguồn gốc từ vision encoder]
+    T[Token văn bản] --> F[Hợp nhất sớm thành backbone thống nhất]
     V --> F
-    F --> M[MoE backbone<br/>Scout or Maverick]
-    M --> L[Scout iRoPE long-context path<br/>or Maverick routed-plus-shared experts]
-    L --> O[Final text or code tokens]
+    F --> M[Backbone MoEScout hoặc Maverick]
+    M --> L[Scout iRoPE long-context đường dẫnhoặc các chuyên gia định tuyến cộng với chia sẻ Maverick]
+    L --> O[Token văn bản hoặc code cuối cùng]
 ```
 
-Meta’s public release is unusually explicit that Llama 4 uses **early fusion** for text and vision, a MetaCLIP-derived vision encoder, and MoE backbones. Scout and Maverick then diverge in their long-context and expert-routing design priorities. citeturn31view0turn30view3
+Bản phát hành công khai của Meta nêu rõ một cách bất thường rằng Llama 4 sử dụng **kết hợp sớm** cho văn bản và hình ảnh, một MetaCLIP có nguồn gốc từ vision encoder và backbone MoE. Scout và Maverick sau đó sẽ có những ưu tiên thiết kế định tuyến long-context và expert của họ. citeturn31view0turn30view3
 
-A concrete public-dataflow example is:
+Một ví dụ về luồng dữ liệu công khai cụ thể là:
 
-1. A user provides several images and a text instruction.
-2. The images are encoded by the vision encoder, and text plus vision tokens are combined early into the same model backbone.
-3. If the request targets Scout, the long-context path benefits from the iRoPE strategy; if it targets Maverick, the shared-plus-routed-expert MoE path emphasizes higher overall capability per serving cost.
-4. The model returns multilingual text or code output. citeturn31view0turn30view3
+1. Người dùng cung cấp một số hình ảnh và hướng dẫn bằng văn bản.
+2. Hình ảnh được mã hóa bởi vision encoder và văn bản cùng với token hình ảnh được kết hợp sớm vào cùng một framework mô hình.
+3. Nếu yêu cầu nhắm mục tiêu Scout, đường dẫn long-context sẽ được hưởng lợi từ chiến lược iRoPE; nếu nó nhắm mục tiêu vào Maverick, đường dẫn expert MoE được chia sẻ-cộng-định tuyến sẽ nhấn mạnh khả năng tổng thể cao hơn trên mỗi chi phí serving.
+4. Mô hình trả về đầu ra văn bản hoặc code đa ngôn ngữ. citeturn31view0turn30view3
 
-## Performance patterns and use-cases
+## Mẫu hiệu suất và trường hợp sử dụng
 
-The cleanest performance conclusion is not that one family dominates every benchmark, but that each family now has a **distinct deployment niche**. GPT-5.6 Sol is optimized for professional workflows that combine reasoning, browsing, tool use, and artifact production; OpenAI highlights strong results on Agents’ Last Exam, BrowseComp, OSWorld 2.0, and coding-agent benchmarks, while the product pages repeatedly frame Sol as the model for complex professional work and Terra/Luna as cheaper throughput tiers. citeturn17view0turn25view0turn35view3
+Kết luận rõ ràng nhất về hiệu suất không phải là một dòng thống trị mọi điểm chuẩn, mà là mỗi dòng hiện có **ngách deployment riêng biệt**. GPT-5.6 Sol được tối ưu hóa cho quy trình làm việc chuyên nghiệp kết hợp reasoning, browsing, sử dụng công cụ và sản xuất tạo tác; OpenAI nêu bật kết quả tốt về các điểm chuẩn trong Bài kiểm tra cuối cùng của Đại lý, DuyệtComp, OSWorld 2.0 và mã hóa- agent, trong khi các trang sản phẩm liên tục coi Sol là mô hình cho công việc chuyên môn phức tạp và Terra/Luna là các cấp thông lượng rẻ hơn. citeturn17view0turn25view0turn35view3
 
-Claude’s newest family looks strongest when the task requires **persistent, high-context orchestration** rather than short, bursty chat turns. Anthropic’s own materials frame Fable 5 as the model for multi-day agents, large migrations, complex implementations, and document-heavy analysis, while Sonnet 5 is the cost-efficient default that inherits much of that agentic behavior through adaptive thinking. That makes Claude especially attractive for codebase-scale and knowledge-work workflows where reliability across many steps matters as much as raw single-turn benchmark scores. citeturn23view0turn24view3turn22view0
+Nhóm mới nhất của Claude có vẻ mạnh nhất khi tác vụ yêu cầu **sự điều phối context cao, liên tục** thay vì các lượt trò chuyện ngắn, dồn dập. Tài liệu riêng của Anthropic coi Fable 5 là mô hình cho các agent kéo dài nhiều ngày, di chuyển lớn, triển khai phức tạp và phân tích nhiều tài liệu, trong khi Sonnet 5 là mặc định tiết kiệm chi phí kế thừa phần lớn hành vi agent đó thông qua adaptive thinking. Điều đó làm cho Claude đặc biệt hấp dẫn đối với quy trình làm việc dựa trên kiến thức và quy mô codebase, trong đó độ tin cậy qua nhiều bước cũng quan trọng như điểm chuẩn một lượt thô. citeturn23view0turn24view3turn22view0
 
-Gemini’s split between 3.1 Pro/Deep Think and 3.5 Flash maps well onto two practical use cases. **Gemini 3.1 Pro** is the better fit when the user needs maximum multimodal depth, long-context reasoning, or research-heavy work; **Gemini 3.5 Flash** is the better fit when low-latency agentic execution matters. Google’s benchmark table is explicit that 3.5 Flash leads across many agentic benchmarks relative to earlier Gemini variants and some competitors, while 3.1 Pro remains stronger on some harder reasoning and long-context metrics such as MRCR and ARC-AGI-2. citeturn37view2turn40view3
+Sự phân chia của Gemini giữa 3.1 Pro/ Deep Think và 3.5 Flash phù hợp với hai trường hợp sử dụng thực tế. ** Gemini 3.1 Pro** phù hợp hơn khi người dùng cần độ sâu multimodal tối đa, long-context reasoning hoặc công việc nặng về nghiên cứu; ** Gemini 3.5 Flash** phù hợp hơn khi vấn đề thực thi agent có độ trễ thấp. Bảng điểm chuẩn của Google nêu rõ rằng 3.5 Flash dẫn đầu trên nhiều điểm chuẩn agent so với các biến thể Gemini trước đó và một số đối thủ cạnh tranh, trong khi 3.1 Pro vẫn mạnh hơn trên một số số liệu reasoning và long-context khó hơn như MRCR và ARC-AGI-2. citeturn37view2turn40view3
 
-Qwen remains the strongest option when the requirement is **open-weight deployment plus unusually transparent controllable reasoning**. The flagship Qwen3-235B-A22B posts strong published results on AIME, LiveCodeBench, CodeForces, and BFCL, while the family’s `/think` versus `/no_think` split and budget control are unusually explicit and developer-friendly. The trade-off is that the very largest open Qwen deployments become hardware-intensive quickly, especially at 1M context. citeturn33view2turn33view3turn27view3
+Qwen vẫn là lựa chọn mạnh nhất khi yêu cầu là **deployment có weight mở cộng với reasoning có thể điều khiển trong suốt bất thường**. Qwen3-235B-A22B hàng đầu đăng các kết quả được công bố mạnh mẽ trên AIME, LiveCodeBench, CodeForces và BFCL, trong khi việc phân chia `/think` và `/no_think` và kiểm soát ngân sách của dòng này rõ ràng và thân thiện với nhà phát triển một cách khác thường. Sự đánh đổi là việc triển khai Qwen mở lớn nhất sẽ nhanh chóng sử dụng nhiều phần cứng, đặc biệt là ở mức 1 triệu context. citeturn33view2turn33view3turn27view3
 
-Llama 4 is strongest where **open-weight customization, fine-tuning freedom, or extreme long context** matter more than closed-model polish. Scout is the standout for ultra-long-context experimentation at 10M tokens, while Maverick is the practical higher-quality multimodal workhorse. But benchmark interpretation needs caution: some of Meta’s launch-era public benchmark claims were tied to an experimental chat variant rather than the exact public release, so architecture and openness are stronger selling points here than single leaderboard snapshots. citeturn31view0turn30view3turn38news28
+Llama 4 mạnh nhất trong đó **tùy chỉnh weight mở, sự tự do của fine-tuning hoặc context cực dài** quan trọng hơn việc đánh bóng mô hình khép kín. Scout là ứng dụng nổi bật cho thử nghiệm siêu long-context với 10 triệu token, trong khi Maverick là ứng dụng đặc biệt multimodal có chất lượng thực tế cao hơn. Tuy nhiên, việc diễn giải điểm chuẩn cần thận trọng: một số tuyên bố về điểm chuẩn công khai trong thời kỳ ra mắt của Meta gắn liền với một biến thể trò chuyện thử nghiệm thay vì bản phát hành công khai chính xác, vì vậy cấu trúc và tính mở là điểm bán hàng mạnh mẽ hơn ở đây so với ảnh chụp nhanh bảng xếp hạng đơn lẻ. citeturn31view0turn30view3turn38news28
 
-In aggregate, the newest family-level similarity is that **all five are now agent models first and chat models second**. The lasting differences are the ones that determine real deployment decisions: whether you need a proprietary but polished routed system with strong tooling, a Constitution-shaped long-running agent, a natively multimodal Google stack, an Apache-licensed reasoning-controllable open model, or an early-fusion open-weight multimodal model that you can run and fine-tune yourself. citeturn25view0turn24view3turn37view2turn33view3turn31view0
+Nhìn chung, điểm tương đồng mới nhất ở cấp độ họ là **cả năm đều là mô hình agent đầu tiên và chat template thứ hai**. Sự khác biệt lâu dài là những yếu tố quyết định các quyết định thực sự về deployment: liệu bạn cần một hệ thống định tuyến độc quyền nhưng được đánh bóng với công cụ mạnh mẽ, agent chạy dài theo Hiến pháp, ngăn xếp multimodal nguyên bản của Google, mô hình mở có thể điều khiển reasoning được cấp phép của Apache hay mô hình multimodal weight mở kết hợp sớm mà bạn có thể tự chạy và fine-tune. citeturn25view0turn24view3turn37view2turn33view3turn31view0
 
-## Prioritized sources
+## Nguồn ưu tiên
 
-The most authoritative sources for this comparison, in practical priority order, are the following:
+Các nguồn có thẩm quyền nhất cho sự so sánh này, theo thứ tự ưu tiên thực tế, là như sau:
 
 **OpenAI**
 
-- GPT-5.6 launch page for tiering, availability, multi-agent “ultra,” and benchmark framing. citeturn35view3turn35view0
-- OpenAI API model catalog for current context windows, outputs, supported tools, and modality surfaces. citeturn25view0
-- GPT-5 system card page for the public description of GPT-5 as a routed unified system. citeturn17view1
+- Trang khởi chạy GPT-5.6 dành cho việc xếp lớp, tính khả dụng, đa agent “siêu” và framework điểm chuẩn. citeturn35view3turn35view0
+- Danh mục mô hình OpenAI API cho các cửa sổ, đầu ra, công cụ được hỗ trợ và bề mặt phương thức context hiện tại. citeturn25view0
+- Trang system card GPT-5 mô tả công khai về GPT-5 như một hệ thống hợp nhất được định tuyến. citeturn17view1
 
 **Anthropic**
 
-- Models overview for current Claude family comparison, context windows, and availability. citeturn24view3
-- “What’s new in Claude Sonnet 5” for tokenizer change and adaptive-thinking defaults. citeturn22view0
-- Claude Fable 5 page for long-running-agent use cases and high-risk safeguard fallback. citeturn23view0
-- Constitutional AI research and Claude constitution materials for family-level alignment method. citeturn39search1turn39search2turn39search12
+- Tổng quan về các mô hình để so sánh dòng Claude hiện tại, cửa sổ context và tính khả dụng. citeturn24view3
+- “Có gì mới trong Claude Sonnet 5 ” dành cho thay đổi và thích ứng tokenizer- mặc định thinking. citeturn22view0
+- Trang Claude Fable 5 dành cho các trường hợp sử dụng agent trong thời gian dài và dự phòng biện pháp bảo vệ có rủi ro cao. citeturn23view0
+- Tài liệu nghiên cứu Constitutional AI và Claude cho phương pháp căn chỉnh cấp độ họ. citeturn39search1turn39search2turn39search12
 
 **Google**
 
-- Gemini 3.1 Pro and 3.5 Flash model pages for current 3.x capabilities, tools, context, and deployment surfaces. citeturn37view2turn40view0
-- Gemini 3.1 Deep Think page for the relationship between Deep Think and 3.1 Pro. citeturn37view3
-- Gemini 2.5 technical report for the newest public family-level technical report with explicit architecture/training discussion. citeturn16view0
+- Các trang mô hình Flash Gemini 3.1 Pro và 3.5 cho các khả năng, công cụ 3. x hiện tại, các bề mặt context và deployment. citeturn37view2turn40view0
+- Trang Gemini 3.1 Deep Think về mối quan hệ giữa Deep Think và 3.1 Pro. citeturn37view3
+- Báo cáo kỹ thuật Gemini 2.5 dành cho báo cáo kỹ thuật công khai cấp độ họ mới nhất với nội dung thảo luận về kiến trúc/huấn luyện rõ ràng. citeturn16view0
 
 **Qwen**
 
-- Qwen3 technical report for architecture, pretraining scale, tokenizer, and post-training pipeline. citeturn28view0turn28view3turn33view0
-- Qwen3-235B-A22B-2507 model cards for current flagship open deployment details and long-context serving notes. citeturn27view2turn27view3
-- Qwen3-VL docs and technical-report abstract for multimodal fusion specifics. citeturn34view0turn34view1
+- Báo cáo kỹ thuật Qwen3 cho kiến trúc, thang đo pretraining, tokenizer và đường dẫn post-training. citeturn28view0turn28view3turn33view0
+- Thẻ mô hình Qwen3-235B-A22B-2507 dành cho các thông tin chi tiết về deployment mở hàng đầu hiện tại và các ghi chú long-context serving. citeturn27view2turn27view3
+- Qwen3-VL tài liệu và bản tóm tắt báo cáo kỹ thuật về các chi tiết cụ thể về fusion multimodal. citeturn34view0turn34view1
 
 **Meta**
 
-- Llama 4 release blog for MoE structure, early fusion, iRoPE, training-scale, and post-training sequence. citeturn31view0
-- Llama 4 model cards for official model sizes, contexts, modalities, training data mix, and licensing. citeturn30view3turn29search6
-- Secondary benchmark-caveat reporting for the LMArena/public-release mismatch. citeturn38news28
+- Blog phát hành Llama 4 về cấu trúc MoE, fusion sớm, iRoPE, quy mô huấn luyện và trình tự post-training. citeturn31view0
+- Thẻ mô hình Llama 4 dành cho kích thước mô hình, bối cảnh, phương thức, kết hợp dữ liệu huấn luyện và cấp phép chính thức. citeturn30view3turn29search6
+- Báo cáo cảnh báo điểm chuẩn thứ cấp cho LMArena/bản phát hành công khai không khớp. citeturn38news28
 
-The highest-confidence comparative statements in this report are those about **Qwen and Llama architecture**, **GPT/Claude/Gemini deployment behavior**, and **context/tool/multimodal surfaces**. The lowest-confidence areas are exactly the ones the vendors do not document publicly for the newest closed families: dense vs MoE, detailed attention kernels, positional encodings, FFN activations, and normalization choices for GPT-5.6, Claude 5, and Gemini 3.x. Those are therefore intentionally labeled **unspecified publicly** throughout. citeturn28view3turn31view0turn25view0turn24view3turn37view
+Các tuyên bố so sánh có độ tin cậy cao nhất trong báo cáo này là các tuyên bố về ** kiến trúc Qwen và Llama**, **hành vi GPT/ Claude/Gemini deployment** và ** các bề mặt context /tool/ multimodal**. Các vùng có độ tin cậy thấp nhất chính xác là những vùng mà nhà cung cấp không ghi lại công khai cho các dòng đóng mới nhất: dense so với MoE, hạt nhân attention chi tiết, mã hóa vị trí, kích hoạt FFN và các lựa chọn chuẩn hóa cho GPT-5.6, Claude 5 và Gemini 3.x. Do đó, chúng được cân nhắc kỹ dán nhãn **không xác định công khai** xuyên suốt. citeturn28view3turn31view0turn25view0turn24view3turn37view
 
-# Latest Major LLM Families Compared
+# So sánh các họ LLM lớn mới nhất
 
-## Executive summary
+## Tóm tắt điều hành
 
-The newest mainstream LLM families have converged on a few visible product-level traits: very long context windows, multimodal inputs, explicit reasoning controls, and tighter integration with tools or agent loops. GPT-5.6, Claude 5, Gemini 3.x, Qwen3, and Llama 4 all present themselves as models for coding, knowledge work, or agentic execution rather than as plain chatbots. But they diverge sharply in what they disclose. OpenAI, Anthropic, and Google now publish rich product, safety, and deployment documentation while leaving many block-level architectural choices unspecified publicly. By contrast, Qwen and Llama publish much more of the technical substrate: expert counts, head counts, positional strategies, training-token counts, and concrete post-training recipes. citeturn25view0turn24view3turn37view2turn28view3turn30view3turn31view0
+Các dòng LLM chính thống mới nhất đã hội tụ một số đặc điểm ở cấp độ sản phẩm có thể nhìn thấy: cửa sổ context rất dài, đầu vào multimodal, điều khiển reasoning rõ ràng và tích hợp chặt chẽ hơn với các công cụ hoặc vòng lặp agent. GPT-5.6, Claude 5, Gemini 3.x, Qwen3 và Llama 4 đều thể hiện mình là mô hình để mã hóa, công việc tri thức hoặc thực thi agent thay vì là các chatbot đơn giản. Nhưng họ khác nhau rõ rệt về những gì họ tiết lộ. OpenAI, Anthropic và Google hiện xuất bản tài liệu phong phú về sản phẩm, an toàn và deployment trong khi vẫn để lại nhiều lựa chọn kiến trúc cấp khối không được chỉ định công khai. Ngược lại, Qwen và Llama xuất bản nhiều nền tảng kỹ thuật hơn: số lượng expert, số lượng đầu người, chiến lược vị trí, số lượng huấn luyện- token và các công thức post-training cụ thể. citeturn25view0turn24view3turn37view2turn28view3turn30view3turn31view0
 
-The most important family-level difference is no longer just “better benchmark X.” It is *how* capability is packaged. OpenAI’s GPT-5 is publicly framed as a routed system with fast and deeper-thinking submodels and an API-facing Sol/Terra/Luna tiering system. Anthropic’s current differentiation centers on adaptive thinking, long-running agents, and safety routing for high-risk domains. Google’s Gemini 3.x emphasizes native multimodality, 1M-token contexts, and strong tool-enabled agentic workflows, with Deep Think as a specialized reasoning mode built atop Gemini 3.1 Pro. Qwen’s current flagship remains the most transparent open-weight family in this comparison, combining MoE and dense lines, explicit thinking-budget control, and a multimodal sibling line with disclosed visual-fusion upgrades. Meta’s Llama 4 is the clearest case of an open-weight frontier family built around early-fusion multimodality and MoE efficiency, with Scout optimized for extreme context and Maverick for higher-quality general multimodal work. citeturn17view1turn35view3turn24view3turn22view0turn37view3turn40view0turn33view3turn34view1turn31view0turn30view3
+Sự khác biệt quan trọng nhất ở cấp độ họ không còn chỉ là “điểm chuẩn X tốt hơn”. Đó là khả năng *làm thế nào* được đóng gói. GPT-5 của OpenAI được đóng framework công khai dưới dạng một hệ thống được định tuyến với các mô hình con thinking nhanh và sâu hơn cũng như hệ thống phân tầng Sol/Terra/Luna đối mặt với API. Sự khác biệt hiện tại của Anthropic tập trung vào adaptive thinking, các agent hoạt động lâu dài và định tuyến an toàn cho các miền có rủi ro cao. Gemini 3.x của Google nhấn mạnh tính đa phương thức của native, bối cảnh 1M- token và các quy trình làm việc agent hỗ trợ công cụ mạnh mẽ, với Deep Think là chế độ reasoning chuyên biệt được xây dựng trên Gemini 3.1 Pro. Flagship hiện tại của Qwen vẫn là dòng sản phẩm có weight mở minh bạch nhất trong so sánh này, kết hợp các dòng MoE và dense, kiểm soát ngân sách thinking rõ ràng và một dòng anh chị em multimodal với các nâng cấp kết hợp hình ảnh được công bố. Llama 4 của Meta là trường hợp rõ ràng nhất về dòng biên giới có weight mở được xây dựng dựa trên đa phương thức kết hợp sớm và hiệu quả MoE, với Scout được tối ưu hóa cho context và Maverick cực cao để làm việc multimodal chung chất lượng cao hơn. citeturn17view1turn35view3turn24view3turn22view0turn37view3turn40view0turn33view3turn34view1turn31view0turn30view3
 
-Across the five families, several similarities are now stable enough to matter in practice. All are optimized for tool use or agentic workflows; all support multimodal or at least vision-heavy use cases at the product surface; all offer long context well beyond the old 32K–128K range; and all have invested substantially in post-training to shape behavior, not just raw pretraining scale. The differences are in where each vendor puts its engineering bets: OpenAI on routed reasoning plus tool-rich productivity; Anthropic on persistent, high-context agents and Constitutional-AI-style alignment; Google on integrated multimodality and agentic execution; Qwen on controllable reasoning and open deployment flexibility; and Meta on efficient open-weight multimodality with extreme context in Scout and strong quality-per-cost in Maverick. citeturn25view0turn17view1turn24view3turn39search1turn37view2turn40view0turn33view3turn31view0turn30view3
+Trong năm họ, một số điểm tương đồng hiện đã đủ ổn định để trở thành vấn đề quan trọng trong thực tế. Tất cả đều được tối ưu hóa cho việc sử dụng công cụ hoặc quy trình làm việc agent; tất cả đều hỗ trợ multimodal hoặc ít nhất là các trường hợp sử dụng nặng về thị giác ở bề mặt sản phẩm; tất cả đều cung cấp context dài vượt xa phạm vi 32K–128K cũ; và tất cả đều đã đầu tư đáng kể vào post-training để định hình hành vi, không chỉ thang đo pretraining thô. Sự khác biệt nằm ở chỗ mỗi nhà cung cấp đặt cược kỹ thuật của mình: OpenAI trên reasoning được định tuyến cộng với năng suất phong phú về công cụ; Anthropic dựa trên các agent context bền bỉ, có chỉ số cao và sự liên kết theo phong cách Hiến pháp-AI; Google về thực thi đa phương thức và agent tích hợp; Qwen trên reasoning có thể điều khiển và deployment mở linh hoạt; và Meta về đa phương thức weight mở hiệu quả với context cực cao trong Scout và chất lượng trên mỗi chi phí mạnh mẽ trong Maverick. citeturn25view0turn17view1turn24view3turn39search1turn37view2turn40view0turn33view3turn31view0turn30view3
 
-## Scope and comparison criteria
+## Phạm vi và tiêu chí so sánh
 
-This report compares the **newest practically relevant public variants with usable primary documentation** as of **July 20, 2026**: **OpenAI GPT-5.6** (Sol/Terra/Luna), **Anthropic Claude Fable 5 and Sonnet 5**, **Google Gemini 3.1 Pro / Deep Think and 3.5 Flash**, **Qwen3-235B-A22B-2507 plus Qwen3-VL**, and **Meta Llama 4 Maverick / Scout**. I treat each as a *family snapshot*, because several vendors now expose multiple current tiers that share the same product generation but differ in cost, speed, or reasoning mode. Where a detail is absent from official documentation, I mark it **unspecified publicly** rather than infer it. citeturn35view3turn24view3turn37view2turn40view0turn27view2turn34view1turn30view3
+Báo cáo này so sánh **các biến thể công khai mới nhất có liên quan đến thực tế với tài liệu chính có thể sử dụng** kể từ **ngày 20 tháng 7 năm 2026**: **OpenAI GPT-5.6** (Sol/Terra/Luna), **Anthropic Claude Fable 5 và Sonnet 5**, **Google Gemini 3.1 Pro/Deep Think và 3.5 Flash**, ** Qwen3-235B-A22B-2507 cộng với Qwen3-VL** và **Meta Llama 4 Maverick/Scout**. Tôi coi mỗi cái như một *ảnh chụp nhanh họ*, vì một số nhà cung cấp hiện hiển thị nhiều cấp độ hiện tại có cùng thế hệ sản phẩm nhưng khác nhau về chi phí, tốc độ hoặc chế độ reasoning. Khi một chi tiết không có trong tài liệu chính thức, tôi đánh dấu nó **không được chỉ định công khai** thay vì suy luận nó. citeturn35view3turn24view3turn37view2turn40view0turn27view2turn34view1turn30view3
 
-Methodologically, the report prioritizes official release pages, API/model overviews, model cards, system cards, technical reports, and arXiv papers. For Qwen and Llama, the primary technical record is unusually rich, so architectural claims can be made at the block and training-recipe level. For GPT, Claude, and Gemini, the public record is much denser on product behavior, safety, and deployment than on internal transformer choices, so the analysis is correspondingly more conservative. citeturn28view3turn31view0turn25view0turn22view0turn37view2turn16view0
+Về mặt phương pháp, báo cáo ưu tiên các trang phát hành chính thức, tổng quan về API /mô hình, thẻ mô hình, system card, báo cáo kỹ thuật và tài liệu arXiv. Đối với Qwen và Llama, hồ sơ kỹ thuật cơ bản rất phong phú, do đó, các yêu cầu về kiến trúc có thể được đưa ra ở cấp độ khối và công thức huấn luyện. Đối với GPT, Claude và Gemini, hồ sơ công khai về hành vi, độ an toàn và deployment của sản phẩm dày đặc hơn nhiều so với các lựa chọn transformer nội bộ, do đó, việc phân tích tương ứng sẽ thận trọng hơn. citeturn28view3turn31view0turn25view0turn22view0turn37view2turn16view0
 
 ```mermaid
 timeline
-    title Recent family snapshots used in this report
-    2025 : Gemini 2.5 technical report
-         : Qwen3 technical report
-         : Llama 4 Scout and Maverick released
-    2026 : Gemini 3.1 Pro and Deep Think pages
-         : Gemini 3.5 Flash page
-         : Claude Fable 5 and Sonnet 5
-         : GPT-5.6 Sol Terra Luna
+    title Các snapshot họ mô hình gần đây được sử dụng trong báo cáo này
+    2025 : Báo cáo kỹ thuật Gemini 2.5
+         : Báo cáo kỹ thuật Qwen3
+         : Phát hành Llama 4 Scout và Maverick
+    2026 : Trang Gemini 3.1 Pro và Deep Think
+         : Trang Gemini 3.5 Flash
+         : Claude Fable 5 và Sonnet 5
+         : GPT-5.6 Sol, Terra, Luna
 ```
 
-The timeline above is limited to the family snapshots actually analyzed in the report, not every intermediate release. Gemini 2.5 is included because it is still Google’s newest public *technical report* with explicit discussion of architecture/training at the family level, while the newest 3.x pages mainly document capabilities and deployment. citeturn16view0turn37view2turn40view0turn24view3turn35view3turn28view3turn31view0
+Dòng thời gian ở trên được giới hạn ở các ảnh chụp nhanh dòng sản phẩm thực sự được phân tích trong báo cáo chứ không phải ở mọi bản phát hành trung gian. Gemini 2.5 được đưa vào vì đây vẫn là *báo cáo kỹ thuật* công khai mới nhất của Google với nội dung thảo luận rõ ràng về kiến trúc/huấn luyện ở cấp độ họ, trong khi các trang 3. x mới nhất chủ yếu ghi lại các khả năng và deployment. citeturn16view0turn37view2turn40view0turn24view3turn35view3turn28view3turn31view0
 
-## Comparative table
+## Bảng so sánh
 
-| Family snapshot                                             | Availability                                                                          | Architecture variant                                                                                                             | Attention and position engineering                                                                                                                                                                     | FFN and normalization                                                                                          | Tokenizer                                                                                            | Context and output                                                                                            | Multimodality and fusion                                                                                                                                    | Training and post-training highlights                                                                                                                                                                                            | Primary source basis                                                                   |
+| Ảnh chụp nhanh họ | sẵn có | Biến thể kiến trúc | Attention và kỹ thuật định vị | FFN và chuẩn hóa | Tokenizer | Context và đầu ra | Đa phương thức và hợp nhất | Điểm nổi bật về huấn luyện và post-training | Cơ sở nguồn chính |
 | ----------------------------------------------------------- | ------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| **OpenAI GPT-5.6** Sol / Terra / Luna                 | Proprietary via ChatGPT, Codex, and OpenAI API                                        | Publicly described as a routed GPT-5 system plus API tiers; dense vs MoE**unspecified publicly**                           | Attention type, Flash/sliding, and positional scheme**unspecified publicly**                                                                                                                     | Activation and normalization**unspecified publicly**                                                     | Design**unspecified publicly**                                                                 | 1.05M context, 128K max output                                                                                | Text and image input, text output; tools include functions, web search, file search, computer use                                                           | Routed between “main” and “thinking” behaviors; safe-completions; reasoning effort controls; multi-agent “ultra” on top of the family                                                                                      | citeturn17view1turn25view0turn35view0turn35view3                           |
-| **Anthropic Claude** Fable 5 / Sonnet 5               | Proprietary via Claude API, Bedrock, Google Cloud, Microsoft Foundry, Claude products | Internal transformer subtype**unspecified publicly**; product family differentiated by adaptive thinking and model tiering | Attention type and positional scheme**unspecified publicly**                                                                                                                                     | Activation and normalization**unspecified publicly**                                                     | Sonnet 5 uses a**new tokenizer**; tokenization design otherwise **unspecified publicly** | Fable 5, Opus 4.8, and Sonnet 5 each have 1M context and 128K max output                                      | Text and image input, text output; strong PDF/file document workflows; multimodal internals**unspecified publicly**                                   | Constitutional AI remains a defining alignment method for Claude broadly; Fable 5 is always adaptive-thinking; Sonnet 5 defaults to adaptive thinking and removes manual thinking budgets                                        | citeturn24view3turn22view0turn23view0turn39search1turn39search12         |
-| **Google Gemini 3.x** 3.1 Pro / Deep Think, 3.5 Flash | Proprietary via Gemini app, Gemini API, AI Studio, Enterprise surfaces                | Natively multimodal generative model family; decoder vs encoder-decoder**unspecified publicly**                            | Attention type, MoE status, and positional scheme for 3.x**unspecified publicly**; latest technical report with family-level details is still Gemini 2.5                                         | Activation and normalization**unspecified publicly**                                                     | **Unspecified publicly**                                                                       | 1M input, 64K output on 3.1 Pro and 3.5 Flash                                                                 | Text, image, video, audio, and PDF input; output text; publicly described as natively multimodal                                                            | 3.1 Deep Think is built on top of 3.1 Pro; 3.5 Flash emphasizes agentic coding and reasoning at low latency; function calling, search-as-a-tool, structured output, and code execution are first-class                           | citeturn37view2turn37view3turn40view0turn40view3turn16view0              |
-| **Qwen3** 235B-A22B-2507 and **Qwen3-VL**       | Open-weight, Apache 2.0; deployable via HF/vLLM/SGLang/local stacks                   | Causal language model family with both dense and MoE lines; flagship open model is 235B total / 22B active                       | GQA, RoPE, QK-Norm; RoPE base raised to 1,000,000 with ABF; YaRN and Dual Chunk Attention used for long-context extension; Qwen3-VL adds enhanced interleaved-MRoPE                                    | SwiGLU and RMSNorm with pre-norm                                                                               | Qwen BBPE tokenizer, vocab 151,669                                                                   | 235B-A22B-2507: 262,144 native and extendable to ~1.01M; Qwen3-VL: native 256K interleaved multimodal context | Qwen3-VL integrates ViT features with DeepStack and text-based timestamp alignment for video; text family supports`/think` and `/no_think` mode control | 36T-token pretraining over 119 languages; four-stage flagship post-training: long-CoT cold start, reasoning RL, thinking-mode fusion SFT, general-domain RL; strong-to-weak distillation for smaller models                      | citeturn27view2turn27view3turn28view0turn28view3turn33view0turn34view1 |
-| **Meta Llama 4** Maverick / Scout                     | Open-weight under Llama 4 Community License; downloadable from Meta and Hugging Face  | Auto-regressive MoE family with early fusion for native multimodality                                                            | Maverick uses alternating dense and MoE layers, shared + routed experts; Scout uses iRoPE with interleaved attention layers and inference-time attention temperature scaling for length generalization | Activation, normalization, and tokenizer specifics are**unspecified publicly** in the reviewed materials | **Unspecified publicly**                                                                       | Maverick: 1M context; Scout: 10M context                                                                      | Early-fusion multimodality into a unified backbone; MetaCLIP-derived vision encoder adapted to the LLM                                                      | Multimodal pretraining over very large token/image/video mixtures; Maverick post-training pipeline is lightweight SFT → online RL → lightweight DPO; both released as open-weight models, but with a non-OSI community license | citeturn30view3turn31view0turn29search6turn38news27                        |
+| **OpenAI GPT-5.6** Sol/Terra/Luna | Độc quyền thông qua ChatGPT, Codex và OpenAI API | Được mô tả công khai là hệ thống GPT-5 được định tuyến cộng với các bậc API; dense so với MoE **không được chỉ định công khai** | Loại Attention, sơ đồ Flash/trượt và vị trí **không được chỉ định công khai** | Kích hoạt và chuẩn hóa **không được chỉ định công khai** | thiết kế **không được chỉ định công khai** | Đầu ra 1,05M context, 128K max | Nhập văn bản và hình ảnh, xuất văn bản; công cụ bao gồm các function, tìm kiếm trên web, tìm kiếm file, computer use | Được định tuyến giữa các hành vi “chính” và “thinking”; hoàn thành an toàn; Bộ điều khiển reasoning effort; multi- agent “cực phẩm” hàng đầu trong họ | citeturn17view1turn25view0turn35view0turn35view3 |
+| **Anthropic Claude** Fable 5/Sonnet 5 | Độc quyền thông qua các sản phẩm Claude API, Bedrock, Google Cloud, Microsoft Foundry, Claude | Loại phụ transformer nội bộ **không được chỉ định công khai**; họ sản phẩm được phân biệt bởi adaptive thinking và phân cấp mô hình | Sơ đồ vị trí và loại Attention **không được chỉ định công khai** | Kích hoạt và chuẩn hóa **không được chỉ định công khai** | Sonnet 5 sử dụng **tokenizer mới**; thiết kế token khác **không được chỉ định công khai** | Fable 5, Opus 4.8 và Sonnet 5 đều có đầu ra 1M context và 128K max | Nhập văn bản và hình ảnh, xuất văn bản; quy trình làm việc tài liệu PDF/file mạnh mẽ; Nội bộ multimodal **không được chỉ định công khai** | Constitutional AI vẫn là phương pháp căn chỉnh xác định cho Claude nói chung; Fable 5 luôn có tính thích ứng- thinking; Sonnet 5 mặc định là adaptive thinking và loại bỏ ngân sách thinking thủ công | citeturn24view3turn22view0turn23view0turn39search1turn39search12 |
+| **Google Gemini 3.x** 3.1 Pro/Deep Think, 3.5 Flash | Độc quyền thông qua ứng dụng Gemini, Gemini API, AI Studio, Enterprise surface | Họ mô hình thế hệ multimodal nguyên bản; bộ giải mã và bộ mã hóa-giải mã **không được chỉ định công khai** | Loại Attention, trạng thái MoE và sơ đồ vị trí cho 3. x **không được chỉ định công khai**; báo cáo kỹ thuật mới nhất với chi tiết cấp độ họ vẫn là Gemini 2.5 | Kích hoạt và chuẩn hóa **không được chỉ định công khai** | **Không được chỉ định công khai** | Đầu vào 1M, đầu ra 64K trên 3.1 Pro và 3.5 Flash | Đầu vào văn bản, hình ảnh, video, âm thanh và PDF; văn bản đầu ra; được mô tả công khai là multimodal nguyên bản | 3.1 Deep Think được xây dựng dựa trên 3.1 Pro;3.5 Flash nhấn mạnh vào mã hóa agent và reasoning ở độ trễ thấp; function calling, công cụ tìm kiếm, structured output và code execution là hạng nhất | citeturn37view2turn37view3turn40view0turn40view3turn16view0 |
+| ** Qwen3** 235B-A22B-2507 và ** Qwen3-VL** | Trọng lượng mở, Apache 2.0; có thể triển khai thông qua ngăn xếp HF/ vLLM/SGLang/cục bộ | Họ mô hình ngôn ngữ nhân quả với cả hai dòng dense và MoE; mô hình mở hàng đầu có tổng cộng 235B/22B hoạt động | GQA, RoPE, QK-Norm; Cơ sở RoPE tăng lên 1.000.000 với ABF; YaRN và Dual Chunk Attention được sử dụng cho phần mở rộng long-context; Qwen3-VL bổ sung tính năng xen kẽ nâng cao- MRoPE | SwiGLU và RMSNorm với định mức trước | Qwen BBPE tokenizer, từ vựng 151,669 | 235B-A22B-2507: 262.144 native và có thể mở rộng tới ~1,01M; Qwen3-VL: native 256K xen kẽ multimodal context | Qwen3-VL tích hợp các tính năng ViT với DeepStack và căn chỉnh dấu thời gian dựa trên văn bản cho video; Họ văn bản hỗ trợ điều khiển chế độ `/think` và `/no_think` | 36T- token pretraining trên 119 ngôn ngữ; hạm bốn giai đoạn post-training: khởi động nguội CoT dài, reasoning RL, thinking -mode fusion SFT, RL miền chung; chưng cất mạnh đến yếu cho các mô hình nhỏ hơn | citeturn27view2turn27view3turn28view0turn28view3turn33view0turn34view1 |
+| **Meta Llama 4** Maverick/Scout | Trọng lượng mở theo Giấy phép Cộng đồng Llama 4; có thể tải xuống từ Meta và Hugging Face | Họ MoE tự động hồi quy với sự early fusion cho đa phương thức native | Maverick sử dụng các lớp dense và MoE xen kẽ, các chuyên gia được chia sẻ + định tuyến; Scout sử dụng iRoPE với các lớp attention xen kẽ và chia tỷ lệ attention temperature theo thời gian suy luận để khái quát hóa độ dài | Thông tin cụ thể về kích hoạt, chuẩn hóa và tokenizer **không được chỉ định công khai** trong các tài liệu được đánh giá | **Không được chỉ định công khai** | Maverick: 1M context; Scout: 10M context | Đa phương thức kết hợp sớm thành một backbone thống nhất; MetaCLIP vision encoder có nguồn gốc từ vision encoder được điều chỉnh phù hợp với LLM | Multimodal pretraining trên hỗn hợp token /hình ảnh/video rất lớn; Đường ống Maverick post-training có weight nhẹ SFT → RL trực tuyến → DPO nhẹ; cả hai đều được phát hành dưới dạng mô hình weight mở, nhưng có giấy phép cộng đồng không phải OSI | citeturn30view3turn31view0turn29search6turn38news27 |
 
-Two immediate patterns emerge from the table. First, the **open families disclose more of the actual transformer stack**: Qwen publishes GQA, RoPE, QK-Norm, RMSNorm, SwiGLU, tokenizer vocabulary, expert counts, and long-context engineering, while Llama 4 publishes MoE topology, early fusion, expert counts, context sizes, and post-training sequence. Second, the **closed families increasingly differentiate at the system and product layer**, not the block diagram layer: GPT-5.6 through routing and effort levels, Claude through adaptive thinking plus domain-specific safeguards, and Gemini through native multimodality, Deep Think, and broad tool surfaces. citeturn28view3turn33view0turn31view0turn17view1turn22view0turn37view3turn40view3
+Hai mô hình ngay lập tức xuất hiện từ bảng. Đầu tiên, **các họ mở tiết lộ nhiều hơn về ngăn xếp transformer thực tế**: Qwen xuất bản GQA, RoPE, QK-Norm, RMSNorm, SwiGLU, tokenizer từ vựng, số lượng expert và kỹ thuật long-context, trong khi Llama 4 xuất bảnCấu trúc liên kết MoE, fusion sớm, số lượng expert, kích thước context và trình tự post-training. Thứ hai, **các dòng đóng ngày càng khác biệt ở lớp hệ thống và sản phẩm**, chứ không phải ở lớp sơ đồ khối: GPT-5.6 thông qua định tuyến và các cấp độ effort, Claude đến adaptive thinking cộng với các biện pháp bảo vệ theo miền cụ thể và Gemini đến đa phương thức native, Deep Think và các bề mặt công cụ rộng. citeturn28view3turn33view0turn31view0turn17view1turn22view0turn37view3turn40view3
 
-## Family-by-family analysis
+## Phân tích theo từng họ
 
 ### OpenAI GPT
 
-OpenAI’s newest GPT family is best understood publicly as a **routed reasoning system** rather than a single monolithic transformer description. The GPT-5 system card says GPT-5 is “a unified system” combining a smart/fast model, a deeper reasoning model, and a real-time router that decides which to use based on conversation type, complexity, tool needs, and explicit intent. Separately, the current API model catalog exposes **GPT-5.6 Sol, Terra, and Luna** as durable tiers with the same 1.05M context window, 128K max output, image input, text output, and built-in tool support. OpenAI does **not** publicly specify whether these deployed models are dense or MoE, what attention variant they use, how positional encoding is handled, or what activation and normalization scheme they use. citeturn17view1turn25view0turn35view3
+Dòng GPT mới nhất của OpenAI được hiểu một cách công khai nhất là **hệ thống reasoning được định tuyến** thay vì một mô tả transformer nguyên khối duy nhất. System card GPT-5 cho biết GPT-5 là “một hệ thống hợp nhất” kết hợp mô hình thông minh/nhanh, mô hình reasoning sâu hơn và router thời gian thực quyết định sử dụng cái nào dựa trên loại hội thoại, độ phức tạp, nhu cầu công cụ và mục đích rõ ràng. Riêng biệt, danh mục mô hình API hiện tại hiển thị ** GPT-5.6 Sol, Terra và Luna** là các bậc bền bỉ với cùng cửa sổ context 1,05M, đầu ra 128K max, đầu vào hình ảnh, đầu ra văn bản và hỗ trợ công cụ tích hợp. OpenAI **không** chỉ định công khai liệu các mô hình được triển khai này là dense hay MoE, chúng sử dụng biến thể attention nào, cách xử lý mã hóa vị trí hoặc chúng sử dụng sơ đồ kích hoạt và chuẩn hóa nào. citeturn17view1turn25view0turn35view3
 
-What *is* specific about GPT right now is the product-layer compute policy. The official docs expose explicit reasoning levels from **none** through **max**, while the GPT-5.6 launch page adds **ultra**, described as coordinating multiple agents across parallel workstreams for harder work. This means GPT’s most visible innovation is less “new kind of transformer block” and more **dynamic allocation of deliberation and agent parallelism** over a long-context, tool-enabled base system. That is a real architectural distinction at deployment time, even if the internal neural architecture remains undisclosed. citeturn25view0turn35view3turn35view0
+Điều * cụ thể* về GPT hiện nay là chính sách điện toán lớp sản phẩm. Các tài liệu chính thức hiển thị các cấp độ reasoning rõ ràng từ **none** đến ** max**, trong khi trang khởi chạy GPT-5.6 bổ sung **siêu**, được mô tả là điều phối nhiều agent trên các luồng công việc song song để làm việc chăm chỉ hơn. Điều này có nghĩa là sự đổi mới rõ ràng nhất của GPT là ít “loại khối transformer mới” hơn và **phân bổ động của sự cân nhắc và tính song song của agent** trên long-context, hệ thống cơ sở hỗ trợ công cụ. Đó là một sự khác biệt thực sự về kiến trúc tại thời điểm deployment, ngay cả khi kiến trúc thần kinh bên trong vẫn chưa được tiết lộ. citeturn25view0turn35view3turn35view0
 
-On alignment and post-training, OpenAI’s current public materials emphasize **safe-completions**, reduced hallucinations, stronger instruction following, and lower sycophancy, but do not publish a GPT-5.6-specific RLHF or DPO recipe at the level Qwen or Llama disclose. The system card also shows a Preparedness-oriented deployment stance, including precautionary treatment of GPT-5-thinking in some bio/chem domains. In other words, OpenAI’s public transparency is strongest on **routing, guardrails, and evals**, weaker on **block-level internals**. citeturn17view1turn35view3
+Về căn chỉnh và post-training, các tài liệu công khai hiện tại của OpenAI nhấn mạnh **hoàn thành an toàn**, giảm ảo giác, tuân theo hướng dẫn mạnh mẽ hơn và giảm tính đồng bộ, nhưng không xuất bản công thức RLHF hoặc DPO dành riêng cho GPT-5.6 ở cấp độ Qwen hoặc Llama tiết lộ. System card cũng hiển thị quan điểm deployment thiên về Chuẩn bị sẵn sàng, bao gồm cả việc xử lý phòng ngừa GPT-5-thinking trong một số lĩnh vực sinh học/hóa học. Nói cách khác, tính minh bạch công khai của OpenAI mạnh nhất ở **định tuyến, guardrail và evals**, yếu hơn ở **nội bộ cấp khối**. citeturn17view1turn35view3
 
 ### Anthropic Claude
 
-Anthropic’s newest current family snapshot separates into **Fable 5** as the most capable widely released model and **Sonnet 5** as the faster, cheaper, mainstream tier. The models overview gives all three top Claude tiers—Fable 5, Opus 4.8, and Sonnet 5—a **1M-token context window** and **128K max output**, while Sonnet 5’s migration page adds a specifically documented tokenizer change and a shift to **adaptive thinking** as the default behavior. Anthropic’s public materials do not specify whether the model internals are dense or MoE, which attention pattern they use, or which normalization and activation stack they use. citeturn24view3turn22view0
+Ảnh chụp nhanh họ mới nhất của Anthropic được tách thành **Fable 5** là mô hình được phát hành rộng rãi có khả năng nhất và **Sonnet 5** là mô hình phổ thông, nhanh hơn, rẻ hơn. Phần tổng quan về mô hình cung cấp cả ba cấp Claude hàng đầu—Fable 5, Opus 4.8 và Sonnet 5—a **1M- token context window** và **đầu ra 128K max**, trong khi trang di chuyển của Sonnet 5 thêm một thay đổi tokenizer được ghi nhận cụ thể và chuyển sang ** adaptive thinking** làm hành vi mặc định. Các tài liệu công khai của Anthropic không chỉ rõ nội bộ của mô hình là dense hay MoE, mô hình attention nào họ sử dụng hoặc họ sử dụng ngăn xếp kích hoạt và chuẩn hóa nào. citeturn24view3turn22view0
 
-Claude’s distinctive public signature is therefore behavioral and alignment-centered. Fable 5 is presented as the tier for **days-long, long-running, asynchronous tasks**, especially coding and document-heavy knowledge work. It is also accompanied by special bio/cyber safeguards, with many high-risk prompts automatically routed down to Opus 4.8 rather than answered directly by Fable 5. Sonnet 5, meanwhile, is presented as a drop-in upgrade whose defaults are more agentic: adaptive thinking is on by default, manual thinking budgets are removed, and non-default sampling parameters are rejected. That is unusual among frontier APIs and suggests Anthropic is pushing users toward a narrower, more deterministic operational profile for its newest production models. citeturn23view0turn24view3turn22view0
+Do đó, chữ ký công khai đặc biệt của Claude tập trung vào hành vi và sự liên kết. Fable 5 được trình bày dưới dạng cấp độ cho **các tác vụ kéo dài nhiều ngày, chạy dài, không đồng bộ**, đặc biệt là công việc coding và chứa nhiều kiến thức về tài liệu. Nó cũng đi kèm với các biện pháp bảo vệ sinh học/mạng đặc biệt, với nhiều prompt có nguy cơ cao được tự động chuyển xuống Opus 4.8 thay vì được Fable 5 trả lời trực tiếp. Trong khi đó, Sonnet 5 được trình bày dưới dạng bản nâng cấp thả xuống có mặc định có tác dụng hơn: adaptive thinking được bật theo mặc định, ngân sách thinking thủ công bị xóa và các tham số sampling không mặc định bị từ chối. Điều đó là bất thường đối với các API biên giới và cho thấy Anthropic đang thúc đẩy người dùng hướng tới một hồ sơ hoạt động hẹp hơn, mang tính xác định hơn cho các mô hình sản xuất mới nhất của mình. citeturn23view0turn24view3turn22view0
 
-Anthropic also remains the clearest case where **alignment philosophy itself is a family differentiator**. Claude is explicitly associated with **Constitutional AI**, which Anthropic describes as supervised learning plus reinforcement learning guided by a set of principles rather than only by harmfulness labels from humans. The company’s current transparency materials still describe Constitutional AI as central to how Claude is aligned with human values during reinforcement learning. That makes Claude the family where post-training philosophy is most legible publicly, even though the base transformer architecture is not. citeturn39search1turn39search12turn39search2
+Anthropic cũng vẫn là trường hợp rõ ràng nhất trong đó **bản thân triết lý liên kết đã là yếu tố tạo ra sự khác biệt trong họ**. Claude được liên kết rõ ràng với ** Constitutional AI**, mà Anthropic mô tả là học tập có giám sát cộng với reinforcement learning được hướng dẫn bởi một bộ nguyên tắc thay vì chỉ bởi các nhãn có hại từ con người. Các tài liệu minh bạch hiện tại của công ty vẫn mô tả Constitutional AI là trọng tâm trong cách Claude phù hợp với các giá trị con người trong quá trình reinforcement learning. Điều đó làm cho Claude trở thành dòng sản phẩm có triết lý post-training dễ đọc nhất một cách công khai, mặc dù kiến trúc transformer cơ bản thì không. citeturn39search1turn39search12turn39search2
 
 ### Google Gemini
 
-Google’s newest public Gemini snapshot is bifurcated: **Gemini 3.1 Pro** remains the “best for complex tasks” and is the basis for **Gemini 3.1 Deep Think**, while **Gemini 3.5 Flash** is the newer fast frontier tier for agents and coding. The official model pages show both 3.1 Pro and 3.5 Flash at **1M input / 64K output**, with support for text, image, video, audio, and PDF input, plus function calling, structured output, search as a tool, and code execution. Deep Think is explicitly described as a specialized reasoning mode built on top of Gemini 3.1 Pro. citeturn37view2turn37view3turn40view0
+Ảnh chụp nhanh Gemini công khai mới nhất của Google được chia thành hai nhánh: ** Gemini 3.1 Pro** vẫn là “tốt nhất cho các tác vụ phức tạp” và là cơ sở cho ** Gemini 3.1 Deep Think**, trong khi ** Gemini 3.5 Flash** là cấp biên giới nhanh mới hơn dành cho các agent và mã hóa. Các trang mô hình chính thức hiển thị cả 3.1 Pro và 3.5 Flash ở **đầu vào 1M/đầu ra 64K**, hỗ trợ đầu vào văn bản, hình ảnh, video, âm thanh và PDF, cùng với function calling, structured output, tìm kiếm dưới dạng công cụ và code execution. Deep Think được mô tả rõ ràng là chế độ reasoning chuyên dụng được xây dựng dựa trên Gemini 3.1 Pro. citeturn37view2turn37view3turn40view0
 
-Architecturally, Google is currently less transparent than Qwen or Meta for the newest Gemini 3.x family. The current 3.x product pages do not publicly specify dense vs MoE, attention style, positional encoding, tokenizer design, normalization, or FFN activation. The newest detailed technical report in the public record is still **Gemini 2.5**, which describes the 2.x family as **natively multimodal**, with **>1M-token inputs**, thinking, and tool use. The outward behavior of Gemini 3.x strongly continues that trajectory, but a rigorous report should stop short of asserting continuity for undisclosed block-level choices. citeturn16view0turn37view2turn40view3
+Về mặt kiến trúc, Google hiện kém minh bạch hơn Qwen hoặc Meta đối với dòng Gemini 3.x mới nhất. Các trang sản phẩm 3. x hiện tại không chỉ định công khai dense so với MoE, kiểu attention, mã hóa vị trí, thiết kế tokenizer, chuẩn hóa hoặc kích hoạt FFN. Báo cáo kỹ thuật chi tiết mới nhất trong hồ sơ công khai vẫn là ** Gemini 2.5**, mô tả dòng 2. x là **multimodal** ban đầu **, với** >1M- token đầu vào **, thinking và cách sử dụng công cụ. Hành vi bên ngoài của Gemini 3.x tiếp tục quỹ đạo đó một cách mạnh mẽ, nhưng một báo cáo nghiêm ngặt sẽ không thể khẳng định tính liên tục đối với các lựa chọn cấp khối không được tiết lộ. citeturn16view0turn37view2turn40view3
 
-The clearest Gemini-specific differentiator is therefore **integrated multimodality plus agent execution**. Gemini 3.5 Flash is explicitly positioned for frontier agentic coding, multimodal understanding, long-horizon tasks, and multi-step problem solving, while the benchmark table on Google’s page shows it competitive or leading on several agentic and multimodal tasks relative to prior Gemini and some rival models. The practical takeaway is that Gemini’s family identity is no longer “a chat model with image support”; it is “a natively multimodal, tool-using, long-context agent platform,” even if the exact internal fusion stack is not publicly specified for 3.x. citeturn40view0turn40view3turn37view2
+Do đó, điểm khác biệt rõ ràng nhất của Gemini là **đa phương thức tích hợp cộng với việc thực thi agent**. Gemini 3.5 Flash được định vị rõ ràng cho mã hóa agent biên giới, hiểu biết về multimodal, các tác vụ có tầm nhìn dài và giải quyết vấn đề nhiều bước, trong khi bảng điểm chuẩn trên trang của Google cho thấy nó có tính cạnh tranh hoặc dẫn đầu trong một số tác vụ agent và multimodal so với Gemini trước đó và một số mô hình đối thủ. Bài học thực tế rút ra là danh tính họ của Gemini không còn là “chat template có hỗ trợ hình ảnh” nữa; nó là “một nền tảng multimodal nguyên bản, sử dụng công cụ, long-context agent,” ngay cả khi ngăn xếp hợp nhất nội bộ chính xác không được chỉ định công khai cho 3. x. citeturn40view0turn40view3turn37view2
 
 ### Qwen
 
-Qwen is the family in this set with the **richest public technical disclosure**. The Qwen3 technical report states that the dense line continues the Qwen2.5 stack of **GQA, SwiGLU, RoPE, and RMSNorm with pre-normalization**, while adding **QK-Norm** and removing QKV bias. It also publishes the MoE topology: the flagship **Qwen3-235B-A22B** has **128 experts with 8 activated experts per token**, and the family uses **byte-level BPE** with a **151,669-token vocabulary**. Public technical sources also disclose that Qwen3 was pretrained on **36T tokens across 119 languages and dialects**. citeturn28view0turn28view3turn33view2
+Qwen là họ trong bộ này có **công bố kỹ thuật công khai phong phú nhất**. Báo cáo kỹ thuật Qwen3 cho biết dòng dense tiếp tục ngăn xếp Qwen2.5 của ** GQA, SwiGLU, RoPE và RMSNorm với tính năng chuẩn hóa trước**, đồng thời thêm ** QK-Norm** và loại bỏ độ lệch QKV. Nó cũng xuất bản cấu trúc liên kết MoE: hàng đầu ** Qwen3-235B-A22B** có **128 chuyên gia với 8 chuyên gia được kích hoạt trên mỗi token** và dòng sử dụng **BPE cấp byte** với **151.669- token vốn từ vựng**. Các nguồn kỹ thuật công khai cũng tiết lộ rằng Qwen3 đã được huấn luyện trước trên **36T token trên 119 ngôn ngữ và phương ngữ**. citeturn28view0turn28view3turn33view2
 
-Qwen is also unusually precise about long-context engineering. The technical report says Qwen3 raises the RoPE base frequency from 10,000 to **1,000,000** using **ABF**, and introduces **YaRN** plus **Dual Chunk Attention** to increase inference-time sequence capacity. The updated **Qwen3-235B-A22B-2507** model card gives the open-weight flagship **262,144 native context**, extendable to about **1.01M tokens**, while the long-context instructions specify sparse-attention serving configurations and even the approximate memory footprint for true 1M-token use. This is considerably more concrete than what frontier closed vendors now publish. citeturn28view4turn27view2turn27view3
+Qwen cũng có độ chính xác bất thường về kỹ thuật long-context. Báo cáo kỹ thuật cho biết Qwen3 tăng tần số cơ sở RoPE từ 10.000 lên **1.000.000** bằng cách sử dụng **ABF** và giới thiệu ** YaRN** cộng với **Dual Chunk Attention** để tăng công suất chuỗi thời gian suy luận. Thẻ mô hình ** Qwen3-235B-A22B-2507** được cập nhật cung cấp hàng đầu có weight mở **262.144 native context**, có thể mở rộng tới khoảng **1,01 triệu token**, trong khi hướng dẫn long-context chỉ định cấu hình sparse-attention serving và thậm chí cả dung lượng bộ nhớ gần đúng chosử dụng đúng 1M- token. Điều này cụ thể hơn đáng kể so với những gì các nhà cung cấp đóng cửa ở biên giới công bố hiện nay. citeturn28view4turn27view2turn27view3
 
-Post-training is another area where Qwen is unusually explicit. Qwen3’s flagship recipe is a **four-stage** process: long-CoT cold start, reasoning RL, thinking-mode fusion via SFT, and general-domain RL. The family’s unusual user-facing differentiator is that it merges **thinking** and **non-thinking** into the same model, surfaced through **`/think`** and **`/no_think`** controls and a **thinking budget** mechanism. For smaller models, Qwen describes a strong-to-weak distillation path rather than repeating the full expensive flagship pipeline. citeturn33view0turn33view1turn33view3
+Post-training là một lĩnh vực khác mà Qwen tỏ ra rõ ràng một cách bất thường. Công thức hàng đầu của Qwen3 là một quy trình **bốn giai đoạn**: khởi động nguội CoT trong thời gian dài, reasoning RL, kết hợp chế độ thinking thông qua SFT và miền chung RL. Điểm khác biệt bất thường đối với người dùng của dòng này là nó hợp nhất ** thinking** và ** non-thinking** vào cùng một mô hình, hiển thị thông qua các điều khiển ** `/think`** và ** `/no_think`** và cơ chế ngân sách ** thinking**. Đối với các mô hình nhỏ hơn, Qwen mô tả lộ trình chưng cất từ mạnh đến yếu thay vì lặp lại toàn bộ quy trình chưng cất đắt tiền hàng đầu. citeturn33view0turn33view1turn33view3
 
-For multimodality, the newest Qwen sibling to know is **Qwen3-VL**. Its public docs and technical-report abstract describe **interleaved 256K multimodal context**, **enhanced interleaved-MRoPE**, **DeepStack** integration for multi-level ViT features, and **text-based timestamp alignment** for video understanding. That makes Qwen arguably the most transparent family here not only for text-only LLM internals, but also for multimodal fusion specifics. citeturn34view0turn34view1
+Đối với đa phương thức, anh chị em Qwen mới nhất cần biết là ** Qwen3-VL**. Các tài liệu công khai và bản tóm tắt báo cáo kỹ thuật của nó mô tả **xen kẽ 256K multimodal context**, **xen kẽ nâng cao- MRoPE**, **tích hợp DeepStack** cho các tính năng ViT đa cấp và **căn chỉnh dấu thời gian dựa trên văn bản** để hiểu video. Điều đó làm cho Qwen được cho là dòng minh bạch nhất ở đây không chỉ đối với nội bộ LLM chỉ có văn bản mà còn đối với các tham số cụ thể của hợp nhất multimodal. citeturn34view0turn34view1
 
 ### Meta Llama
 
-Llama 4’s public design is the clearest among the big Western open-weight families. Meta’s official release and model cards describe **Llama 4 Scout** and **Llama 4 Maverick** as **auto-regressive MoE** models with **early fusion** for native multimodality. Maverick is listed at **17B active / 400B total** with **128 experts**, while Scout is **17B active / 109B total** with **16 experts**. The public model card also exposes context and training-scale asymmetry: Scout targets **10M context** and about **40T tokens**, whereas Maverick targets **1M context** and about **22T tokens**. citeturn30view3turn31view0
+thiết kế công cộng của Llama 4 là rõ ràng nhất trong số các họ weight mở lớn của phương Tây. Thẻ mô hình và bản phát hành chính thức của Meta mô tả ** Llama 4 Scout** và ** Llama 4 Maverick** là **các mô hình MoE** tự động hồi quy ** với** kết hợp sớm ** cho đa phương thức native. Maverick được liệt kê ở mức** 17B hoạt động/tổng số 400B ** với** 128 chuyên gia **, trong khi Scout là** 17B hoạt động/tổng số 109B ** với** 16 chuyên gia **. Thẻ mô hình công khai cũng hiển thị context và sự bất đối xứng trong quy mô huấn luyện: Scout nhắm mục tiêu** 10 triệu context ** và khoảng** 40T token **, trong khi Maverick nhắm mục tiêu** 1 triệu context ** và khoảng** 22T token **. citeturn30view3turn31view0
 
-Meta also reveals more about the serving topology than most proprietary vendors do. The release blog says Maverick uses **alternating dense and MoE layers**, and that each token is sent to a **shared expert** plus one routed expert among 128. Scout, in contrast, is the family’s long-context research-heavy model: Meta describes an **iRoPE architecture** combining **interleaved attention layers without positional embeddings** in some layers, RoPE in most layers, and inference-time attention temperature scaling to improve length generalization. That makes Scout the most explicit long-context architecture experiment in this whole comparison. citeturn31view0
+Meta cũng tiết lộ nhiều hơn về cấu trúc liên kết serving so với hầu hết các nhà cung cấp độc quyền. Blog phát hành cho biết Maverick sử dụng **các lớp dense và MoE xen kẽ**, và mỗi lớp token được gửi đến **expert được chia sẻ** cộng với một expert được định tuyến trong số 128. Ngược lại, Scout là mô hình nghiên cứu long-context của dòng: Meta mô tả kiến trúc ** iRoPE** kết hợp **xen kẽCác lớp attention không có phần nhúng vị trí** trong một số lớp, RoPE trong hầu hết các lớp và attention temperature chia tỷ lệ theo thời gian suy luận để cải thiện khả năng khái quát hóa độ dài. Điều đó khiến Scout trở thành thử nghiệm kiến trúc long-context rõ ràng nhất trong toàn bộ cuộc so sánh này. citeturn31view0
 
-Llama 4’s post-training disclosure is also relatively strong. Meta says Maverick was post-trained using **lightweight SFT → online RL → lightweight DPO**, and that balancing modalities, reasoning, and conversational quality was a central problem. On multimodality, Meta emphasizes **early fusion** plus a **MetaCLIP-derived vision encoder** trained to adapt to the LLM, as well as image/video-still pretraining to support broad visual reasoning. The family therefore stands out as the most clearly documented case of **native multimodality in an open-weight frontier family**. citeturn31view0turn30view3
+Tiết lộ post-training của Llama 4 cũng tương đối mạnh mẽ. Meta cho biết Maverick đã được huấn luyện sau khi sử dụng **SFT nhẹ → RL trực tuyến → DPO nhẹ** và việc cân bằng các phương thức reasoning và chất lượng đàm thoại là vấn đề trọng tâm. Về đa phương thức, Meta nhấn mạnh **kết hợp sớm** cộng với ** MetaCLIP có nguồn gốc từ vision encoder** được huấn luyện để thích ứng với LLM, cũng như pretraining hình ảnh/video tĩnh để hỗ trợ reasoning hình ảnh rộng. Do đó, dòng này nổi bật là trường hợp được ghi chép rõ ràng nhất về ** đa phương thức native trong dòng biên giới có weight mở**. citeturn31view0turn30view3
 
-One caution is benchmark interpretation. Meta’s official blog highlighted an **experimental chat variant** of Maverick for LMArena, and later reporting showed that the leaderboard variant was not identical to the public release, which complicates direct transfer of some headline benchmark claims to the downloadable model. That does not negate the family’s technical innovations, but it does mean Llama 4’s public benchmark story deserves more scrutiny than its architecture story. citeturn31view0turn38news28
+Một sự thận trọng là giải thích điểm chuẩn. Blog chính thức của Meta đã nêu bật **biến thể trò chuyện thử nghiệm** của Maverick cho LMArena và báo cáo sau đó cho thấy biến thể bảng xếp hạng không giống với bản phát hành công khai, điều này làm phức tạp việc chuyển trực tiếp một số xác nhận điểm chuẩn tiêu đề sang mô hình có thể tải xuống. Điều đó không phủ nhận những đổi mới kỹ thuật của dòng sản phẩm này, nhưng điều đó có nghĩa là câu chuyện chuẩn công khai của Llama 4 xứng đáng được xem xét kỹ lưỡng hơn câu chuyện kiến trúc của nó. citeturn31view0turn38news28
 
-## Public dataflow walkthroughs
+## Hướng dẫn về luồng dữ liệu công khai
 
-### GPT family dataflow
+### Luồng dữ liệu dòng GPT
 
 ```mermaid
 flowchart LR
-    U[User text plus optional image or file] --> P[Parsing and tokenization<br/>image or file preprocessing unspecified publicly]
-    P --> R[GPT-5 router<br/>main path vs thinking path]
-    R --> E[Reasoning effort<br/>none to max or ultra]
-    E --> T[Tool loop<br/>functions web search file search computer use]
-    T --> D[Decoder generates final text tokens]
+    U[Văn bản người dùng cộng với hình ảnh hoặc file tùy chọn] --> P[Phân tích cú pháp và tokenxử lý trước hình ảnh hoặc file không được chỉ định công khai]
+    P --> R[GPT-5 routerđường dẫn chính so với đường dẫn thinking]
+    R --> E[Reasoning effortkhông có max hoặc cực]
+    E --> T[Vòng lặp công cụfunction tìm kiếm file web tìm kiếm computer use]
+    T --> D[Bộ giải mã tạo token văn bản cuối cùng]
 ```
 
-This diagram reflects only what OpenAI states publicly: a routed GPT-5 system, explicit effort controls, and built-in tool surfaces. OpenAI does **not** publicly document the image encoder path, attention kernels, or internal multimodal fusion mechanism for GPT-5.6. citeturn17view1turn25view0turn35view0
+Sơ đồ này chỉ phản ánh những gì OpenAI nêu công khai: hệ thống GPT-5 được định tuyến, các điều khiển effort rõ ràng và các bề mặt công cụ tích hợp. OpenAI **không** ghi lại công khai đường dẫn bộ mã hóa hình ảnh, hạt nhân attention hoặc cơ chế hợp nhất multimodal nội bộ cho GPT-5.6. citeturn17view1turn25view0turn35view0
 
-A concrete public-dataflow example is:
+Một ví dụ về luồng dữ liệu công khai cụ thể là:
 
-1. A user sends a long prompt plus an image or file.
-2. OpenAI tokenizes the text and processes the other input through an **unspecified publicly** pathway.
-3. The GPT-5 router decides whether the turn stays on the fast path or the deeper reasoning path; the selected reasoning level shapes how much additional deliberation the system uses.
-4. If needed, the model enters tool loops through functions, web search, file search, or computer use, then returns final text tokens. citeturn17view1turn25view0turn35view0
+1. Người dùng gửi prompt dài kèm theo hình ảnh hoặc file.
+2. OpenAI mã hóa văn bản và xử lý dữ liệu đầu vào khác thông qua đường dẫn **công khai không xác định**.
+3. GPT-5 router quyết định xem ngã rẽ vẫn đi trên đường nhanh hay đường reasoning sâu hơn; mức reasoning đã chọn sẽ định hình mức độ cân nhắc bổ sung mà hệ thống sử dụng.
+4. Nếu cần, mô hình sẽ nhập các vòng lặp công cụ thông qua các function, tìm kiếm trên web, tìm kiếm file hoặc computer use, sau đó trả về token văn bản cuối cùng. citeturn17view1turn25view0turn35view0
 
-### Claude family dataflow
+### Luồng dữ liệu dòng Claude
 
 ```mermaid
 flowchart LR
-    U[User text plus image or PDF] --> P[Tokenization and document or vision ingestion<br/>internal pathway unspecified publicly]
-    P --> A[Adaptive thinking<br/>always on for Fable 5 and Sonnet 5]
-    A --> S[Safety routing and policy checks]
-    S --> F[Possible fallback for some bio or cyber requests]
-    F --> O[Final text tokens]
+    U[Văn bản người dùng cộng với hình ảnh hoặc PDF] --> P[Token và nhập tài liệu hoặc tầm nhìncon đường nội bộ không được chỉ định công khai]
+    P --> A[luôn bật cho Fable 5 và Sonnet 5]
+    A --> S[Kiểm tra chính sách và định tuyến an toàn]
+    S --> F[Dự phòng có thể xảy ra đối với một số yêu cầu sinh học hoặc mạng]
+    F --> O[Token văn bản cuối cùng]
 ```
 
-The Claude dataflow is shaped publicly by **adaptive thinking** and **safeguard routing**, not by disclosed block-level internals. Anthropic says Fable 5 and Sonnet 5 run with adaptive thinking and that some high-risk Fable 5 bio/cyber prompts are routed to Opus 4.8. citeturn24view3turn22view0turn23view0
+Luồng dữ liệu Claude được định hình công khai bởi ** adaptive thinking** và **định tuyến bảo vệ**, không phải bởi nội bộ cấp khối được tiết lộ. Anthropic cho biết Fable 5 và Sonnet 5 chạy với adaptive thinking và một số prompt về sinh học/mạng của Fable 5 có rủi ro cao được chuyển đến Opus 4.8. citeturn24view3turn22view0turn23view0
 
-A concrete public-dataflow example is:
+Một ví dụ về luồng dữ liệu công khai cụ thể là:
 
-1. A user uploads a PDF with charts and asks for analysis.
-2. Claude ingests text plus the file or image through an internal pathway Anthropic does not specify publicly.
-3. The model runs adaptive thinking to decide how much reasoning to use, rather than depending on a manual token budget.
-4. If the request hits high-risk bio/cyber safeguards in Fable 5, the system may fallback; otherwise Claude returns text output. citeturn23view0turn22view0turn24view3
+1. Người dùng tải lên bản PDF có biểu đồ và yêu cầu phân tích.
+2. Claude nhập văn bản cùng với file hoặc hình ảnh thông qua đường dẫn nội bộ mà Anthropic không chỉ định công khai.
+3. Mô hình chạy adaptive thinking để quyết định số lượng reasoning sẽ sử dụng, thay vì phụ thuộc vào ngân sách token thủ công.
+4. Nếu yêu cầu chạm đến các biện pháp bảo vệ sinh học/mạng có rủi ro cao trong Fable 5, hệ thống có thể dự phòng; nếu không thì Claude trả về kết quả văn bản. citeturn23view0turn22view0turn24view3
 
-### Gemini family dataflow
+### Luồng dữ liệu dòng Gemini
 
 ```mermaid
 flowchart LR
-    U[Text image video audio or PDF] --> M[Native multimodal packing]
-    M --> G[Gemini 3.1 Pro or 3.5 Flash]
-    G --> D[Optional Deep Think or fast Flash reasoning path]
-    D --> T[Tool use<br/>function calling search code execution]
-    T --> O[Final text tokens]
+    U[Văn bản hình ảnh âm thanh video hoặc PDF] --> M[Đóng gói Native multimodal]
+    M --> G[Gemini 3.1 Pro hoặc 3.5 Flash]
+    G --> D[Đường dẫn Deep Think tùy chọn hoặc Flash reasoning nhanh]
+    D --> T[Sử dụng công cụfunction calling tìm kiếm code execution]
+    T --> O[Token văn bản cuối cùng]
 ```
 
-Google publicly describes Gemini as a **natively multimodal** family with long context and first-class tool use. The exact encoder/decoder separation and internal fusion stack for Gemini 3.x are not specified on the reviewed model pages, so the diagram stays at the product-mechanism level. citeturn16view0turn37view2turn37view3turn40view0
+Google mô tả công khai Gemini là dòng **multimodal** vốn có context lâu dài và sử dụng công cụ hạng nhất. Việc tách bộ mã hóa/giải mã chính xác và ngăn hợp nhất bên trong cho Gemini 3.x không được chỉ định trên các trang mô hình đã xem xét, do đó sơ đồ vẫn ở cấp cơ chế sản phẩm. citeturn16view0turn37view2turn37view3turn40view0
 
-A concrete public-dataflow example is:
+Một ví dụ về luồng dữ liệu công khai cụ thể là:
 
-1. A user provides a long prompt, a PDF, and a screenshot.
-2. Gemini 3.x ingests text plus multimodal inputs into a unified context window.
-3. The request goes either to Gemini 3.5 Flash for fast agentic execution or to Gemini 3.1 Pro / Deep Think when deeper reasoning is appropriate.
-4. The model can call functions, search, or code execution before returning text output. citeturn37view2turn37view3turn40view0turn40view3
+1. Người dùng cung cấp một prompt dài, một bản PDF và ảnh chụp màn hình.
+2. Gemini 3.x nhập văn bản cùng với đầu vào multimodal vào một cửa sổ context hợp nhất.
+3. Yêu cầu được chuyển tới Gemini 3.5 Flash để thực thi agent nhanh hoặc tới Gemini 3.1 Pro/Deep Think khi reasoning sâu hơn phù hợp.
+4. Mô hình có thể gọi các function, tìm kiếm hoặc code execution trước khi trả về đầu ra văn bản. citeturn37view2turn37view3turn40view0turn40view3
 
-### Qwen family dataflow
+### Luồng dữ liệu dòng Qwen
 
 ```mermaid
 flowchart LR
-    I[Image video and text] --> V[Vision stack with DeepStack in Qwen3-VL]
-    I --> X[BBPE text tokenizer]
-    V --> F[Interleaved multimodal sequence with enhanced MRoPE]
+    I[Hình ảnh video và văn bản] --> V[Ngăn xếp tầm nhìn với DeepStack trong Qwen3-VL]
+    I --> X[BBPE văn bản tokenizer]
+    V --> F[Chuỗi multimodal xen kẽ với MRoPE nâng cao]
     X --> F
-    F --> B[Dense or MoE decoder<br/>GQA RoPE QK-Norm RMSNorm SwiGLU]
-    B --> C[Thinking control<br/>/think /no_think and budget]
-    C --> O[Final text tokens]
+    F --> B[Bộ giải mã Dense hoặc MoEGQA RoPE QK-Norm RMSNorm SwiGLU]
+    B --> C[Điều khiển Thinking/think /no_think và ngân sách]
+    C --> O[Token văn bản cuối cùng]
 ```
 
-Unlike the closed families, Qwen’s public docs let us be fairly concrete here. The text line discloses GQA, RoPE, RMSNorm, SwiGLU, QK-Norm, and BBPE tokenization, while Qwen3-VL discloses enhanced interleaved-MRoPE, DeepStack, and text-based temporal alignment for video. citeturn28view3turn28view0turn34view0turn34view1
+Không giống như các họ khép kín, tài liệu công khai của Qwen cho phép chúng tôi khá cụ thể ở đây. Dòng văn bản tiết lộ token GQA, RoPE, RMSNorm, SwiGLU, QK-Norm và BBPE, trong khi Qwen3-VL tiết lộ tính năng xen kẽ nâng cao- MRoPE, DeepStack và căn chỉnh thời gian dựa trên văn bản cho video. citeturn28view3turn28view0turn34view0turn34view1
 
-A concrete public-dataflow example is:
+Một ví dụ về luồng dữ liệu công khai cụ thể là:
 
-1. A user sends an image and a question, or a long multilingual prompt.
-2. Qwen tokenizes text with its BBPE tokenizer; Qwen3-VL encodes image or video signals and merges them into an interleaved multimodal sequence.
-3. The dense or MoE decoder processes that sequence with GQA, RoPE-family position handling, RMSNorm, and SwiGLU.
-4. The user or chat template can force `/think` or `/no_think`, or use a reasoning budget, before the model emits final tokens. citeturn28view0turn28view3turn33view1turn34view1
+1. Người dùng gửi một hình ảnh và một câu hỏi hoặc một prompt dài đa ngôn ngữ.
+2. Qwen mã hóa văn bản bằng BBPE tokenizer; Qwen3-VL mã hóa tín hiệu hình ảnh hoặc video và hợp nhất chúng thành chuỗi multimodal xen kẽ.
+3. Bộ giải mã dense hoặc MoE xử lý trình tự đó với xử lý vị trí họ GQA, RoPE, RMSNorm và SwiGLU.
+4. Người dùng hoặc chat template có thể buộc `/think` hoặc `/no_think` hoặc sử dụng ngân sách reasoning trước khi mô hình phát ra token cuối cùng. citeturn28view0turn28view3turn33view1turn34view1
 
-### Llama family dataflow
+### Luồng dữ liệu dòng Llama
 
 ```mermaid
 flowchart LR
-    I[Image plus text] --> V[MetaCLIP-derived vision encoder]
-    T[Text tokens] --> F[Early fusion into unified backbone]
+    I[Hình ảnh cộng với văn bản] --> V[MetaCLIP có nguồn gốc từ vision encoder]
+    T[Token văn bản] --> F[Hợp nhất sớm thành backbone thống nhất]
     V --> F
-    F --> M[MoE backbone<br/>Scout or Maverick]
-    M --> L[Scout iRoPE long-context path<br/>or Maverick routed-plus-shared experts]
-    L --> O[Final text or code tokens]
+    F --> M[Backbone MoEScout hoặc Maverick]
+    M --> L[Scout iRoPE long-context đường dẫnhoặc các chuyên gia định tuyến cộng với chia sẻ Maverick]
+    L --> O[Token văn bản hoặc code cuối cùng]
 ```
 
-Meta’s public release is unusually explicit that Llama 4 uses **early fusion** for text and vision, a MetaCLIP-derived vision encoder, and MoE backbones. Scout and Maverick then diverge in their long-context and expert-routing design priorities. citeturn31view0turn30view3
+Bản phát hành công khai của Meta nêu rõ một cách bất thường rằng Llama 4 sử dụng **kết hợp sớm** cho văn bản và hình ảnh, một MetaCLIP có nguồn gốc từ vision encoder và backbone MoE. Scout và Maverick sau đó sẽ có những ưu tiên thiết kế định tuyến long-context và expert của họ. citeturn31view0turn30view3
 
-A concrete public-dataflow example is:
+Một ví dụ về luồng dữ liệu công khai cụ thể là:
 
-1. A user provides several images and a text instruction.
-2. The images are encoded by the vision encoder, and text plus vision tokens are combined early into the same model backbone.
-3. If the request targets Scout, the long-context path benefits from the iRoPE strategy; if it targets Maverick, the shared-plus-routed-expert MoE path emphasizes higher overall capability per serving cost.
-4. The model returns multilingual text or code output. citeturn31view0turn30view3
+1. Người dùng cung cấp một số hình ảnh và hướng dẫn bằng văn bản.
+2. Hình ảnh được mã hóa bởi vision encoder và văn bản cùng với token hình ảnh được kết hợp sớm vào cùng một framework mô hình.
+3. Nếu yêu cầu nhắm mục tiêu Scout, đường dẫn long-context sẽ được hưởng lợi từ chiến lược iRoPE; nếu nó nhắm mục tiêu vào Maverick, đường dẫn expert MoE được chia sẻ-cộng-định tuyến sẽ nhấn mạnh khả năng tổng thể cao hơn trên mỗi chi phí serving.
+4. Mô hình trả về đầu ra văn bản hoặc code đa ngôn ngữ. citeturn31view0turn30view3
 
-## Performance patterns and use-cases
+## Mẫu hiệu suất và trường hợp sử dụng
 
-The cleanest performance conclusion is not that one family dominates every benchmark, but that each family now has a **distinct deployment niche**. GPT-5.6 Sol is optimized for professional workflows that combine reasoning, browsing, tool use, and artifact production; OpenAI highlights strong results on Agents’ Last Exam, BrowseComp, OSWorld 2.0, and coding-agent benchmarks, while the product pages repeatedly frame Sol as the model for complex professional work and Terra/Luna as cheaper throughput tiers. citeturn17view0turn25view0turn35view3
+Kết luận rõ ràng nhất về hiệu suất không phải là một dòng thống trị mọi điểm chuẩn, mà là mỗi dòng hiện có **ngách deployment riêng biệt**. GPT-5.6 Sol được tối ưu hóa cho quy trình làm việc chuyên nghiệp kết hợp reasoning, browsing, sử dụng công cụ và sản xuất tạo tác; OpenAI nêu bật kết quả tốt về các điểm chuẩn trong Bài kiểm tra cuối cùng của Đại lý, DuyệtComp, OSWorld 2.0 và mã hóa- agent, trong khi các trang sản phẩm liên tục coi Sol là mô hình cho công việc chuyên môn phức tạp và Terra/Luna là các cấp thông lượng rẻ hơn. citeturn17view0turn25view0turn35view3
 
-Claude’s newest family looks strongest when the task requires **persistent, high-context orchestration** rather than short, bursty chat turns. Anthropic’s own materials frame Fable 5 as the model for multi-day agents, large migrations, complex implementations, and document-heavy analysis, while Sonnet 5 is the cost-efficient default that inherits much of that agentic behavior through adaptive thinking. That makes Claude especially attractive for codebase-scale and knowledge-work workflows where reliability across many steps matters as much as raw single-turn benchmark scores. citeturn23view0turn24view3turn22view0
+Nhóm mới nhất của Claude có vẻ mạnh nhất khi tác vụ yêu cầu **sự điều phối context cao, liên tục** thay vì các lượt trò chuyện ngắn, dồn dập. Tài liệu riêng của Anthropic coi Fable 5 là mô hình cho các agent kéo dài nhiều ngày, di chuyển lớn, triển khai phức tạp và phân tích nhiều tài liệu, trong khi Sonnet 5 là mặc định tiết kiệm chi phí kế thừa phần lớn hành vi agent đó thông qua adaptive thinking. Điều đó làm cho Claude đặc biệt hấp dẫn đối với quy trình làm việc dựa trên kiến thức và quy mô codebase, trong đó độ tin cậy qua nhiều bước cũng quan trọng như điểm chuẩn một lượt thô. citeturn23view0turn24view3turn22view0
 
-Gemini’s split between 3.1 Pro/Deep Think and 3.5 Flash maps well onto two practical use cases. **Gemini 3.1 Pro** is the better fit when the user needs maximum multimodal depth, long-context reasoning, or research-heavy work; **Gemini 3.5 Flash** is the better fit when low-latency agentic execution matters. Google’s benchmark table is explicit that 3.5 Flash leads across many agentic benchmarks relative to earlier Gemini variants and some competitors, while 3.1 Pro remains stronger on some harder reasoning and long-context metrics such as MRCR and ARC-AGI-2. citeturn37view2turn40view3
+Sự phân chia của Gemini giữa 3.1 Pro/ Deep Think và 3.5 Flash phù hợp với hai trường hợp sử dụng thực tế. ** Gemini 3.1 Pro** phù hợp hơn khi người dùng cần độ sâu multimodal tối đa, long-context reasoning hoặc công việc nặng về nghiên cứu; ** Gemini 3.5 Flash** phù hợp hơn khi vấn đề thực thi agent có độ trễ thấp. Bảng điểm chuẩn của Google nêu rõ rằng 3.5 Flash dẫn đầu trên nhiều điểm chuẩn agent so với các biến thể Gemini trước đó và một số đối thủ cạnh tranh, trong khi 3.1 Pro vẫn mạnh hơn trên một số số liệu reasoning và long-context khó hơn như MRCR và ARC-AGI-2. citeturn37view2turn40view3
 
-Qwen remains the strongest option when the requirement is **open-weight deployment plus unusually transparent controllable reasoning**. The flagship Qwen3-235B-A22B posts strong published results on AIME, LiveCodeBench, CodeForces, and BFCL, while the family’s `/think` versus `/no_think` split and budget control are unusually explicit and developer-friendly. The trade-off is that the very largest open Qwen deployments become hardware-intensive quickly, especially at 1M context. citeturn33view2turn33view3turn27view3
+Qwen vẫn là lựa chọn mạnh nhất khi yêu cầu là **deployment có weight mở cộng với reasoning có thể điều khiển trong suốt bất thường**. Qwen3-235B-A22B hàng đầu đăng các kết quả được công bố mạnh mẽ trên AIME, LiveCodeBench, CodeForces và BFCL, trong khi việc phân chia `/think` và `/no_think` và kiểm soát ngân sách của dòng này rõ ràng và thân thiện với nhà phát triển một cách khác thường. Sự đánh đổi là việc triển khai Qwen mở lớn nhất sẽ nhanh chóng sử dụng nhiều phần cứng, đặc biệt là ở mức 1 triệu context. citeturn33view2turn33view3turn27view3
 
-Llama 4 is strongest where **open-weight customization, fine-tuning freedom, or extreme long context** matter more than closed-model polish. Scout is the standout for ultra-long-context experimentation at 10M tokens, while Maverick is the practical higher-quality multimodal workhorse. But benchmark interpretation needs caution: some of Meta’s launch-era public benchmark claims were tied to an experimental chat variant rather than the exact public release, so architecture and openness are stronger selling points here than single leaderboard snapshots. citeturn31view0turn30view3turn38news28
+Llama 4 mạnh nhất trong đó **tùy chỉnh weight mở, sự tự do của fine-tuning hoặc context cực dài** quan trọng hơn việc đánh bóng mô hình khép kín. Scout là ứng dụng nổi bật cho thử nghiệm siêu long-context với 10 triệu token, trong khi Maverick là ứng dụng đặc biệt multimodal có chất lượng thực tế cao hơn. Tuy nhiên, việc diễn giải điểm chuẩn cần thận trọng: một số tuyên bố về điểm chuẩn công khai trong thời kỳ ra mắt của Meta gắn liền với một biến thể trò chuyện thử nghiệm thay vì bản phát hành công khai chính xác, vì vậy cấu trúc và tính mở là điểm bán hàng mạnh mẽ hơn ở đây so với ảnh chụp nhanh bảng xếp hạng đơn lẻ. citeturn31view0turn30view3turn38news28
 
-In aggregate, the newest family-level similarity is that **all five are now agent models first and chat models second**. The lasting differences are the ones that determine real deployment decisions: whether you need a proprietary but polished routed system with strong tooling, a Constitution-shaped long-running agent, a natively multimodal Google stack, an Apache-licensed reasoning-controllable open model, or an early-fusion open-weight multimodal model that you can run and fine-tune yourself. citeturn25view0turn24view3turn37view2turn33view3turn31view0
+Nhìn chung, điểm tương đồng mới nhất ở cấp độ họ là **cả năm đều là mô hình agent đầu tiên và chat template thứ hai**. Sự khác biệt lâu dài là những yếu tố quyết định các quyết định thực sự về deployment: liệu bạn cần một hệ thống định tuyến độc quyền nhưng được đánh bóng với công cụ mạnh mẽ, agent chạy dài theo Hiến pháp, ngăn xếp multimodal nguyên bản của Google, mô hình mở có thể điều khiển reasoning được cấp phép của Apache hay mô hình multimodal weight mở kết hợp sớm mà bạn có thể tự chạy và fine-tune. citeturn25view0turn24view3turn37view2turn33view3turn31view0
 
-## Prioritized sources
+## Nguồn ưu tiên
 
-The most authoritative sources for this comparison, in practical priority order, are the following:
+Các nguồn có thẩm quyền nhất cho sự so sánh này, theo thứ tự ưu tiên thực tế, là như sau:
 
 **OpenAI**
 
-- GPT-5.6 launch page for tiering, availability, multi-agent “ultra,” and benchmark framing. citeturn35view3turn35view0
-- OpenAI API model catalog for current context windows, outputs, supported tools, and modality surfaces. citeturn25view0
-- GPT-5 system card page for the public description of GPT-5 as a routed unified system. citeturn17view1
+- Trang khởi chạy GPT-5.6 dành cho việc xếp lớp, tính khả dụng, đa agent “siêu” và framework điểm chuẩn. citeturn35view3turn35view0
+- Danh mục mô hình OpenAI API cho các cửa sổ, đầu ra, công cụ được hỗ trợ và bề mặt phương thức context hiện tại. citeturn25view0
+- Trang system card GPT-5 mô tả công khai về GPT-5 như một hệ thống hợp nhất được định tuyến. citeturn17view1
 
 **Anthropic**
 
-- Models overview for current Claude family comparison, context windows, and availability. citeturn24view3
-- “What’s new in Claude Sonnet 5” for tokenizer change and adaptive-thinking defaults. citeturn22view0
-- Claude Fable 5 page for long-running-agent use cases and high-risk safeguard fallback. citeturn23view0
-- Constitutional AI research and Claude constitution materials for family-level alignment method. citeturn39search1turn39search2turn39search12
+- Tổng quan về các mô hình để so sánh dòng Claude hiện tại, cửa sổ context và tính khả dụng. citeturn24view3
+- “Có gì mới trong Claude Sonnet 5 ” dành cho thay đổi và thích ứng tokenizer- mặc định thinking. citeturn22view0
+- Trang Claude Fable 5 dành cho các trường hợp sử dụng agent trong thời gian dài và dự phòng biện pháp bảo vệ có rủi ro cao. citeturn23view0
+- Tài liệu nghiên cứu Constitutional AI và Claude cho phương pháp căn chỉnh cấp độ họ. citeturn39search1turn39search2turn39search12
 
 **Google**
 
-- Gemini 3.1 Pro and 3.5 Flash model pages for current 3.x capabilities, tools, context, and deployment surfaces. citeturn37view2turn40view0
-- Gemini 3.1 Deep Think page for the relationship between Deep Think and 3.1 Pro. citeturn37view3
-- Gemini 2.5 technical report for the newest public family-level technical report with explicit architecture/training discussion. citeturn16view0
+- Các trang mô hình Flash Gemini 3.1 Pro và 3.5 cho các khả năng, công cụ 3. x hiện tại, các bề mặt context và deployment. citeturn37view2turn40view0
+- Trang Gemini 3.1 Deep Think về mối quan hệ giữa Deep Think và 3.1 Pro. citeturn37view3
+- Báo cáo kỹ thuật Gemini 2.5 dành cho báo cáo kỹ thuật công khai cấp độ họ mới nhất với nội dung thảo luận về kiến trúc/huấn luyện rõ ràng. citeturn16view0
 
 **Qwen**
 
-- Qwen3 technical report for architecture, pretraining scale, tokenizer, and post-training pipeline. citeturn28view0turn28view3turn33view0
-- Qwen3-235B-A22B-2507 model cards for current flagship open deployment details and long-context serving notes. citeturn27view2turn27view3
-- Qwen3-VL docs and technical-report abstract for multimodal fusion specifics. citeturn34view0turn34view1
+- Báo cáo kỹ thuật Qwen3 cho kiến trúc, thang đo pretraining, tokenizer và đường dẫn post-training. citeturn28view0turn28view3turn33view0
+- Thẻ mô hình Qwen3-235B-A22B-2507 dành cho các thông tin chi tiết về deployment mở hàng đầu hiện tại và các ghi chú long-context serving. citeturn27view2turn27view3
+- Qwen3-VL tài liệu và bản tóm tắt báo cáo kỹ thuật về các chi tiết cụ thể về fusion multimodal. citeturn34view0turn34view1
 
 **Meta**
 
-- Llama 4 release blog for MoE structure, early fusion, iRoPE, training-scale, and post-training sequence. citeturn31view0
-- Llama 4 model cards for official model sizes, contexts, modalities, training data mix, and licensing. citeturn30view3turn29search6
-- Secondary benchmark-caveat reporting for the LMArena/public-release mismatch. citeturn38news28
+- Blog phát hành Llama 4 về cấu trúc MoE, fusion sớm, iRoPE, quy mô huấn luyện và trình tự post-training. citeturn31view0
+- Thẻ mô hình Llama 4 dành cho kích thước mô hình, bối cảnh, phương thức, kết hợp dữ liệu huấn luyện và cấp phép chính thức. citeturn30view3turn29search6
+- Báo cáo cảnh báo điểm chuẩn thứ cấp cho LMArena/bản phát hành công khai không khớp. citeturn38news28
 
-The highest-confidence comparative statements in this report are those about **Qwen and Llama architecture**, **GPT/Claude/Gemini deployment behavior**, and **context/tool/multimodal surfaces**. The lowest-confidence areas are exactly the ones the vendors do not document publicly for the newest closed families: dense vs MoE, detailed attention kernels, positional encodings, FFN activations, and normalization choices for GPT-5.6, Claude 5, and Gemini 3.x. Those are therefore intentionally labeled **unspecified publicly** throughout. citeturn28view3turn31view0turn25view0turn24view3turn37view2
+Các tuyên bố so sánh có độ tin cậy cao nhất trong báo cáo này là các tuyên bố về ** kiến trúc Qwen và Llama**, **hành vi GPT/ Claude/Gemini deployment** và ** các bề mặt context /tool/ multimodal**. Các vùng có độ tin cậy thấp nhất chính xác là những vùng mà nhà cung cấp không ghi lại công khai cho các dòng đóng mới nhất: dense so với MoE, hạt nhân attention chi tiết, mã hóa vị trí, kích hoạt FFN và các lựa chọn chuẩn hóa cho GPT-5.6, Claude 5 và Gemini 3.x. Do đó, chúng được cân nhắc kỹ dán nhãn **không xác định công khai** xuyên suốt. citeturn28view3turn31view0turn25view0turn24view3turn37view2

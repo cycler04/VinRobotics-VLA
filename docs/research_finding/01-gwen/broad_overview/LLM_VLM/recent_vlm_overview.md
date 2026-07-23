@@ -1,19 +1,19 @@
-# Modern Vision-Language Models: Architecture, Training, Prompt Behavior, and End-to-End Dataflow
+# Các mô hình Thị giác-Ngôn ngữ hiện đại: Kiến trúc, Huấn luyện, Hành vi prompt và Luồng dữ liệu đầu cuối
 
-**Compared families:** OpenAI GPT, Anthropic Claude, Google Gemini, Alibaba Qwen-VL, and Meta Llama  
-**Research date:** 2026-07-21  
-**Audience:** Software engineers, ML engineers, and AI researchers
+**Các họ được so sánh:** OpenAI GPT, Anthropic Claude, Google Gemini, Alibaba Qwen-VL và Meta Llama  
+**Ngày nghiên cứu:** 2026-07-21  
+**Đối tượng:** Kỹ sư phần mềm, kỹ sư ML và nhà nghiên cứu AI
 
 ---
 
-## 1. Executive conclusion
+## 1. Kết luận tổng quan
 
-A modern vision-language model is not merely an LLM with an image file attached. It is a system that
-must turn pixels or video frames into a bounded sequence of visual representations, align those
-representations with language, preserve spatial and temporal information, and then generate or act on a
-language-conditioned result.
+Một mô hình thị giác-ngôn ngữ hiện đại không đơn thuần là một LLM được đính kèm tệp ảnh. Đó là một hệ
+thống phải chuyển pixel hoặc khung hình video thành một chuỗi hữu hạn các biểu diễn thị giác, căn chỉnh
+các biểu diễn đó với ngôn ngữ, bảo toàn thông tin không gian và thời gian, rồi sinh hoặc hành động dựa
+trên một kết quả được điều kiện hóa bởi ngôn ngữ.
 
-The most useful high-level decomposition is:
+Phép phân rã cấp cao hữu ích nhất là:
 
 ```text
 Observed VLM behavior
@@ -29,16 +29,21 @@ vision preprocessing and sampling
 + decoding and safety layers
 ```
 
-The newest families are converging in product capability but not in public architecture:
+Các họ mới nhất đang hội tụ về năng lực sản phẩm nhưng không hội tụ về kiến trúc được công khai:
 
-- **OpenAI GPT-5.6 and Claude 5** expose strong image understanding and detailed input controls, but do not disclose their current vision encoder, connector, attention design, or parameter topology.
-- **Gemini 3.x** is explicitly a native multimodal sparse-MoE Transformer family, but Google still withholds most block-level and modality-encoder details.
-- **The Qwen line** is the most technically inspectable current family in this comparison. Qwen3.6 is the newest released open-weight VLM snapshot; Qwen3-VL remains the newest full technical report for the vision stack, disclosing its SigLIP-2 encoder, MLP merger, DeepStack fusion, multimodal RoPE, textual video timestamps, and multi-stage training recipe.
-- **Llama 4** exposes an early-fusion native-multimodal MoE design, a MetaCLIP-derived vision encoder,
-  training scale, and post-training sequence, but its released interface is image-and-text rather than a
-  general native-video API.
+- **OpenAI GPT-5.6 và Claude 5** thể hiện năng lực hiểu ảnh mạnh cùng khả năng kiểm soát đầu vào chi
+  tiết, nhưng không công bố vision encoder, connector, thiết kế attention hoặc topology tham số hiện tại.
+- **Gemini 3.x** được xác định rõ là một họ Transformer sparse-MoE đa phương thức nguyên bản, nhưng
+  Google vẫn không công bố phần lớn chi tiết ở cấp block và modality encoder.
+- **Dòng Qwen** là họ hiện tại dễ khảo sát kỹ thuật nhất trong so sánh này. Qwen3.6 là snapshot VLM
+  open-weight mới nhất đã phát hành; Qwen3-VL vẫn là báo cáo kỹ thuật đầy đủ mới nhất về vision stack,
+  công bố SigLIP-2 encoder, MLP merger, DeepStack fusion, multimodal RoPE, timestamp video dạng văn bản
+  và quy trình huấn luyện nhiều giai đoạn.
+- **Llama 4** công bố thiết kế MoE đa phương thức nguyên bản dùng early fusion, vision encoder dựa trên
+  MetaCLIP, quy mô huấn luyện và chuỗi post-training, nhưng giao diện được phát hành là image-and-text
+  thay vì một native-video API tổng quát.
 
-The practical difference between models is often decided before the first language-model block runs:
+Khác biệt thực tế giữa các mô hình thường được quyết định trước khi block đầu tiên của language model chạy:
 
 ```text
 raw pixels/video
@@ -49,315 +54,318 @@ raw pixels/video
 -> answer
 ```
 
-This is why the same model can succeed on a cropped high-resolution chart and fail on the original
-full-page screenshot, or summarize a slow lecture correctly while missing a one-second event in a
-video.
+Đây là lý do cùng một mô hình có thể thành công với biểu đồ độ phân giải cao đã được crop nhưng thất bại
+với ảnh chụp toàn trang ban đầu, hoặc tóm tắt đúng một bài giảng diễn tiến chậm nhưng bỏ lỡ một sự kiện
+kéo dài một giây trong video.
 
 ---
 
-## 2. Scope and current snapshots
+## 2. Phạm vi và các snapshot hiện tại
 
-This report focuses on **generative VLMs that accept image or video evidence and produce text or tool calls**. It does not compare:
+Báo cáo này tập trung vào **các VLM sinh nhận bằng chứng ảnh hoặc video và tạo văn bản hoặc tool
+call**. Báo cáo không so sánh:
 
-- image/video generation models such as GPT Image, Gemini Image, or Veo;
-- pure contrastive embedding models used only for retrieval;
-- classical task-specific detectors or OCR systems;
-- vision-language-action models that directly output robot controls.
+- các mô hình sinh ảnh/video như GPT Image, Gemini Image hoặc Veo;
+- các mô hình contrastive embedding thuần túy chỉ dùng cho retrieval;
+- các detector chuyên biệt theo tác vụ hoặc hệ thống OCR cổ điển;
+- các mô hình vision-language-action trực tiếp xuất lệnh điều khiển robot.
 
-Those systems can share encoders or training data with a VLM, but their output contracts and evaluation
-criteria differ.
+Các hệ thống đó có thể dùng chung encoder hoặc dữ liệu huấn luyện với một VLM, nhưng output contract và
+tiêu chí đánh giá của chúng khác nhau.
 
-| Family                     | Practical snapshot used here                                                     | Accepted visual input in the cited public interface                                                | Publicly inspectable internals                                                                                          |
+| Họ                         | Snapshot thực tế được dùng ở đây                                                 | Đầu vào thị giác được chấp nhận trong giao diện công khai đã dẫn nguồn                              | Thành phần nội bộ có thể khảo sát công khai                                                                             |
 | -------------------------- | -------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| **OpenAI GPT**       | GPT-5.6 Sol/Terra/Luna                                                           | Images; text output. The API model pages mark audio and video as unsupported for these checkpoints | Input resizing/token controls and product behavior; current neural internals unspecified                                |
-| **Anthropic Claude** | Claude Sonnet 5, with Fable 5/Opus 4.8 as higher-capability current alternatives | Images and PDFs; text output                                                                       | Patch accounting, resolution tiers, training-data categories, post-training goals; current neural internals unspecified |
-| **Google Gemini**    | Gemini 3.5 Flash for throughput and Gemini 3.1 Pro for harder reasoning          | Images, video, audio, documents; text output                                                       | Native multimodal sparse-MoE Transformer at Gemini 3 family level; exact encoder/router details mostly unspecified      |
-| **Alibaba Qwen**     | Qwen3.6-35B-A3B as the newest open checkpoint; Qwen3-VL as the latest full VL technical report | Images, multi-image sequences, documents, and video; text/tool-oriented output | Qwen3.6 weights and hybrid LM config; Qwen3-VL vision encoder, merger, fusion, positional strategy, training recipe, and code |
-| **Meta Llama**       | Llama 4 Scout and Maverick                                                       | Images and text in released checkpoints; multi-image support is bounded and should be validated    | Weights, MoE scale, early fusion, vision-encoder family, training-token estimates, and post-training sequence           |
+| **OpenAI GPT**       | GPT-5.6 Sol/Terra/Luna                                                           | Ảnh; đầu ra văn bản. Các trang model API đánh dấu audio và video là không được hỗ trợ cho các checkpoint này | Kiểm soát resize/token đầu vào và hành vi sản phẩm; thành phần neural nội bộ hiện tại chưa được nêu rõ |
+| **Anthropic Claude** | Claude Sonnet 5, với Fable 5/Opus 4.8 là các lựa chọn hiện tại có năng lực cao hơn | Ảnh và PDF; đầu ra văn bản                                                                         | Cách tính patch, các mức độ phân giải, loại dữ liệu huấn luyện, mục tiêu post-training; thành phần neural nội bộ hiện tại chưa được nêu rõ |
+| **Google Gemini**    | Gemini 3.5 Flash cho throughput và Gemini 3.1 Pro cho suy luận khó hơn           | Ảnh, video, audio, tài liệu; đầu ra văn bản                                                        | Transformer sparse-MoE đa phương thức nguyên bản ở cấp họ Gemini 3; phần lớn chi tiết chính xác về encoder/router chưa được nêu rõ |
+| **Alibaba Qwen**     | Qwen3.6-35B-A3B là open checkpoint mới nhất; Qwen3-VL là báo cáo kỹ thuật VL đầy đủ mới nhất | Ảnh, chuỗi nhiều ảnh, tài liệu và video; đầu ra hướng đến văn bản/tool | Weight và cấu hình LM hybrid của Qwen3.6; vision encoder, merger, fusion, chiến lược vị trí, quy trình huấn luyện và code của Qwen3-VL |
+| **Meta Llama**       | Llama 4 Scout và Maverick                                                        | Ảnh và văn bản trong các checkpoint đã phát hành; hỗ trợ nhiều ảnh có giới hạn và cần được kiểm chứng | Weight, quy mô MoE, early fusion, họ vision encoder, ước lượng training token và chuỗi post-training |
 
-Current product facts are from the official [OpenAI model catalog](https://developers.openai.com/api/docs/models),
-[Claude model overview](https://platform.claude.com/docs/en/about-claude/models/overview),
-[Gemini 3.5 Flash model card](https://deepmind.google/models/model-cards/gemini-3-5-flash/),
-[Qwen3.6 model card](https://huggingface.co/Qwen/Qwen3.6-35B-A3B), and
-[Llama 4 launch report](https://ai.meta.com/blog/llama-4-multimodal-intelligence/).
+Các thông tin sản phẩm hiện tại đến từ [danh mục model OpenAI](https://developers.openai.com/api/docs/models),
+[tổng quan model Claude](https://platform.claude.com/docs/en/about-claude/models/overview),
+[model card Gemini 3.5 Flash](https://deepmind.google/models/model-cards/gemini-3-5-flash/),
+[model card Qwen3.6](https://huggingface.co/Qwen/Qwen3.6-35B-A3B) và
+[báo cáo ra mắt Llama 4](https://ai.meta.com/blog/llama-4-multimodal-intelligence/).
 
-Qwen3.7-Max and Meta Muse Spark are newer proprietary product lines, but their public material does
-not provide a comparable current vision-stack specification; this report keeps Qwen3.6/Qwen3-VL and
-Llama 4 as the inspectable technical subjects.
+Qwen3.7-Max và Meta Muse Spark là các dòng sản phẩm proprietary mới hơn, nhưng tài liệu công khai của
+chúng không cung cấp đặc tả vision stack hiện tại có thể so sánh; báo cáo này giữ Qwen3.6/Qwen3-VL và
+Llama 4 làm các đối tượng kỹ thuật có thể khảo sát.
 
-### Disclosure labels
+### Nhãn mức độ công bố
 
-- **Verified:** directly documented in an official paper, model card, repository, or API guide.
-- **Family-level:** documented for an earlier or underlying family member, not guaranteed unchanged in
-  the newest checkpoint.
-- **Inferred:** a reasonable engineering interpretation, not a vendor statement.
-- **Unknown:** the public evidence is insufficient.
+- **Đã xác minh:** được ghi trực tiếp trong paper, model card, repository hoặc hướng dẫn API chính thức.
+- **Cấp họ:** được ghi cho một thành viên trước đó hoặc nền tảng của họ, không đảm bảo là không
+  thay đổi trong checkpoint mới nhất.
+- **Suy luận:** diễn giải kỹ thuật hợp lý, không phải tuyên bố của nhà cung cấp.
+- **Chưa rõ:** bằng chứng công khai chưa đủ.
 
 ---
 
-# Part I — Shared foundation and architecture
+# Part I — Nền tảng và kiến trúc chung
 
-## 3. What makes a model a VLM?
+## 3. Điều gì khiến một mô hình trở thành VLM?
 
-A text-only autoregressive LLM maps token IDs to embeddings and predicts the next token. A generative
-VLM must also map visual input into representations the language backbone can condition on.
+Một LLM autoregressive chỉ dùng văn bản ánh xạ token ID sang embedding và dự đoán token tiếp theo. Một
+VLM sinh còn phải ánh xạ đầu vào thị giác thành các biểu diễn mà language backbone có thể dùng làm điều
+kiện.
 
 ```mermaid
 flowchart LR
-    I[Image or sampled video frames] --> P[Resize, tile, patch, normalize]
+    I[Ảnh hoặc khung hình video được lấy mẫu] --> P[Resize, chia tile, chia patch, chuẩn hóa]
     P --> V[Vision encoder]
-    V --> C[Connector or native fusion]
-    T[Prompt text] --> Tok[Text tokenizer]
-    Tok --> E[Text embeddings]
-    C --> F[Joint multimodal sequence or cross-attention memory]
+    V --> C[Connector hoặc native fusion]
+    T[Văn bản prompt] --> Tok[Text tokenizer]
+    Tok --> E[Text embedding]
+    C --> F[Chuỗi đa phương thức chung hoặc bộ nhớ cross-attention]
     E --> F
     F --> L[Language/reasoning backbone]
-    L --> O[Text, coordinates, JSON, or tool call]
+    L --> O[Văn bản, tọa độ, JSON hoặc tool call]
 ```
 
-The term **visual token** is overloaded. Depending on the system, it can mean:
+Thuật ngữ **visual token** mang nhiều nghĩa. Tùy hệ thống, nó có thể là:
 
-1. a raw image patch embedding;
-2. an encoded patch after the vision Transformer;
-3. a compressed query or resampler output;
-4. a projected vector placed in the LLM embedding sequence;
-5. a billing unit that is not one-to-one with an internal neural token.
+1. một embedding patch ảnh thô;
+2. một patch đã mã hóa sau vision Transformer;
+3. đầu ra query hoặc resampler đã nén;
+4. một vector đã chiếu được đặt trong chuỗi embedding của LLM;
+5. một đơn vị tính phí không tương ứng một-một với neural token nội bộ.
 
-Therefore, vendor token-cost formulas should not be treated as architecture diagrams.
+Vì vậy, không nên coi công thức chi phí token của nhà cung cấp là sơ đồ kiến trúc.
 
-## 4. Four recurring fusion patterns
+## 4. Bốn mẫu fusion thường gặp
 
-### 4.1 Project visual features into the LLM token space
+### 4.1 Chiếu đặc trưng thị giác vào không gian token của LLM
 
-The canonical open recipe is:
+Công thức mở kinh điển là:
 
 ```text
 ViT/CLIP features -> linear or MLP projector -> visual tokens -> decoder-only LLM
 ```
 
-LLaVA showed that a simple projection plus visual instruction tuning can be effective. LLaVA 1.5
-replaced the single linear connector with an MLP and used a stronger CLIP resolution and more
-task-oriented data. See the original [Visual Instruction Tuning paper](https://arxiv.org/abs/2304.08485)
-and [LLaVA 1.5 baseline paper](https://arxiv.org/abs/2310.03744).
+LLaVA cho thấy một phép chiếu đơn giản kết hợp visual instruction tuning có thể hiệu quả. LLaVA 1.5
+thay linear connector đơn bằng một MLP, đồng thời dùng độ phân giải CLIP mạnh hơn và dữ liệu định hướng
+tác vụ nhiều hơn. Xem [paper Visual Instruction Tuning](https://arxiv.org/abs/2304.08485) gốc và
+[paper baseline LLaVA 1.5](https://arxiv.org/abs/2310.03744).
 
-This design is simple and easy to fine-tune, but every retained visual token consumes context and
-attention compute.
+Thiết kế này đơn giản và dễ fine-tune, nhưng mỗi visual token được giữ lại đều tiêu tốn context và tài
+nguyên tính toán attention.
 
-### 4.2 Compress vision through learned queries
+### 4.2 Nén thông tin thị giác thông qua các learned query
 
-BLIP-2 keeps the image encoder and LLM frozen and trains a lightweight **Q-Former** in two stages:
-vision-language representation learning, then vision-to-language generative learning. The method is
-parameter-efficient but creates a deliberate information bottleneck. See the
-[BLIP-2 paper](https://arxiv.org/abs/2301.12597).
+BLIP-2 đóng băng image encoder và LLM, đồng thời huấn luyện một **Q-Former** gọn nhẹ theo hai giai
+đoạn: học biểu diễn vision-language, sau đó học sinh vision-to-language. Phương pháp này hiệu quả về
+tham số nhưng chủ động tạo ra một nút thắt thông tin. Xem
+[paper BLIP-2](https://arxiv.org/abs/2301.12597).
 
 ```mermaid
 flowchart LR
-    I[Image] --> VE[Frozen image encoder]
-    Q[Learned queries] --> QF[Q-Former]
+    I[Ảnh] --> VE[Image encoder đã đóng băng]
+    Q[Learned query] --> QF[Q-Former]
     VE --> QF
-    QF --> PJ[Projection]
-    PJ --> L[Frozen LLM]
-    T[Text] --> L
+    QF --> PJ[Phép chiếu]
+    PJ --> L[LLM đã đóng băng]
+    T[Văn bản] --> L
 ```
 
-### 4.3 Insert gated cross-attention into a language model
+### 4.3 Chèn gated cross-attention vào language model
 
-Flamingo uses a Perceiver-style resampler and gated cross-attention to let a pretrained language model
-attend to arbitrarily interleaved images, video, and text. This avoids simply appending all raw patch
-features to the text stream and supports multimodal few-shot examples. See the
-[Flamingo paper](https://arxiv.org/abs/2204.14198).
+Flamingo dùng resampler kiểu Perceiver và gated cross-attention để một language model đã pretrain có
+thể attend vào ảnh, video và văn bản xen kẽ tùy ý. Cách này tránh việc chỉ nối toàn bộ đặc trưng patch
+thô vào luồng văn bản và hỗ trợ các ví dụ few-shot đa phương thức. Xem
+[paper Flamingo](https://arxiv.org/abs/2204.14198).
 
-### 4.4 Native or early fusion
+### 4.4 Native fusion hoặc early fusion
 
-In an early-fusion design, text and visual representations enter a shared backbone during large-scale
-joint training. This does not mean raw pixels and text characters use identical tokenizers; it means the
-model is optimized as one multimodal system rather than only joining two frozen experts at the end.
+Trong thiết kế early fusion, biểu diễn văn bản và thị giác đi vào một backbone dùng chung trong quá
+trình huấn luyện chung ở quy mô lớn. Điều này không có nghĩa pixel thô và ký tự văn bản dùng tokenizer
+giống nhau; nó có nghĩa mô hình được tối ưu như một hệ thống đa phương thức duy nhất thay vì chỉ ghép
+hai expert đã đóng băng ở cuối.
 
-Meta explicitly describes Llama 4 as early fusion, while Google describes Gemini as natively
-multimodal. Qwen3-VL uses a recognizable encoder-merger-LLM boundary but unfreezes all modules after
-its initial alignment stage, so its later pretraining is end-to-end multimodal.
+Meta mô tả rõ Llama 4 là early fusion, còn Google mô tả Gemini là đa phương thức nguyên bản. Qwen3-VL
+có ranh giới encoder-merger-LLM dễ nhận biết nhưng mở đóng băng mọi module sau giai đoạn căn chỉnh ban
+đầu, vì vậy quá trình pretraining về sau là đa phương thức đầu cuối.
 
-## 5. Architecture comparison
+## 5. So sánh kiến trúc
 
-| Subsystem        | GPT-5.6                                                         | Claude 5                                                                         | Gemini 3.x                                                  | Qwen                                                                      | Llama 4                                                                                             |
+| Hệ thống con     | GPT-5.6                                                         | Claude 5                                                                         | Gemini 3.x                                                  | Qwen                                                                      | Llama 4                                                                                             |
 | ---------------- | --------------------------------------------------------------- | -------------------------------------------------------------------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| Vision encoder   | **Unknown**                                               | **Unknown**                                                                | **Unknown** publicly for current models               | Qwen3.6 confirms a vision encoder but does not narratively specify it; Qwen3-VL uses continuously trained SigLIP-2 | MetaCLIP-derived encoder trained alongside a frozen Llama during encoder adaptation                 |
-| Connector/fusion | **Unknown**                                               | **Unknown**                                                                | Native multimodal; exact fusion unspecified                 | Qwen3.6 specifics not fully documented; Qwen3-VL uses a two-layer MLP merger plus DeepStack injection | Early fusion of vision and text tokens into a shared backbone                                       |
-| Language core    | Current block topology **unknown**                         | Current block topology **unknown**                                          | Sparse-MoE Transformer for Gemini 3 Pro family              | Qwen3.6 hybrid Gated DeltaNet/full attention plus MoE; Qwen3-VL Qwen3 dense or MoE decoder | Alternating dense/MoE Transformer; Maverick has 17B active, 400B total parameters                   |
-| Spatial position | Input sizing disclosed; neural position method **unknown** | 28x28 visual-patch accounting disclosed; neural position method **unknown** | Neural position method **unknown**                     | Qwen3.6 exposes interleaved MRoPE config; Qwen3-VL documents 2D RoPE plus interleaved temporal/height/width MRoPE | Family uses RoPE/iRoPE; detailed visual position path not fully disclosed                           |
-| Video treatment  | GPT-5.6 API checkpoint does not accept video                    | No native video block in the cited API guide; users can supply extracted frames  | Samples visual stream and audio; File API defaults to 1 FPS | Dynamic frame sampling plus textual timestamp tokens                      | Trained on image and video-frame stills; released interface is multi-image rather than native video |
-| Open weights     | No                                                              | No                                                                               | No for Gemini                                               | Yes, Apache 2.0                                                           | Yes, Llama Community License                                                                        |
+| Bộ mã hóa thị giác | **Chưa rõ**                                             | **Chưa rõ**                                                                | **Chưa rõ** công khai đối với các model hiện tại      | Qwen3.6 xác nhận có vision encoder nhưng không mô tả cụ thể; Qwen3-VL dùng SigLIP-2 được huấn luyện liên tục | Encoder dựa trên MetaCLIP được huấn luyện cùng một Llama đóng băng trong quá trình thích nghi encoder |
+| Bộ nối/fusion    | **Chưa rõ**                                               | **Chưa rõ**                                                                | Đa phương thức nguyên bản; fusion chính xác chưa được nêu rõ | Chi tiết Qwen3.6 chưa được ghi đầy đủ; Qwen3-VL dùng MLP merger hai lớp cùng DeepStack injection | Early fusion các token thị giác và văn bản vào backbone dùng chung |
+| Lõi ngôn ngữ     | Topology block hiện tại **chưa rõ**                       | Topology block hiện tại **chưa rõ**                                         | Transformer sparse-MoE cho họ Gemini 3 Pro                  | Qwen3.6 kết hợp Gated DeltaNet/full attention với MoE; Qwen3-VL dùng decoder Qwen3 dense hoặc MoE | Transformer dense/MoE xen kẽ; Maverick có 17B tham số active, tổng cộng 400B tham số |
+| Vị trí không gian | Kích thước đầu vào được công bố; phương pháp neural position **chưa rõ** | Cách tính visual patch 28x28 được công bố; phương pháp neural position **chưa rõ** | Phương pháp neural position **chưa rõ**               | Qwen3.6 công khai cấu hình MRoPE xen kẽ; Qwen3-VL ghi 2D RoPE cùng MRoPE temporal/height/width xen kẽ | Họ này dùng RoPE/iRoPE; đường đi vị trí thị giác chi tiết chưa được công bố đầy đủ |
+| Xử lý video      | Checkpoint GPT-5.6 API không nhận video                         | Không có native video block trong hướng dẫn API đã dẫn; người dùng có thể cung cấp các frame được trích xuất | Lấy mẫu luồng thị giác và audio; File API mặc định 1 FPS | Lấy mẫu frame động cùng token timestamp dạng văn bản | Được huấn luyện trên ảnh và ảnh tĩnh từ video frame; giao diện phát hành là multi-image thay vì native video |
+| Weight mở        | Không                                                           | Không                                                                            | Không đối với Gemini                                        | Có, Apache 2.0                                                          | Có, Llama Community License                                                                         |
 
-The key conclusion is not that closed models are architecturally simpler. It is that architecture-level
-comparison is **not possible from public evidence** for their current versions.
+Kết luận chính không phải là các model đóng có kiến trúc đơn giản hơn. Mà là **không thể so sánh ở
+cấp kiến trúc từ bằng chứng công khai** đối với các phiên bản hiện tại của chúng.
 
 ---
 
-## 6. OpenAI GPT-5.6 vision system
+## 6. Hệ thống thị giác OpenAI GPT-5.6
 
-### Verified public behavior
+### Hành vi công khai đã được xác minh
 
-All current GPT-5.6 tiers accept text and image input and produce text. The models expose a 1.05M
-context window and multiple reasoning levels, while the current model pages mark audio and video input
-as unsupported. See the [OpenAI model catalog](https://developers.openai.com/api/docs/models) and the
-[GPT-5.6 Terra model page](https://developers.openai.com/api/docs/models/gpt-5.6-terra).
+Tất cả các tier GPT-5.6 hiện tại đều nhận đầu vào văn bản và ảnh, đồng thời tạo văn bản. Các model cung
+cấp context window 1.05M và nhiều mức reasoning, trong khi các trang model hiện tại đánh dấu đầu vào
+audio và video là không được hỗ trợ. Xem [danh mục model OpenAI](https://developers.openai.com/api/docs/models)
+và [trang model GPT-5.6 Terra](https://developers.openai.com/api/docs/models/gpt-5.6-terra).
 
-The image pipeline exposes four detail settings:
+Pipeline ảnh cung cấp bốn thiết lập detail:
 
-- `low`: a 512x512 low-resolution representation;
-- `high`: standard high-fidelity processing;
-- `original`: preserves input dimensions for GPT-5.6 rather than resizing to a patch budget;
-- `auto`: on GPT-5.6, currently behaves like `original`.
+- `low`: biểu diễn độ phân giải thấp 512x512;
+- `high`: xử lý độ trung thực cao tiêu chuẩn;
+- `original`: bảo toàn kích thước đầu vào cho GPT-5.6 thay vì resize theo patch budget;
+- `auto`: trên GPT-5.6 hiện hoạt động giống `original`.
 
-These rules and their cost implications are documented in the
-[OpenAI image and vision guide](https://developers.openai.com/api/docs/guides/images-vision).
+Các quy tắc này và tác động của chúng đến chi phí được ghi trong
+[hướng dẫn ảnh và thị giác của OpenAI](https://developers.openai.com/api/docs/guides/images-vision).
 
 ```mermaid
 flowchart LR
-    I[Image] --> D[Detail policy: low, high, original, auto]
-    D --> VT[Internal visual representation]
-    T[Text prompt] --> M[GPT-5.6 reasoning model]
+    I[Ảnh] --> D[Chính sách detail: low, high, original, auto]
+    D --> VT[Biểu diễn thị giác nội bộ]
+    T[Prompt văn bản] --> M[Model reasoning GPT-5.6]
     VT --> M
-    M --> Q{Need a tool?}
-    Q -->|No| O[Text or structured response]
-    Q -->|Yes| X[Web, code, computer, functions]
+    M --> Q{Cần tool?}
+    Q -->|Không| O[Văn bản hoặc phản hồi có cấu trúc]
+    Q -->|Có| X[Web, code, computer, functions]
     X --> M
 ```
 
-### What is not public
+### Những gì chưa được công khai
 
-OpenAI does not state whether GPT-5.6 uses a separate ViT, a resampler, cross-attention layers, early
-fusion, MoE routing, or a particular multimodal positional encoding. GPT-4o was explicitly described
-as one model trained end-to-end across text, vision, and audio, but that 2024 statement is
-**family-history evidence, not proof of GPT-5.6 internals**. See
+OpenAI không cho biết GPT-5.6 có dùng một ViT riêng, resampler, các lớp cross-attention, early fusion,
+MoE routing hay một multimodal positional encoding cụ thể hay không. GPT-4o từng được mô tả rõ là một
+model được huấn luyện đầu cuối trên văn bản, thị giác và audio, nhưng tuyên bố năm 2024 đó là **bằng
+chứng lịch sử của họ model, không phải bằng chứng về thành phần nội bộ của GPT-5.6**. Xem
 [Hello GPT-4o](https://openai.com/index/hello-gpt-4o/).
 
-### Practical prompt behavior
+### Hành vi prompt trong thực tế
 
-- Choose `original` for dense documents, small UI elements, charts, and localization when accuracy is
-  worth the added tokens and latency.
-- Crop the relevant region when the full image contains large irrelevant areas.
-- Ask for evidence tied to visible regions before asking for a conclusion.
-- Do not rely on natural-language coordinates as a replacement for a detector without application-level
-  evaluation.
+- Chọn `original` cho tài liệu dày đặc, phần tử UI nhỏ, biểu đồ và localization khi độ chính xác xứng
+  đáng với lượng token và độ trễ tăng thêm.
+- Crop vùng liên quan khi ảnh đầy đủ chứa nhiều khu vực không liên quan.
+- Yêu cầu bằng chứng gắn với các vùng nhìn thấy được trước khi yêu cầu kết luận.
+- Không dựa vào tọa độ bằng ngôn ngữ tự nhiên để thay thế detector nếu chưa đánh giá ở cấp ứng dụng.
 
-OpenAI explicitly lists small text, rotation, precise spatial localization, counting, panoramas, and
-incorrect descriptions among current limitations in the image guide.
+Trong hướng dẫn ảnh, OpenAI liệt kê rõ chữ nhỏ, xoay ảnh, localization không gian chính xác, đếm,
+panorama và mô tả không chính xác trong số các hạn chế hiện tại.
 
 ---
 
-## 7. Claude 5 vision system
+## 7. Hệ thống thị giác Claude 5
 
-### Verified public behavior
+### Hành vi công khai đã được xác minh
 
-All current Claude models accept text and image input and return text. Claude Sonnet 5 provides a 1M
-context window, adaptive thinking by default, and a 128K synchronous output limit. Anthropic does not
-publish the current vision encoder or fusion architecture. See the
-[Claude model overview](https://platform.claude.com/docs/en/about-claude/models/overview) and
-[Sonnet 5 migration notes](https://platform.claude.com/docs/en/about-claude/models/whats-new-sonnet-5).
+Tất cả model Claude hiện tại đều nhận đầu vào văn bản và ảnh, đồng thời trả về văn bản. Claude Sonnet 5
+cung cấp context window 1M, mặc định dùng adaptive thinking và có giới hạn đầu ra đồng bộ 128K.
+Anthropic không công bố vision encoder hoặc kiến trúc fusion hiện tại. Xem
+[tổng quan model Claude](https://platform.claude.com/docs/en/about-claude/models/overview) và
+[ghi chú chuyển đổi Sonnet 5](https://platform.claude.com/docs/en/about-claude/models/whats-new-sonnet-5).
 
-Claude's API documentation is unusually explicit about visual-token accounting:
+Tài liệu API của Claude nêu rõ một cách khác thường về cách tính visual token:
 
 ```text
 visual_tokens = ceil(width / 28) * ceil(height / 28)
 ```
 
-Images exceeding a model's long-edge or visual-token limit are downscaled. High-resolution current
-models including Sonnet 5 support up to a 2,576-pixel long edge and 4,784 visual tokens. See the
-[Claude vision guide](https://platform.claude.com/docs/en/build-with-claude/vision).
+Ảnh vượt quá giới hạn cạnh dài hoặc visual token của model sẽ bị downscale. Các model độ phân giải cao
+hiện tại, bao gồm Sonnet 5, hỗ trợ cạnh dài tối đa 2.576 pixel và 4.784 visual token. Xem
+[hướng dẫn thị giác Claude](https://platform.claude.com/docs/en/build-with-claude/vision).
 
-### Prompt behavior
+### Hành vi prompt
 
-Anthropic recommends placing images before the text query. For multiple images, label them explicitly
-(`Image 1`, `Image 2`, and so on) so later questions have stable references. Animated GIFs are not
-processed as video; only the first frame is used.
+Anthropic khuyến nghị đặt ảnh trước truy vấn văn bản. Với nhiều ảnh, hãy gắn nhãn rõ ràng (`Image 1`,
+`Image 2`, v.v.) để các câu hỏi sau có tham chiếu ổn định. GIF động không được xử lý như video; chỉ
+frame đầu tiên được dùng.
 
-Sonnet 5 also changes non-visual behavior relevant to VLM workloads:
+Sonnet 5 cũng thay đổi hành vi phi thị giác có liên quan đến workload VLM:
 
-- adaptive thinking is on by default;
-- manual thinking-token budgets are removed;
-- non-default `temperature`, `top_p`, and `top_k` are rejected;
-- a new text tokenizer yields roughly 30% more text tokens than Sonnet 4.6 for equivalent content,
-  depending on the input.
+- adaptive thinking được bật mặc định;
+- manual thinking-token budget bị loại bỏ;
+- `temperature`, `top_p` và `top_k` khác mặc định bị từ chối;
+- một text tokenizer mới tạo ra nhiều hơn khoảng 30% text token so với Sonnet 4.6 cho nội dung tương
+  đương, tùy đầu vào.
 
-### Training and tool use
+### Huấn luyện và sử dụng tool
 
-The [Claude Sonnet 5 system card](https://www.anthropic.com/system-cards) states that training uses a
-proprietary mixture of public internet information, public and private datasets, and synthetic data,
-followed by post-training aligned to Claude's constitution. It does not disclose modality ratios or
-neural architecture.
+[System card Claude Sonnet 5](https://www.anthropic.com/system-cards) cho biết quá trình huấn luyện dùng
+một hỗn hợp proprietary gồm thông tin internet công khai, các dataset công khai và riêng tư cùng dữ
+liệu synthetic, tiếp theo là post-training được căn chỉnh theo hiến pháp của Claude. Tài liệu không
+công bố tỷ lệ modality hoặc kiến trúc neural.
 
-The same system card reports large gains from a Python environment and image-cropping tool on document,
-chart, and CAD evaluations. This supports an important systems conclusion: a high-resolution crop/tool
-loop can matter more than one extra forward pass over the untouched image.
+System card này cũng báo cáo mức cải thiện lớn nhờ môi trường Python và tool crop ảnh trên các đánh giá
+tài liệu, biểu đồ và CAD. Điều này củng cố một kết luận hệ thống quan trọng: vòng lặp crop/tool độ phân
+giải cao có thể quan trọng hơn một forward pass bổ sung trên ảnh chưa chỉnh sửa.
 
 ---
 
-## 8. Gemini 3.x: native multimodality plus explicit media control
+## 8. Gemini 3.x: đa phương thức nguyên bản cùng khả năng kiểm soát media rõ ràng
 
-### Architecture and modalities
+### Kiến trúc và các modality
 
-Gemini 3.5 Flash accepts text, images, audio, and video with a 1M-token context window and returns up to
-64K text tokens. Gemini 3.1 Pro exposes the same input modalities for harder reasoning work. Their model
-cards inherit core details from Gemini 3 Flash/Pro.
+Gemini 3.5 Flash nhận văn bản, ảnh, audio và video với context window 1M token, đồng thời trả về tối đa
+64K text token. Gemini 3.1 Pro cung cấp cùng các modality đầu vào cho tác vụ reasoning khó hơn. Model
+card của chúng kế thừa các chi tiết cốt lõi từ Gemini 3 Flash/Pro.
 
-The underlying [Gemini 3 Pro model card](https://storage.googleapis.com/deepmind-media/Model-Cards/Gemini-3-Pro-Model-Card.pdf)
-describes a **sparse mixture-of-experts Transformer with native multimodal support**. It discloses the
-architecture class but not expert counts, vision/audio encoders, head dimensions, or fusion layers.
+[Model card Gemini 3 Pro](https://storage.googleapis.com/deepmind-media/Model-Cards/Gemini-3-Pro-Model-Card.pdf)
+nền tảng mô tả một **Transformer sparse mixture-of-experts hỗ trợ đa phương thức nguyên bản**. Tài liệu
+công bố lớp kiến trúc nhưng không công bố số lượng expert, vision/audio encoder, kích thước head hoặc
+các lớp fusion.
 
-### Image preprocessing
+### Tiền xử lý ảnh
 
-The current [Gemini image-understanding guide](https://ai.google.dev/gemini-api/docs/image-understanding)
-states:
+[Hướng dẫn hiểu ảnh Gemini](https://ai.google.dev/gemini-api/docs/image-understanding) hiện tại cho biết:
 
-- images no larger than 384 pixels in both dimensions cost 258 tokens;
-- larger images are tiled into 768x768 regions, each costing 258 tokens;
-- Gemini 3 exposes `media_resolution` to trade fine detail for tokens and latency;
-- for a single image, place the text prompt before the image in the Interactions API input array;
-- rotate images correctly and avoid blur.
+- ảnh có cả hai chiều không lớn hơn 384 pixel tốn 258 token;
+- ảnh lớn hơn được chia thành các vùng 768x768, mỗi vùng tốn 258 token;
+- Gemini 3 cung cấp `media_resolution` để đánh đổi chi tiết nhỏ lấy token và độ trễ;
+- với một ảnh duy nhất, đặt prompt văn bản trước ảnh trong mảng đầu vào Interactions API;
+- xoay ảnh đúng chiều và tránh ảnh mờ.
 
-### Video preprocessing
+### Tiền xử lý video
 
-Gemini's current File API processing is concrete enough to reason about failure modes:
+Quy trình xử lý File API hiện tại của Gemini đủ cụ thể để phân tích các failure mode:
 
-- default visual sampling: 1 frame per second;
-- default visual cost: 258 tokens per sampled frame, or 66 at low media resolution;
-- audio: about 32 tokens per second;
-- total: approximately 300 tokens/second at default resolution or 100 tokens/second at low resolution;
-- models with a 1M context window support about one hour at default resolution or three hours at low
-  resolution.
+- lấy mẫu thị giác mặc định: 1 frame mỗi giây;
+- chi phí thị giác mặc định: 258 token trên mỗi frame được lấy mẫu, hoặc 66 ở media resolution thấp;
+- audio: khoảng 32 token mỗi giây;
+- tổng cộng: xấp xỉ 300 token/giây ở độ phân giải mặc định hoặc 100 token/giây ở độ phân giải thấp;
+- model có context window 1M hỗ trợ khoảng một giờ ở độ phân giải mặc định hoặc ba giờ ở độ phân giải
+  thấp.
 
-Google warns that 1 FPS can miss fast action and recommends placing the video before the text prompt.
-See the [Gemini video-understanding guide](https://ai.google.dev/gemini-api/docs/video-understanding).
+Google cảnh báo rằng 1 FPS có thể bỏ lỡ hành động nhanh và khuyến nghị đặt video trước prompt văn bản.
+Xem [hướng dẫn hiểu video Gemini](https://ai.google.dev/gemini-api/docs/video-understanding).
 
 ```mermaid
 flowchart LR
-    V[Video] --> S[Sample frames at 1 FPS by default]
-    V --> A[Process audio stream]
-    S --> R[Media-resolution token budget]
-    A --> P[Timestamped multimodal sequence]
+    V[Video] --> S[Mặc định lấy mẫu frame ở 1 FPS]
+    V --> A[Xử lý luồng audio]
+    S --> R[Token budget theo media resolution]
+    A --> P[Chuỗi đa phương thức có timestamp]
     R --> P
-    T[Prompt] --> G[Gemini sparse-MoE reasoning model]
+    T[Prompt] --> G[Model reasoning sparse-MoE Gemini]
     P --> G
-    G --> O[Text or tool call]
+    G --> O[Văn bản hoặc tool call]
 ```
 
-### Training
+### Huấn luyện
 
-The Gemini 3 Pro model card lists public web documents, text, code, images, audio, video, licensed data,
-permitted user data, and synthetic data in pretraining. Post-training includes instruction tuning,
-reinforcement-learning data, human-preference data, and multi-step reasoning/problem-solving data.
-Filtering includes deduplication, `robots.txt` handling, safety filtering, and quality filtering.
+Model card Gemini 3 Pro liệt kê tài liệu web công khai, văn bản, code, ảnh, audio, video, dữ liệu được
+cấp phép, dữ liệu người dùng được cho phép và dữ liệu synthetic trong pretraining. Post-training gồm
+instruction tuning, dữ liệu reinforcement learning, dữ liệu human preference và dữ liệu
+reasoning/problem-solving nhiều bước. Quy trình lọc gồm deduplication, xử lý `robots.txt`, lọc an toàn
+và lọc chất lượng.
 
-The exact modality proportions, token count, routing configuration, and curriculum remain unknown.
+Tỷ lệ modality, số lượng token, cấu hình routing và curriculum chính xác vẫn unknown.
 
 ---
 
-## 9. Qwen3.6 and Qwen3-VL: current checkpoint versus full vision report
+## 9. Qwen3.6 và Qwen3-VL: checkpoint hiện tại so với báo cáo thị giác đầy đủ
 
-Qwen3.6-35B-A3B is the newest released open-weight Qwen checkpoint verified in this research. Its
-official model card describes a causal language model with a vision encoder, 35B total and 3B active
-parameters, 40 layers, and a repeating language-backbone layout:
+Qwen3.6-35B-A3B là checkpoint Qwen open-weight mới nhất đã phát hành và được xác minh trong nghiên cứu
+này. Model card chính thức mô tả một causal language model có vision encoder, tổng cộng 35B tham số với
+3B tham số active, 40 lớp và một bố cục language backbone lặp lại:
 
 ```text
 3 x (Gated DeltaNet -> MoE)
@@ -365,16 +373,16 @@ parameters, 40 layers, and a repeating language-backbone layout:
 (repeat 10 times)
 ```
 
-It has 256 experts, activates eight routed plus one shared expert, supports a native 262,144-token
-context, accepts image and video input, and thinks by default. The published card does not provide an
-equally complete narrative for its vision tower and fusion path. See the
-[Qwen3.6-35B-A3B model card](https://huggingface.co/Qwen/Qwen3.6-35B-A3B).
+Model có 256 expert, kích hoạt tám routed expert cùng một shared expert, hỗ trợ context nguyên bản
+262.144 token, nhận đầu vào ảnh và video, đồng thời mặc định bật thinking. Model card đã công bố không
+cung cấp mô tả đầy đủ tương đương cho vision tower và đường fusion. Xem
+[model card Qwen3.6-35B-A3B](https://huggingface.co/Qwen/Qwen3.6-35B-A3B).
 
-For that missing vision-stack detail, Qwen3-VL is the latest full technical report and the proper source
-for the architecture and curriculum below. These details must not be silently asserted as unchanged in
-Qwen3.6.
+Đối với chi tiết vision stack còn thiếu đó, Qwen3-VL là báo cáo kỹ thuật đầy đủ mới nhất và là nguồn
+phù hợp cho kiến trúc cùng curriculum bên dưới. Không được ngầm khẳng định rằng các chi tiết này không
+thay đổi trong Qwen3.6.
 
-Qwen3-VL uses three primary modules:
+Qwen3-VL dùng ba module chính:
 
 ```text
 SigLIP-2 vision encoder
@@ -382,532 +390,536 @@ SigLIP-2 vision encoder
 -> Qwen3 dense or MoE language backbone
 ```
 
-The flagship Qwen3-VL-235B-A22B has 235B total parameters and 22B active per token. Dense 2B, 4B,
-8B, and 32B variants and the 30B-A3B MoE variant provide smaller deployment points. The weights are
-Apache-2.0 licensed. See the [Qwen3-VL technical report](https://arxiv.org/abs/2511.21631) and
-[official repository](https://github.com/QwenLM/Qwen3-VL).
+Flagship Qwen3-VL-235B-A22B có tổng cộng 235B tham số và 22B tham số active trên mỗi token. Các biến thể
+dense 2B, 4B, 8B và 32B cùng biến thể MoE 30B-A3B cung cấp các điểm triển khai nhỏ hơn. Weight được cấp
+phép theo Apache-2.0. Xem [báo cáo kỹ thuật Qwen3-VL](https://arxiv.org/abs/2511.21631) và
+[repository chính thức](https://github.com/QwenLM/Qwen3-VL).
 
-### 9.1 Vision encoder and merger
+### 9.1 Vision encoder và merger
 
-- The vision encoder starts from SigLIP-2 and is continuously trained at dynamic native resolutions.
-- It uses 2D RoPE plus interpolated absolute position embeddings.
-- A two-layer MLP compresses each 2x2 group of visual features into one token in the LLM hidden
-  dimension.
-- The default large-model encoder is SigLIP2-SO-400M; smaller 2B/4B models use SigLIP2-Large.
+- Vision encoder khởi đầu từ SigLIP-2 và được huấn luyện liên tục ở các độ phân giải nguyên bản động.
+- Nó dùng 2D RoPE cùng absolute position embedding được nội suy.
+- Một MLP hai lớp nén mỗi nhóm đặc trưng thị giác 2x2 thành một token trong hidden dimension của LLM.
+- Encoder mặc định cho model lớn là SigLIP2-SO-400M; các model 2B/4B nhỏ hơn dùng SigLIP2-Large.
 
 ### 9.2 DeepStack
 
-Instead of passing only the final ViT layer to the language model, Qwen3-VL selects three levels of
-vision features. Dedicated mergers project them and add them to the hidden states of the first three LLM
-layers.
+Thay vì chỉ truyền lớp ViT cuối cùng cho language model, Qwen3-VL chọn ba cấp đặc trưng thị giác. Các
+merger chuyên biệt chiếu chúng và cộng chúng vào hidden state của ba lớp LLM đầu tiên.
 
 ```mermaid
 flowchart LR
-    I[Dynamic-resolution image] --> V1[Early ViT features]
-    I --> V2[Middle ViT features]
-    I --> V3[Late ViT features]
-    V1 --> M1[Merger 1 -> LLM layer 1]
-    V2 --> M2[Merger 2 -> LLM layer 2]
-    V3 --> M3[Merger 3 -> LLM layer 3]
-    M1 --> L[Qwen3 language backbone]
+    I[Ảnh có độ phân giải động] --> V1[Đặc trưng ViT sớm]
+    I --> V2[Đặc trưng ViT giữa]
+    I --> V3[Đặc trưng ViT muộn]
+    V1 --> M1[Merger 1 -> lớp LLM 1]
+    V2 --> M2[Merger 2 -> lớp LLM 2]
+    V3 --> M3[Merger 3 -> lớp LLM 3]
+    M1 --> L[Language backbone Qwen3]
     M2 --> L
     M3 --> L
 ```
 
-The paper's pretraining ablation improves its reported 12-task average from 74.7 to 76.0 with DeepStack.
-That is evidence for this training setup, not a guarantee for every downstream task.
+Ablation pretraining trong paper cải thiện mức trung bình 12 tác vụ được báo cáo từ 74.7 lên 76.0 khi
+dùng DeepStack. Đây là bằng chứng cho thiết lập huấn luyện này, không phải đảm bảo cho mọi tác vụ
+downstream.
 
-### 9.3 Interleaved MRoPE and video timestamps
+### 9.3 MRoPE xen kẽ và timestamp video
 
-Earlier MRoPE split embedding dimensions into temporal, height, and width bands, which could give each
-axis a different frequency spectrum. Qwen3-VL interleaves those axes across dimensions so all three get
-low- and high-frequency coverage.
+MRoPE trước đây chia các chiều embedding thành các dải temporal, height và width, điều này có thể khiến
+mỗi trục có một phổ tần số khác nhau. Qwen3-VL xen kẽ các trục đó giữa các chiều để cả ba đều bao phủ
+tần số thấp và cao.
 
-For video, Qwen3-VL prefixes temporal patches with textual timestamps such as `<3.0 seconds>` rather
-than encoding absolute time only through large temporal position IDs. This slightly increases context
-length but makes time directly legible to the language backbone.
+Với video, Qwen3-VL đặt trước các temporal patch timestamp dạng văn bản như `<3.0 seconds>` thay vì chỉ
+mã hóa thời gian tuyệt đối thông qua temporal position ID lớn. Điều này làm context dài hơn một chút
+nhưng giúp language backbone đọc trực tiếp được thời gian.
 
-### 9.4 Practical inference behavior
+### 9.4 Hành vi inference trong thực tế
 
-- Use the exact official chat template and processor; image placeholder placement is part of the model
+- Dùng chính xác chat template và processor chính thức; vị trí image placeholder là một phần của model
   contract.
-- Set resolution or frame budgets deliberately. Larger images and more frames increase both prefill
-  cost and KV-cache pressure.
-- For Qwen3-VL, use **Instruct** for direct answers and **Thinking** for harder visual reasoning. For
-  Qwen3.6, thinking is on by default and must be disabled with the API/template parameter; the old
-  `/think` and `/nothink` soft switch is not officially supported.
-- Qwen3.6's vLLM example defaults to 2 FPS for video and exposes the frame rate through processor
-  arguments. This is a serving default, not a training-time property or a universal backend contract.
-- Record Qwen3.6 sampling parameters and whether historical thinking is preserved; both can change
-  latency, token use, and visible behavior.
-- FlashAttention-2 is recommended by the official model card for multi-image and video workloads.
+- Chủ động đặt resolution budget hoặc frame budget. Ảnh lớn hơn và nhiều frame hơn làm tăng cả chi phí
+  prefill lẫn áp lực KV-cache.
+- Với Qwen3-VL, dùng **Instruct** cho câu trả lời trực tiếp và **Thinking** cho visual reasoning khó hơn.
+  Với Qwen3.6, thinking được bật mặc định và phải tắt bằng tham số API/template; soft switch `/think`
+  và `/nothink` cũ không được hỗ trợ chính thức.
+- Ví dụ vLLM của Qwen3.6 mặc định dùng 2 FPS cho video và cung cấp frame rate qua tham số processor. Đây
+  là mặc định serving, không phải thuộc tính ở thời điểm huấn luyện hay backend contract phổ quát.
+- Ghi lại sampling parameter của Qwen3.6 và việc historical thinking có được bảo toàn hay không; cả hai
+  đều có thể thay đổi độ trễ, mức sử dụng token và hành vi nhìn thấy được.
+- Model card chính thức khuyến nghị FlashAttention-2 cho workload nhiều ảnh và video.
 
-See the official
-[Qwen3-VL-235B-A22B-Thinking model card](https://huggingface.co/Qwen/Qwen3-VL-235B-A22B-Thinking).
-
----
-
-## 10. Llama 4: open-weight early fusion
-
-Meta describes Llama 4 Scout and Maverick as its first natively multimodal Llama models and its first
-MoE family.
-
-### Architecture
-
-- Vision and text tokens use **early fusion** in a shared backbone.
-- The vision encoder is MetaCLIP-derived and was adapted while paired with a frozen Llama model.
-- Maverick alternates dense and MoE layers, with 128 routed experts plus one shared expert; each token
-  reaches the shared expert and one routed expert.
-- Maverick has 17B active and about 400B total parameters; Scout has 17B active and about 109B total.
-- Scout uses an iRoPE-related long-context design with interleaved attention layers.
-
-These details are documented in Meta's
-[Llama 4 launch report](https://ai.meta.com/blog/llama-4-multimodal-intelligence/).
-
-### Training and interface boundaries
-
-Meta reports approximately 40T multimodal training tokens for Scout and 22T for Maverick, drawn from
-public, licensed, and Meta product/service data. It also describes training on text, images, and video
-data, plus a post-training sequence of lightweight SFT, multimodal online RL, and lightweight DPO.
-
-However, the release should not be described as an unrestricted native-video API. Meta says the models
-were trained on image and video-frame stills and supports multi-image reasoning. The official Maverick
-model card says image understanding was tested up to five input images; use above that boundary requires
-application-specific validation. See the
-[Maverick model card](https://huggingface.co/meta-llama/Llama-4-Maverick-17B-128E).
-
-### Practical prompt behavior
-
-- Use the official processor and chat template so image markers align with encoded features.
-- Explicitly label multiple images and state whether the task is comparison, temporal ordering, or
-  independent analysis.
-- Treat safety, tools, retrieval, and prompt-injection handling as deployer responsibilities; raw open
-  weights do not reproduce a closed product's runtime.
+Xem [model card Qwen3-VL-235B-A22B-Thinking](https://huggingface.co/Qwen/Qwen3-VL-235B-A22B-Thinking)
+chính thức.
 
 ---
 
-# Part II — Visual tokenization and prompt behavior
+## 10. Llama 4: early fusion với trọng số mở
 
-## 11. Resolution is a compute and information decision
+Meta mô tả Llama 4 Scout và Maverick là các model Llama đa phương thức nguyên bản đầu tiên và họ MoE
+đầu tiên của hãng.
 
-The visual bottleneck is not only the number of input pixels. It is the number of visual features that
-survive resizing, tiling, patching, encoder compression, and connector compression.
+### Kiến trúc
 
-| System   | Public input-accounting behavior                                                                 | Main engineering consequence                                                                                      |
+- Token thị giác và văn bản dùng **early fusion** trong một backbone dùng chung.
+- Vision encoder dựa trên MetaCLIP và được thích nghi khi ghép với một model Llama đã đóng băng.
+- Maverick xen kẽ các lớp dense và MoE, với 128 routed expert cùng một shared expert; mỗi token đi đến
+  shared expert và một routed expert.
+- Maverick có 17B tham số active và tổng cộng khoảng 400B tham số; Scout có 17B tham số active và tổng
+  cộng khoảng 109B tham số.
+- Scout dùng thiết kế long-context liên quan đến iRoPE với các lớp attention xen kẽ.
+
+Các chi tiết này được ghi trong
+[báo cáo ra mắt Llama 4](https://ai.meta.com/blog/llama-4-multimodal-intelligence/) của Meta.
+
+### Ranh giới huấn luyện và giao diện
+
+Meta báo cáo khoảng 40T multimodal training token cho Scout và 22T cho Maverick, lấy từ dữ liệu công
+khai, dữ liệu được cấp phép và dữ liệu sản phẩm/dịch vụ của Meta. Hãng cũng mô tả việc huấn luyện trên
+dữ liệu văn bản, ảnh và video, cùng một chuỗi post-training gồm SFT gọn nhẹ, multimodal online RL và
+DPO gọn nhẹ.
+
+Tuy nhiên, không nên mô tả bản phát hành như một native-video API không giới hạn. Meta cho biết các
+model được huấn luyện trên ảnh và ảnh tĩnh từ video frame, đồng thời hỗ trợ multi-image reasoning. Model
+card Maverick chính thức cho biết khả năng hiểu ảnh đã được kiểm thử với tối đa năm ảnh đầu vào; sử dụng
+vượt ranh giới đó cần được kiểm chứng riêng cho ứng dụng. Xem
+[model card Maverick](https://huggingface.co/meta-llama/Llama-4-Maverick-17B-128E).
+
+### Hành vi prompt trong thực tế
+
+- Dùng processor và chat template chính thức để image marker căn chỉnh với đặc trưng đã mã hóa.
+- Gắn nhãn rõ ràng cho nhiều ảnh và nêu tác vụ là so sánh, sắp xếp theo thời gian hay phân tích độc lập.
+- Xem an toàn, tool, retrieval và xử lý prompt injection là trách nhiệm của bên triển khai; open weight
+  thô không tái tạo runtime của một sản phẩm đóng.
+
+---
+
+# Part II — Token hóa hình ảnh và hành vi prompt
+
+## 11. Độ phân giải là một quyết định về tài nguyên tính toán và thông tin
+
+Nút thắt cổ chai về thị giác không chỉ là số pixel đầu vào. Đó còn là số đặc trưng thị giác còn giữ
+được sau khi đổi kích thước, chia ô, chia patch, nén bằng encoder và nén bằng connector.
+
+| Hệ thống | Cách tính đầu vào được công khai                                                                 | Hệ quả kỹ thuật chính                                                                                              |
 | -------- | ------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------- |
-| GPT-5.6  | `low`, `high`, `original`, `auto`; `original` preserves dimensions                     | Original detail can improve dense/localized tasks but has unboundedly higher input cost relative to resized modes |
-| Claude 5 | 28x28-pixel visual patches, capped by resolution tier                                            | Cost is predictable; large images are downscaled, so crop before upload when small detail matters                 |
-| Gemini 3 | 258-token base/tile behavior and `media_resolution`                                            | Explicit quality/latency control; high resolution should be reserved for OCR, charts, and small objects           |
-| Qwen      | Qwen3.6 exposes configurable processor/frame budgets; Qwen3-VL documents dynamic resolution and 2x2 feature compression | Deployment owner controls memory/latency but can silently remove needed detail through aggressive limits |
-| Llama 4  | Processor-dependent tiling/encoding; public release guidance is less explicit than Claude/Gemini | Inspect the exact processor config and measure tokens rather than assuming a generic patch count                  |
+| GPT-5.6  | `low`, `high`, `original`, `auto`; `original` giữ nguyên kích thước                    | Mức chi tiết `original` có thể cải thiện các tác vụ dày đặc/cục bộ nhưng có chi phí đầu vào cao hơn không có giới hạn so với các chế độ đã đổi kích thước |
+| Claude 5 | Các patch thị giác 28x28 pixel, bị giới hạn theo bậc độ phân giải                              | Chi phí có thể dự đoán; ảnh lớn bị giảm kích thước, vì vậy hãy crop trước khi tải lên nếu chi tiết nhỏ quan trọng |
+| Gemini 3 | Cách xử lý cơ sở/theo ô ở mức 258 token và `media_resolution`                                  | Kiểm soát rõ chất lượng/độ trễ; chỉ nên dành độ phân giải cao cho OCR, biểu đồ và vật thể nhỏ                     |
+| Qwen     | Qwen3.6 cung cấp ngân sách processor/frame có thể cấu hình; Qwen3-VL mô tả độ phân giải động và nén đặc trưng 2x2 | Chủ triển khai kiểm soát bộ nhớ/độ trễ nhưng có thể vô tình loại bỏ chi tiết cần thiết nếu đặt giới hạn quá mạnh |
+| Llama 4  | Việc chia ô/mã hóa phụ thuộc processor; hướng dẫn phát hành công khai ít rõ ràng hơn Claude/Gemini | Kiểm tra chính xác cấu hình processor và đo số token thay vì giả định một số lượng patch chung                  |
 
-### A common failure chain
+### Một chuỗi lỗi thường gặp
 
 ```mermaid
 flowchart TD
-    A[Full-resolution screenshot] --> B[Service or processor downsizes]
-    B --> C[Small labels collapse into a few patches]
-    C --> D[Vision encoder produces ambiguous features]
-    D --> E[LLM fills gaps from language priors]
-    E --> F[Fluent but visually unsupported answer]
+    A[Ảnh chụp màn hình ở độ phân giải đầy đủ] --> B[Dịch vụ hoặc processor giảm kích thước]
+    B --> C[Nhãn nhỏ co lại chỉ còn vài patch]
+    C --> D[Vision encoder tạo ra các đặc trưng mơ hồ]
+    D --> E[LLM lấp khoảng trống bằng prior ngôn ngữ]
+    E --> F[Câu trả lời trôi chảy nhưng không được hình ảnh hỗ trợ]
 ```
 
-More reasoning after detail is lost does not restore the lost pixels.
+Suy luận thêm sau khi chi tiết đã mất không thể khôi phục các pixel bị mất.
 
-## 12. Prompt adaptation matrix
+## 12. Ma trận điều chỉnh prompt
 
-| Task property            | Better prompt/input strategy                                                                                     | Why                                                                                    |
+| Đặc tính tác vụ          | Chiến lược prompt/đầu vào tốt hơn                                                                                | Lý do                                                                                  |
 | ------------------------ | ---------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| Dense chart or document  | Crop relevant panels, preserve high/original detail, ask for extracted evidence first                            | Reduces visual competition and makes unsupported inference easier to catch             |
-| Multiple images          | Label each image and define the comparison axes                                                                  | Prevents reference ambiguity                                                           |
-| Object counting          | Ask for a region-by-region inventory, then total; validate against a detector for high-stakes use                | Generative VLMs can approximate rather than enumerate                                  |
-| Spatial grounding        | Request a structured coordinate format and define coordinate order/range                                         | Natural-language locations are ambiguous; vendors use different normalized conventions |
-| Long video               | State required timestamps and event granularity; increase sampling around fast segments                          | Default frame sampling can miss short events                                           |
-| GUI agent                | Use high resolution, preserve coordinates, allow crop/zoom, and require confirmation before actions              | Click accuracy depends on fine spatial detail and runtime policy                       |
-| OCR                      | Rotate correctly, avoid blur, use crop/high resolution, and request verbatim transcription before interpretation | OCR error and reasoning error are otherwise mixed                                      |
-| Scientific/medical image | Ask the model to identify visible evidence and uncertainty; use a domain specialist for decisions                | General VLM documentation explicitly excludes some specialized medical interpretation  |
+| Biểu đồ hoặc tài liệu dày đặc | Crop các vùng liên quan, giữ mức chi tiết `high`/`original`, yêu cầu trích xuất bằng chứng trước             | Giảm cạnh tranh thị giác và giúp dễ phát hiện suy luận không có căn cứ                  |
+| Nhiều ảnh                | Gắn nhãn từng ảnh và xác định các trục so sánh                                                                   | Ngăn tham chiếu mơ hồ                                                                  |
+| Đếm vật thể              | Yêu cầu kiểm kê theo từng vùng rồi tính tổng; đối chiếu bằng detector cho trường hợp rủi ro cao                  | VLM sinh có thể ước lượng thay vì liệt kê                                               |
+| Grounding không gian     | Yêu cầu định dạng tọa độ có cấu trúc và xác định thứ tự/phạm vi tọa độ                                           | Vị trí bằng ngôn ngữ tự nhiên có tính mơ hồ; các nhà cung cấp dùng quy ước chuẩn hóa khác nhau |
+| Video dài                | Nêu timestamp và độ chi tiết sự kiện cần có; tăng lấy mẫu quanh các đoạn diễn ra nhanh                           | Cách lấy mẫu frame mặc định có thể bỏ lỡ sự kiện ngắn                                  |
+| GUI agent                | Dùng độ phân giải cao, giữ tọa độ, cho phép crop/zoom và yêu cầu xác nhận trước khi hành động                    | Độ chính xác khi click phụ thuộc vào chi tiết không gian tinh và chính sách runtime     |
+| OCR                      | Xoay đúng chiều, tránh nhòe, dùng crop/độ phân giải cao và yêu cầu chép nguyên văn trước khi diễn giải           | Nếu không, lỗi OCR và lỗi suy luận sẽ bị trộn lẫn                                       |
+| Ảnh khoa học/y tế        | Yêu cầu model chỉ ra bằng chứng nhìn thấy và mức độ bất định; dùng chuyên gia lĩnh vực để ra quyết định          | Tài liệu VLM tổng quát loại trừ rõ một số dạng diễn giải y tế chuyên biệt               |
 
-### Family-specific ordering guidance
+### Hướng dẫn thứ tự riêng cho từng họ model
 
-- **Claude:** image before text.
-- **Gemini Interactions API:** text before a single image; video before its prompt in the current video
-  best-practice section.
-- **Qwen/Llama:** use the model's official processor/chat template rather than assuming content order is
-  implementation-independent.
-- **OpenAI:** the API supports interleaved content blocks; detail choice and unambiguous references are
-  more important than copying another vendor's ordering convention.
+- **Claude:** ảnh trước văn bản.
+- **Gemini Interactions API:** văn bản trước một ảnh đơn; video trước prompt của nó theo mục thực hành
+  tốt nhất cho video hiện tại.
+- **Qwen/Llama:** dùng processor/chat template chính thức của model thay vì giả định thứ tự nội dung
+  không phụ thuộc cách triển khai.
+- **OpenAI:** API hỗ trợ các content block xen kẽ; việc chọn mức chi tiết và tham chiếu không mơ hồ
+  quan trọng hơn việc sao chép quy ước thứ tự của nhà cung cấp khác.
 
-## 13. Why tool-assisted vision is becoming standard
+## 13. Vì sao thị giác có công cụ hỗ trợ đang trở thành tiêu chuẩn
 
-A VLM can use tools to compensate for fixed perception:
+VLM có thể dùng công cụ để bù cho khả năng cảm nhận cố định:
 
 ```text
-inspect full image
--> identify uncertain region
+kiểm tra toàn bộ ảnh
+-> xác định vùng chưa chắc chắn
 -> crop/zoom
--> OCR or run code
--> compare extracted values
--> answer with evidence
+-> OCR hoặc chạy code
+-> so sánh các giá trị đã trích xuất
+-> trả lời kèm bằng chứng
 ```
 
-This is not equivalent to a larger vision encoder. It is a test-time perception loop. Claude's Sonnet 5
-system card reports consistent gains from Python plus image cropping across document, chart, and CAD
-tasks. GPT-5.6 and Gemini expose computer/code tools in their runtimes, while Qwen3-VL explicitly
-post-trains visual-agent and tool-use trajectories.
+Điều này không tương đương với một vision encoder lớn hơn. Đây là vòng lặp cảm nhận ở test-time. System
+card của Claude Sonnet 5 báo cáo mức cải thiện nhất quán khi dùng Python cùng thao tác crop ảnh trên các
+tác vụ tài liệu, biểu đồ và CAD. GPT-5.6 và Gemini cung cấp công cụ computer/code trong runtime, còn
+Qwen3-VL post-train rõ ràng trên các trajectory của visual-agent và việc sử dụng công cụ.
 
 ---
 
-# Part III — Pretraining and post-training
+# Part III — Pretraining và post-training
 
-## 14. What VLM pretraining must learn
+## 14. Pretraining VLM phải học những gì
 
-Text pretraining alone supplies language, reasoning patterns, and world knowledge, but it does not teach
-which pixel regions support which words. VLM training must add at least four capabilities:
+Chỉ pretraining trên văn bản có thể cung cấp ngôn ngữ, các mẫu suy luận và tri thức thế giới, nhưng
+không dạy model vùng pixel nào làm căn cứ cho từ nào. Việc huấn luyện VLM phải bổ sung ít nhất bốn năng lực:
 
-1. **visual representation:** preserve objects, text, layout, attributes, and relations;
-2. **modality alignment:** map visual evidence into a space the language model can use;
-3. **joint reasoning:** combine image/video evidence with instructions and prior knowledge;
-4. **output grounding:** produce answers, coordinates, timestamps, or tool actions that remain tied to
-   the input.
+1. **biểu diễn thị giác:** giữ được vật thể, văn bản, bố cục, thuộc tính và quan hệ;
+2. **căn chỉnh modality:** ánh xạ bằng chứng thị giác vào một không gian mà language model có thể sử dụng;
+3. **suy luận kết hợp:** kết hợp bằng chứng ảnh/video với chỉ dẫn và tri thức có trước;
+4. **grounding đầu ra:** tạo câu trả lời, tọa độ, timestamp hoặc thao tác công cụ vẫn gắn với đầu vào.
 
-Common data types include:
+Các loại dữ liệu phổ biến gồm:
 
-- image-caption pairs;
-- interleaved webpages and documents;
-- OCR and document-layout data;
-- VQA and visual reasoning problems;
-- boxes, points, masks, and referring expressions;
-- multi-image and video sequences;
-- text-only data to preserve language capability;
-- GUI and tool-use trajectories;
-- preference, safety, and refusal data.
+- các cặp ảnh-caption;
+- trang web và tài liệu xen kẽ;
+- dữ liệu OCR và bố cục tài liệu;
+- các bài toán VQA và suy luận thị giác;
+- box, point, mask và referring expression;
+- chuỗi nhiều ảnh và video;
+- dữ liệu chỉ có văn bản để giữ năng lực ngôn ngữ;
+- trajectory GUI và sử dụng công cụ;
+- dữ liệu về preference, an toàn và từ chối.
 
-The VILA study found that interleaved data helped more than image-caption pairs alone for some VLM
-properties, and that re-mixing text-only instructions could protect and even improve capability during
-multimodal tuning. It also found that freezing the LLM limited in-context learning in its setup. See
-[VILA: On Pre-training for Visual Language Models](https://arxiv.org/abs/2312.07533). These are
-controlled results for VILA, not universal laws.
+Nghiên cứu VILA phát hiện rằng với một số đặc tính VLM, dữ liệu xen kẽ hữu ích hơn so với chỉ dùng các
+cặp ảnh-caption, và việc trộn lại các chỉ dẫn chỉ có văn bản có thể bảo vệ, thậm chí cải thiện năng lực
+trong quá trình multimodal tuning. Nghiên cứu cũng phát hiện rằng trong thiết lập của họ, việc đóng băng
+LLM làm hạn chế in-context learning. Xem
+[VILA: On Pre-training for Visual Language Models](https://arxiv.org/abs/2312.07533). Đây là các kết
+quả có kiểm soát đối với VILA, không phải quy luật phổ quát.
 
-## 15. Training comparison
+## 15. So sánh huấn luyện
 
-| Family   | Public pretraining evidence                                                                                                                                        | Public multimodal post-training evidence                                                        | Major unknowns                                                                     |
+| Họ model | Bằng chứng pretraining công khai                                                                                                                                   | Bằng chứng multimodal post-training công khai                                                    | Các ẩn số lớn                                                                       |
 | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| GPT      | GPT-4V used internet and licensed text/image data; GPT-4o was trained end-to-end across text, vision, audio. GPT-5.6 data categories are published at system level | RL/reasoning, safety and multimodal deployment evaluations are documented                       | Current modality mix, encoder/fusion, objectives, scale                            |
-| Claude   | Public internet, public/private datasets, synthetic data; deduplication/classification                                                                             | Constitution-aligned post-training, preference work, red teaming; multimodal tool evals         | Vision-specific data, objectives, architecture, modality ratios                    |
-| Gemini   | Web documents, text, code, images, audio, video, licensed/user/synthetic data; native multimodal training                                                          | Instruction tuning, human-preference data, RL including multi-step reasoning                    | Exact token counts, modality ratios, expert/router and encoder details             |
-| Qwen     | Qwen3-VL publishes a four-stage alignment-to-256K recipe with approximately 2T+ multimodal/text tokens after a 67B-token alignment stage | Qwen3-VL documents SFT, strong-to-weak distillation, reasoning RL, general RL, and tool-integrated visual-agent RL | Qwen3.6's complete VL curriculum and exact relation to Qwen3-VL are not fully documented |
-| Llama 4  | Reported 22T/40T multimodal tokens, early fusion, text/image/video data, 200 pretraining languages                                                                 | Lightweight SFT -> multimodal online RL -> lightweight DPO                                      | Dataset composition at sample level and full fusion/encoder implementation details |
+| GPT      | GPT-4V dùng dữ liệu văn bản/ảnh từ internet và được cấp phép; GPT-4o được huấn luyện end-to-end trên văn bản, thị giác, âm thanh. Các loại dữ liệu của GPT-5.6 được công bố ở cấp hệ thống | Đã có tài liệu về RL/suy luận, an toàn và đánh giá triển khai multimodal                         | Tỷ lệ modality hiện tại, encoder/fusion, objective, quy mô                          |
+| Claude   | Internet công khai, dataset công khai/riêng tư, dữ liệu tổng hợp; khử trùng lặp/phân loại                                                                           | Post-training căn chỉnh theo Constitution, tối ưu preference, red teaming; đánh giá công cụ multimodal | Dữ liệu riêng cho thị giác, objective, kiến trúc, tỷ lệ modality                    |
+| Gemini   | Tài liệu web, văn bản, code, ảnh, âm thanh, video, dữ liệu được cấp phép/người dùng/tổng hợp; huấn luyện multimodal native                                           | Instruction tuning, dữ liệu preference của con người, RL gồm cả suy luận nhiều bước              | Số token chính xác, tỷ lệ modality, chi tiết expert/router và encoder               |
+| Qwen     | Qwen3-VL công bố quy trình bốn giai đoạn từ alignment đến 256K với khoảng hơn 2T token multimodal/văn bản sau giai đoạn alignment 67B token | Qwen3-VL mô tả SFT, distillation strong-to-weak, reasoning RL, general RL và visual-agent RL tích hợp công cụ | Curriculum VL đầy đủ của Qwen3.6 và quan hệ chính xác với Qwen3-VL chưa được mô tả đầy đủ |
+| Llama 4  | Báo cáo 22T/40T token multimodal, early fusion, dữ liệu văn bản/ảnh/video, 200 ngôn ngữ pretraining                                                                 | SFT gọn nhẹ -> multimodal online RL -> DPO gọn nhẹ                                               | Thành phần dataset ở cấp sample và chi tiết triển khai fusion/encoder đầy đủ        |
 
-## 16. Qwen3-VL's four-stage pretraining recipe
+## 16. Quy trình pretraining bốn giai đoạn của Qwen3-VL
 
-Qwen3-VL provides the clearest example of a staged current VLM curriculum:
+Qwen3-VL cung cấp ví dụ rõ ràng nhất về một curriculum VLM hiện đại theo từng giai đoạn:
 
-| Stage | Trainable modules                              | Approximate budget | Sequence length | Purpose                                             |
+| Giai đoạn | Module có thể huấn luyện                   | Ngân sách xấp xỉ | Độ dài chuỗi | Mục đích                                               |
 | ----- | ---------------------------------------------- | -----------------: | --------------: | --------------------------------------------------- |
-| S0    | MLP merger only; vision encoder and LLM frozen |         67B tokens |           8,192 | Initial vision-language alignment                   |
-| S1    | All modules                                    |         ~1T tokens |           8,192 | Broad multimodal pretraining plus text preservation |
-| S2    | All modules                                    |         ~1T tokens |          32,768 | More video, agent data, and long-context learning   |
-| S3    | All modules                                    |        100B tokens |         262,144 | Ultra-long documents and video adaptation           |
+| S0    | Chỉ MLP merger; vision encoder và LLM đóng băng |         67B token |           8,192 | Alignment vision-language ban đầu                     |
+| S1    | Tất cả module                                    |         ~1T token |           8,192 | Pretraining multimodal rộng và duy trì năng lực văn bản |
+| S2    | Tất cả module                                    |         ~1T token |          32,768 | Thêm video, dữ liệu agent và học long-context          |
+| S3    | Tất cả module                                    |        100B token |         262,144 | Thích nghi với tài liệu siêu dài và video              |
 
-Important details from the technical report include:
+Các chi tiết quan trọng trong báo cáo kỹ thuật gồm:
 
-- 30M in-house OCR samples plus multilingual synthetic OCR data;
-- millions of documents/PDFs with layout-aware parsing;
-- grounding data with boxes and points normalized to `[0, 1000]`;
-- multimodal coding data such as screenshot-to-HTML and diagram-to-code;
-- length-adaptive video frame sampling;
-- visual STEM data and millions of filtered reasoning samples;
-- GUI, function-calling, and search trajectories.
+- 30M sample OCR nội bộ cùng dữ liệu OCR tổng hợp đa ngôn ngữ;
+- hàng triệu tài liệu/PDF được parse có nhận biết bố cục;
+- dữ liệu grounding với box và point được chuẩn hóa về `[0, 1000]`;
+- dữ liệu coding multimodal như screenshot-to-HTML và diagram-to-code;
+- lấy mẫu frame video thích ứng theo độ dài;
+- dữ liệu STEM thị giác và hàng triệu sample suy luận đã lọc;
+- trajectory GUI, function-calling và tìm kiếm.
 
-This explains why Qwen3-VL's behavior cannot be attributed only to SigLIP-2 or DeepStack. Data
-construction and curriculum cover the exact output contracts the model is expected to produce.
+Điều này giải thích vì sao không thể chỉ quy hành vi của Qwen3-VL cho SigLIP-2 hoặc DeepStack. Quá
+trình xây dựng dữ liệu và curriculum bao phủ chính xác các contract đầu ra mà model được kỳ vọng tạo ra.
 
-## 17. Post-training changes what users perceive
+## 17. Post-training thay đổi những gì người dùng cảm nhận
 
-A generic multimodal post-training pipeline is:
+Một pipeline multimodal post-training tổng quát là:
 
 ```mermaid
 flowchart LR
-    B[Multimodal base model] --> SFT[Visual instruction tuning]
-    SFT --> R[Reasoning and verifiable-task RL]
-    R --> P[Preference and response-quality optimization]
-    P --> A[Tool and visual-agent trajectories]
-    A --> Safe[Safety training and red teaming]
-    Safe --> Prod[Production VLM system]
+    B[Base model multimodal] --> SFT[Tinh chỉnh theo chỉ dẫn thị giác]
+    SFT --> R[RL cho suy luận và tác vụ có thể kiểm chứng]
+    R --> P[Tối ưu preference và chất lượng phản hồi]
+    P --> A[Trajectory công cụ và visual-agent]
+    A --> Safe[Huấn luyện an toàn và red teaming]
+    Safe --> Prod[Hệ thống VLM trong production]
 ```
 
-Post-training controls whether a model:
+Post-training kiểm soát việc model có:
 
-- transcribes before interpreting;
-- admits that text is unreadable;
-- emits normalized boxes in the requested schema;
-- uses a crop or OCR tool;
-- persists through a multi-step visual task;
-- refuses unsafe image-based requests;
-- gives a concise answer or a long visual rationale.
+- chép lại trước khi diễn giải;
+- thừa nhận văn bản không đọc được;
+- xuất box đã chuẩn hóa theo schema được yêu cầu;
+- dùng công cụ crop hoặc OCR;
+- kiên trì thực hiện một tác vụ thị giác nhiều bước;
+- từ chối yêu cầu dựa trên ảnh không an toàn;
+- đưa ra câu trả lời ngắn gọn hoặc một lập luận thị giác dài.
 
-The vision encoder may determine what evidence is available, but post-training determines how that
-evidence is selected, verbalized, checked, and acted upon.
+Vision encoder có thể quyết định bằng chứng nào sẵn có, nhưng post-training quyết định cách bằng chứng
+đó được lựa chọn, diễn đạt thành lời, kiểm tra và chuyển thành hành động.
 
 ---
 
-# Part IV — End-to-end dataflow
+# Part IV — Luồng dữ liệu đầu cuối
 
-## 18. Shared example task
+## 18. Tác vụ ví dụ chung
 
-Assume the input is a 4K dashboard screenshot and the request is:
+Giả sử đầu vào là ảnh chụp màn hình dashboard 4K và yêu cầu là:
 
 ```text
-Read the revenue value in the upper-right card, compare it with the previous-month value,
-and return JSON with current, previous, difference, and confidence.
+Đọc giá trị doanh thu trong thẻ phía trên bên phải, so sánh với giá trị của tháng trước,
+và trả về JSON gồm current, previous, difference và confidence.
 ```
 
-The ideal logical flow is:
+Luồng logic lý tưởng là:
 
 ```mermaid
 sequenceDiagram
-    participant U as User
-    participant P as Preprocessor
-    participant V as Vision encoder
-    participant L as Language/reasoning model
-    participant T as Crop/OCR/code tool
+    participant U as Người dùng
+    participant P as Bộ tiền xử lý
+    participant V as Bộ mã hóa thị giác
+    participant L as Model ngôn ngữ/suy luận
+    participant T as Công cụ crop/OCR/code
 
-    U->>P: 4K screenshot + task
-    P->>V: resized/tiled visual input
-    V->>L: visual representations + prompt tokens
-    L->>L: locate upper-right card and assess readability
-    L->>T: crop or OCR uncertain values
-    T-->>L: extracted text/region
-    L->>L: parse numbers and compute difference
-    L-->>U: validated JSON + confidence
+    U->>P: Ảnh chụp 4K + tác vụ
+    P->>V: Đầu vào thị giác đã resize/chia tile
+    V->>L: Biểu diễn thị giác + token prompt
+    L->>L: Xác định thẻ trên bên phải và đánh giá khả năng đọc
+    L->>T: Crop hoặc OCR các giá trị chưa chắc chắn
+    T-->>L: Văn bản/vùng đã trích xuất
+    L->>L: Parse số và tính chênh lệch
+    L-->>U: JSON đã kiểm chứng + confidence
 ```
 
-## 19. How the five families realize the flow
+## 19. Cách năm họ model hiện thực hóa luồng
 
 ### GPT-5.6
 
 ```text
-image block + detail policy
--> undisclosed visual stack
--> GPT-5.6 reasoning
--> optional computer/code/crop workflow
--> structured text output
+khối image + chính sách detail
+-> stack thị giác không được công bố
+-> suy luận GPT-5.6
+-> workflow computer/code/crop tùy chọn
+-> đầu ra văn bản có cấu trúc
 ```
 
-Use `original` when small dashboard text is the bottleneck. The architecture between the image block
-and reasoning model is unknown.
+Dùng `original` khi văn bản nhỏ trên dashboard là điểm nghẽn. Kiến trúc nằm giữa khối image
+và model suy luận chưa được biết.
 
 ### Claude Sonnet 5
 
 ```text
-image first, then task
--> 28x28 patch accounting and possible downscale
--> undisclosed multimodal stack
+image trước, sau đó đến tác vụ
+-> tính toán patch 28x28 và có thể downscale
+-> stack đa phương thức không được công bố
 -> adaptive thinking
--> optional crop/Python tools
--> JSON/text output
+-> công cụ crop/Python tùy chọn
+-> đầu ra JSON/văn bản
 ```
 
-Pre-crop the card if the full screenshot would exceed the visual-token tier or make the target too small.
+Crop trước thẻ nếu ảnh chụp toàn màn hình sẽ vượt bậc visual-token hoặc khiến mục tiêu quá nhỏ.
 
 ### Gemini 3.5 Flash / 3.1 Pro
 
 ```text
-task + image
--> tile and media-resolution allocation
--> native multimodal sparse-MoE reasoning model
--> optional code/tool runtime
--> JSON/text output
+tác vụ + image
+-> phân bổ tile và media-resolution
+-> model suy luận sparse-MoE đa phương thức native
+-> runtime code/công cụ tùy chọn
+-> đầu ra JSON/văn bản
 ```
 
-Use Flash for high-volume extraction after measuring accuracy; use Pro when the comparison requires
-harder reasoning or cross-document context.
+Dùng Flash để trích xuất khối lượng lớn sau khi đo độ chính xác; dùng Pro khi phép so sánh đòi hỏi
+suy luận khó hơn hoặc ngữ cảnh xuyên tài liệu.
 
 ### Qwen3.6 / Qwen3-VL
 
 ```text
-official processor and chat template
--> Qwen3.6 visual front end (details incomplete), or documented Qwen3-VL SigLIP-2 stack
--> Qwen3.6 hybrid DeltaNet/attention MoE, or Qwen3-VL Qwen3 backbone
--> configured thinking or direct-answer mode
--> local structured output/tool loop
+processor và chat template chính thức
+-> front end thị giác Qwen3.6 (chi tiết chưa đầy đủ), hoặc stack Qwen3-VL SigLIP-2 đã được ghi nhận
+-> DeltaNet/attention MoE lai của Qwen3.6, hoặc backbone Qwen3 của Qwen3-VL
+-> chế độ thinking hoặc direct-answer đã cấu hình
+-> vòng lặp đầu ra có cấu trúc/công cụ cục bộ
 ```
 
-The deployer owns processor limits, sampling, quantization, runtime tools, and schema enforcement.
+Đơn vị triển khai chịu trách nhiệm về giới hạn processor, sampling, quantization, công cụ runtime
+và việc thực thi schema.
 
 ### Llama 4
 
 ```text
-official image processor and chat template
--> MetaCLIP-derived visual representation
--> early-fused shared MoE backbone
--> local decoder/runtime
--> structured output
+image processor và chat template chính thức
+-> biểu diễn thị giác có nguồn gốc từ MetaCLIP
+-> backbone MoE dùng chung được early-fusion
+-> decoder/runtime cục bộ
+-> đầu ra có cấu trúc
 ```
 
-The deployer also owns safety and tool orchestration. Do not infer that a hosted provider uses Meta's
-reference processor or prompt defaults without checking.
+Đơn vị triển khai cũng chịu trách nhiệm về an toàn và điều phối công cụ. Không suy diễn rằng một nhà
+cung cấp hosted sử dụng processor tham chiếu hoặc prompt mặc định của Meta khi chưa kiểm tra.
 
 ---
 
-# Part V — Evaluation, limitations, and counter-evidence
+# Part V — Đánh giá, giới hạn và phản chứng
 
-## 20. What different benchmarks actually test
+## 20. Các benchmark khác nhau thực sự kiểm tra điều gì
 
-| Benchmark type             | Examples                              | What it can reveal                               | What it does not establish                                     |
-| -------------------------- | ------------------------------------- | ------------------------------------------------ | -------------------------------------------------------------- |
-| Broad multimodal reasoning | MMMU, MMMU-Pro                        | Cross-domain image-plus-text reasoning           | Production OCR, latency, robustness to arbitrary image quality |
-| Document/chart             | DocVQA, ChartQA, CharXiv, ChartMuseum | Reading, layout, chart reasoning                 | General spatial grounding or video understanding               |
-| Visual math                | MathVista, MathVision                 | Diagram perception plus symbolic reasoning       | Open-world visual accuracy                                     |
-| Hallucination/illusion     | HallusionBench                        | Inconsistency and language-prior failures        | Full factuality across real applications                       |
-| Video                      | Video-MME, VideoMMMU, MLVU, LVBench   | Temporal and long-video comprehension            | Equal frame/audio budgets across providers                     |
-| GUI/agent                  | OSWorld, ScreenSpot-style tasks       | Visual localization plus action policy           | Passive image understanding in isolation                       |
-| Grounding                  | RefCOCO-style boxes/points            | Localization under a defined coordinate contract | Pixel-accurate detection for all categories                    |
+| Loại benchmark                    | Ví dụ                                 | Điều có thể cho thấy                                 | Điều không thể xác lập                                           |
+| --------------------------------- | ------------------------------------- | ---------------------------------------------------- | ---------------------------------------------------------------- |
+| Suy luận đa phương thức diện rộng | MMMU, MMMU-Pro                        | Suy luận image-plus-text xuyên lĩnh vực               | OCR production, độ trễ, độ bền vững với chất lượng ảnh bất kỳ    |
+| Tài liệu/biểu đồ                  | DocVQA, ChartQA, CharXiv, ChartMuseum | Đọc, bố cục, suy luận biểu đồ                         | Grounding không gian tổng quát hoặc hiểu video                   |
+| Toán học thị giác                 | MathVista, MathVision                 | Nhận thức sơ đồ kết hợp suy luận ký hiệu              | Độ chính xác thị giác trong thế giới mở                          |
+| Hallucination/ảo giác             | HallusionBench                        | Lỗi do bất nhất và tiên nghiệm ngôn ngữ               | Tính đúng sự thật đầy đủ trên các ứng dụng thực                   |
+| Video                             | Video-MME, VideoMMMU, MLVU, LVBench   | Khả năng hiểu theo thời gian và video dài             | Ngân sách frame/audio bằng nhau giữa các nhà cung cấp             |
+| GUI/agent                         | OSWorld, tác vụ kiểu ScreenSpot       | Định vị thị giác kết hợp chính sách hành động         | Khả năng hiểu ảnh thụ động khi xét riêng                         |
+| Grounding                         | Box/point kiểu RefCOCO                | Định vị theo một hợp đồng tọa độ đã xác định          | Phát hiện chính xác đến pixel cho mọi hạng mục                    |
 
-No single score measures “vision.”
+Không có một điểm số đơn lẻ nào đo được “vision”.
 
-## 21. Why current leaderboard numbers are not directly comparable
+## 21. Vì sao các con số leaderboard hiện tại không thể so sánh trực tiếp
 
-### Different model versions
+### Các phiên bản model khác nhau
 
-Vendor tables often compare a current model against older competitor snapshots. A Gemini 3.5 Flash
-table that lists GPT-5.5 or Claude 4.x is useful for that evaluation run, but it is not a current GPT-5.6
-versus Claude 5 versus Gemini 3.5 leaderboard.
+Các bảng của vendor thường so sánh một model hiện tại với các snapshot cũ hơn của đối thủ. Một bảng
+Gemini 3.5 Flash liệt kê GPT-5.5 hoặc Claude 4.x hữu ích cho lần đánh giá đó, nhưng không phải là
+leaderboard hiện tại giữa GPT-5.6, Claude 5 và Gemini 3.5.
 
-### Different visual budgets
+### Các ngân sách thị giác khác nhau
 
-The Qwen3-VL technical report explicitly notes unequal maximum input frames in one video comparison:
-512 for Gemini 2.5 Pro, 256 for GPT-5, and 100 for Claude Opus 4.1. It says full fairness cannot be
-guaranteed. A video score can therefore measure sampling budget and API constraints as well as model
-quality.
+Báo cáo kỹ thuật Qwen3-VL ghi rõ số frame đầu vào tối đa không bằng nhau trong một phép so sánh video:
+512 cho Gemini 2.5 Pro, 256 cho GPT-5 và 100 cho Claude Opus 4.1. Báo cáo cho biết không thể bảo đảm
+công bằng hoàn toàn. Vì vậy, một điểm video có thể đo cả ngân sách sampling và các ràng buộc API,
+chứ không chỉ chất lượng model.
 
-### Different tools and graders
+### Các công cụ và grader khác nhau
 
-The Claude Sonnet 5 system card reports separate tool/no-tool results, changes the grader on some
-benchmarks, and states that Anthropic could not reproduce Surge's published GDP.pdf numbers. These are
-responsible caveats, but they prevent casual cross-table ranking.
+System card Claude Sonnet 5 báo cáo riêng kết quả có công cụ/không công cụ, thay đổi grader trên một số
+benchmark và cho biết Anthropic không thể tái lập các con số GDP.pdf mà Surge đã công bố. Đây là những
+lưu ý thận trọng có trách nhiệm, nhưng chúng không cho phép xếp hạng tùy tiện giữa các bảng.
 
-### Data exposure and benchmark saturation
+### Phơi nhiễm dữ liệu và benchmark bão hòa
 
-Web-scale training can expose models to benchmark images, questions, or closely related templates.
-Use fresh private tasks, not only public leaderboards, for application selection.
+Huấn luyện ở quy mô web có thể khiến model tiếp xúc với ảnh, câu hỏi benchmark hoặc các template rất
+gần với chúng. Khi lựa chọn cho ứng dụng, hãy dùng các tác vụ riêng mới, không chỉ leaderboard công khai.
 
-## 22. Shared failure modes
+## 22. Các dạng lỗi chung
 
-### 22.1 Visual hallucination
+### 22.1 Hallucination thị giác
 
-The language model can produce a plausible completion when visual evidence is weak or missing. The
-[HallusionBench paper](https://arxiv.org/abs/2310.14566) documents failures from entangled language
-hallucination and visual illusion. Although the evaluated 2023-era models are no longer current, the
-failure taxonomy remains relevant and should be tested again on current checkpoints.
+Model ngôn ngữ có thể tạo ra một phần hoàn thành nghe hợp lý khi bằng chứng thị giác yếu hoặc thiếu.
+[Paper HallusionBench](https://arxiv.org/abs/2310.14566) ghi nhận các lỗi bắt nguồn từ hallucination
+ngôn ngữ đan xen với ảo giác thị giác. Dù các model thời kỳ 2023 được đánh giá không còn là model hiện
+tại, hệ thống phân loại lỗi vẫn còn phù hợp và nên được kiểm tra lại trên các checkpoint hiện tại.
 
-### 22.2 Fine-detail loss
+### 22.2 Mất chi tiết nhỏ
 
-Small text, thin chart lines, distant objects, and dense UI elements can disappear during resizing or
-compression. Higher resolution helps only if the service preserves the detail and the connector retains
-it.
+Văn bản nhỏ, đường biểu đồ mảnh, vật thể ở xa và các phần tử UI dày đặc có thể biến mất trong quá trình
+resize hoặc nén. Độ phân giải cao hơn chỉ hữu ích nếu dịch vụ bảo toàn chi tiết và connector giữ lại
+được chi tiết đó.
 
-### 22.3 Counting and exact geometry
+### 22.3 Đếm và hình học chính xác
 
-Autoregressive generation is not a guaranteed enumeration or geometry algorithm. Ask for intermediate
-grounding and verify coordinates/counts with task-specific tools when errors are costly.
+Sinh tự hồi quy không phải là thuật toán liệt kê hay hình học được bảo đảm. Hãy yêu cầu grounding trung
+gian và xác minh tọa độ/số lượng bằng công cụ chuyên biệt cho tác vụ khi lỗi gây tổn thất lớn.
 
-### 22.4 Video aliasing
+### 22.4 Aliasing video
 
-Temporal sampling turns continuous video into sparse observations. Gemini's documented 1 FPS default
-can miss short actions. Increasing reasoning effort cannot recover an unsampled frame.
+Sampling theo thời gian biến video liên tục thành các quan sát thưa. Mức mặc định 1 FPS đã được ghi nhận
+của Gemini có thể bỏ lỡ các hành động ngắn. Tăng reasoning effort không thể khôi phục một frame chưa
+được lấy mẫu.
 
-### 22.5 OCR-language and rotation sensitivity
+### 22.5 Độ nhạy với ngôn ngữ OCR và phép xoay
 
-Blur, rotation, unusual scripts, handwriting, and low contrast can cause transcription errors that then
-propagate into reasoning. Separate transcription, parsing, and conclusion in the output contract.
+Độ nhòe, phép xoay, hệ chữ hiếm gặp, chữ viết tay và độ tương phản thấp có thể gây lỗi phiên chép rồi
+lan truyền vào quá trình suy luận. Hãy tách phiên chép, parsing và kết luận trong hợp đồng đầu ra.
 
-### 22.6 Prompt injection inside images
+### 22.6 Prompt injection bên trong ảnh
 
-A screenshot or document can contain instructions addressed to the model. An agentic VLM must treat
-visual text as untrusted evidence, not automatically as higher-priority instructions. This is primarily a
-runtime and policy problem, not just an encoder problem.
+Ảnh chụp màn hình hoặc tài liệu có thể chứa chỉ dẫn dành cho model. Một VLM có tính agent phải coi văn
+bản thị giác là bằng chứng không đáng tin cậy, không tự động xem đó là chỉ dẫn có mức ưu tiên cao hơn.
+Đây chủ yếu là vấn đề runtime và policy, không chỉ là vấn đề của encoder.
 
-### 22.7 Fluent uncertainty masking
+### 22.7 Sự trôi chảy che lấp tính bất định
 
-Text quality is not a confidence estimate. Require evidence fields, allow `unknown`/`unreadable`, and
-calibrate confidence on labeled data rather than trusting self-reported certainty.
+Chất lượng văn bản không phải là một ước lượng confidence. Hãy yêu cầu các trường bằng chứng, cho phép
+`unknown`/`unreadable` và hiệu chỉnh confidence trên dữ liệu có nhãn thay vì tin vào độ chắc chắn do
+model tự báo cáo.
 
-## 23. Fair application-specific test protocol
+## 23. Quy trình kiểm thử công bằng dành riêng cho ứng dụng
 
-Use a fixed dataset and record the full effective configuration:
+Dùng một dataset cố định và ghi lại toàn bộ cấu hình thực tế:
 
-1. exact model ID and date;
-2. original image/video plus any crop, resize, compression, or frame sampling;
-3. visual detail/media-resolution setting;
-4. prompt and image/video ordering;
-5. reasoning effort or Thinking/Instruct variant;
-6. tool availability and tool-call limits;
-7. temperature/decoding settings where supported;
-8. output schema and retry policy;
-9. latency, input tokens, output tokens, and cost;
-10. human-reviewed correctness and evidence grounding.
+1. model ID và ngày chính xác;
+2. image/video gốc cùng mọi thao tác crop, resize, nén hoặc sampling frame;
+3. thiết lập visual detail/media-resolution;
+4. thứ tự prompt và image/video;
+5. reasoning effort hoặc biến thể Thinking/Instruct;
+6. tính khả dụng của công cụ và giới hạn tool-call;
+7. thiết lập temperature/decoding ở nơi được hỗ trợ;
+8. schema đầu ra và chính sách retry;
+9. độ trễ, input token, output token và chi phí;
+10. tính đúng đắn được con người duyệt và grounding bằng chứng.
 
-Recommended test slices:
+Các lát cắt kiểm thử được khuyến nghị:
 
-- clean versus blurred/rotated inputs;
-- original versus cropped image;
-- low versus high visual budget;
-- single versus multiple images;
-- no-tool versus crop/OCR/code tools;
-- normal versus adversarial text embedded in the image;
-- common versus rare scripts and domain terminology;
-- slow versus fast video events.
+- đầu vào sạch so với đầu vào bị nhòe/xoay;
+- ảnh gốc so với ảnh đã crop;
+- ngân sách thị giác thấp so với cao;
+- một ảnh so với nhiều ảnh;
+- không dùng công cụ so với dùng công cụ crop/OCR/code;
+- văn bản thông thường so với văn bản đối kháng được nhúng trong ảnh;
+- hệ chữ phổ biến so với hiếm gặp và thuật ngữ chuyên ngành;
+- sự kiện video chậm so với nhanh.
 
-Report task success, not only average answer similarity. For extraction, include exact-field accuracy. For
-grounding, use IoU or point distance. For video, score timestamp tolerance. For agents, measure both
-completion and unsafe/incorrect actions.
+Báo cáo mức độ thành công của tác vụ, không chỉ độ tương đồng trung bình của câu trả lời. Với trích xuất,
+hãy đưa vào độ chính xác exact-field. Với grounding, dùng IoU hoặc khoảng cách điểm. Với video, chấm
+dung sai timestamp. Với agent, đo cả mức hoàn thành lẫn các hành động không an toàn/không chính xác.
 
 ---
 
-# Part VI — Practical selection guidance
+# Part VI — Hướng dẫn lựa chọn thực tế
 
-## 24. Choose GPT-5.6 when
+## 24. Chọn GPT-5.6 khi
 
-- a managed reasoning-and-tool system matters more than inspecting neural internals;
-- high-resolution image input and computer-use workflows are central;
-- structured output, tools, and long context need one hosted API;
-- image input is sufficient and native video input is not required for this checkpoint.
+- một hệ thống suy luận và công cụ được quản lý quan trọng hơn việc kiểm tra nội bộ mạng neural;
+- đầu vào ảnh độ phân giải cao và các workflow computer-use là trọng tâm;
+- đầu ra có cấu trúc, công cụ và ngữ cảnh dài cần cùng một hosted API;
+- đầu vào ảnh là đủ và checkpoint này không bắt buộc đầu vào video native.
 
-## 25. Choose Claude when
+## 25. Chọn Claude khi
 
-- image-plus-document analysis and long-context professional work dominate;
-- explicit, predictable visual patch accounting is useful;
-- crop/Python-assisted analysis is part of the workflow;
-- a hosted model is acceptable and architecture transparency is not required.
+- phân tích image-plus-document và công việc chuyên môn với ngữ cảnh dài chiếm ưu thế;
+- cách tính visual patch rõ ràng, có thể dự đoán là hữu ích;
+- phân tích có crop/Python hỗ trợ là một phần của workflow;
+- có thể chấp nhận hosted model và không cần tính minh bạch về kiến trúc.
 
-## 26. Choose Gemini when
+## 26. Chọn Gemini khi
 
-- native video plus audio understanding is required;
-- long multimodal context and Google tool integration matter;
-- explicit image/video media-resolution controls are valuable;
-- Flash/Pro tiers fit a measured quality-latency split.
+- cần khả năng hiểu video native cùng audio;
+- ngữ cảnh đa phương thức dài và tích hợp công cụ Google là quan trọng;
+- các điều khiển media-resolution rõ ràng cho image/video có giá trị;
+- các bậc Flash/Pro phù hợp với sự phân chia chất lượng-độ trễ đã đo.
 
-## 27. Choose Qwen when
+## 27. Chọn Qwen khi
 
-- open weights, local deployment, fine-tuning, or architecture inspection are required;
-- OCR, document parsing, grounding, GUI agents, or native video are important;
-- the team can own processor limits, serving, quantization, safety, and tool orchestration;
-- Qwen3.6 thinking/direct modes or Qwen3-VL Instruct/Thinking variants can be evaluated separately.
+- cần open weight, triển khai cục bộ, fine-tuning hoặc kiểm tra kiến trúc;
+- OCR, parsing tài liệu, grounding, GUI agent hoặc video native là quan trọng;
+- đội ngũ có thể chịu trách nhiệm về giới hạn processor, serving, quantization, an toàn và điều phối công cụ;
+- có thể đánh giá riêng các chế độ thinking/direct của Qwen3.6 hoặc các biến thể Instruct/Thinking của Qwen3-VL.
 
-## 28. Choose Llama 4 when
+## 28. Chọn Llama 4 khi
 
-- an open-weight early-fusion MoE model is preferred;
-- image reasoning and customization matter more than native video ingestion;
-- the Llama ecosystem/license fits the deployment;
-- the team can build the missing safety, tools, and application evaluation stack.
+- ưu tiên một model MoE open-weight early-fusion;
+- suy luận ảnh và khả năng tùy chỉnh quan trọng hơn ingest video native;
+- hệ sinh thái/license Llama phù hợp với triển khai;
+- đội ngũ có thể xây dựng stack còn thiếu về an toàn, công cụ và đánh giá ứng dụng.
 
-## 29. Final answer to the central question
+## 29. Câu trả lời cuối cùng cho câu hỏi trung tâm
 
-Modern VLM families are converging toward a shared product surface—images, documents, reasoning,
-structured outputs, and tools—but they reach it through different and often undisclosed internal paths.
+Các họ VLM hiện đại đang hội tụ về một bề mặt sản phẩm chung — image, tài liệu, suy luận,
+đầu ra có cấu trúc và công cụ — nhưng đạt đến đó qua các con đường nội bộ khác nhau và thường không
+được công bố.
 
-The most durable conceptual model is:
+Mô hình khái niệm bền vững nhất là:
 
 ```text
 VLM quality
@@ -919,114 +931,114 @@ what visual evidence survives preprocessing
 + what tools can re-inspect uncertain regions
 ```
 
-Architecture still matters. Qwen3.6's hybrid sequence backbone, Qwen3-VL's DeepStack and temporal
-encoding, Llama 4's early fusion, and Gemini's native sparse-MoE design are meaningful differences. But
-real application behavior is often dominated by resolution, sampling, data mixture, post-training, tool
-availability, and runtime policy.
+Kiến trúc vẫn quan trọng. Backbone chuỗi lai của Qwen3.6, DeepStack và temporal encoding của Qwen3-VL,
+early fusion của Llama 4 và thiết kế sparse-MoE native của Gemini là những khác biệt có ý nghĩa. Nhưng
+hành vi ứng dụng thực thường bị chi phối bởi độ phân giải, sampling, hỗn hợp dữ liệu, post-training,
+tính khả dụng của công cụ và policy runtime.
 
-Therefore:
+Do đó:
 
-> A VLM cannot reason about visual evidence that its preprocessing discarded.
-> A strong visual encoder does not guarantee a grounded answer.
-> The complete system—not the model name alone—must be evaluated.
+> Một VLM không thể suy luận về bằng chứng thị giác mà quá trình tiền xử lý đã loại bỏ.
+> Một visual encoder mạnh không bảo đảm câu trả lời grounded.
+> Phải đánh giá toàn bộ hệ thống — không chỉ riêng tên model.
 
 ---
 
-# Sources
+# Nguồn
 
-All online sources were accessed on **2026-07-21**.
+Tất cả nguồn trực tuyến được truy cập vào **2026-07-21**.
 
 ## OpenAI
 
-- [OpenAI API model catalog](https://developers.openai.com/api/docs/models) — current GPT-5.6 tiers,
-  modalities, context, reasoning, and tools.
-- [GPT-5.6 model guidance](https://developers.openai.com/api/docs/guides/latest-model) — current
-  reasoning and original-image-detail behavior.
-- [Images and vision guide](https://developers.openai.com/api/docs/guides/images-vision) — detail
-  levels, resizing/tokenization, costs, and vision limitations.
-- [GPT-5.6 system card](https://deploymentsafety.openai.com/gpt-5-6) — training categories, vision
-  safety evaluation, hallucination and deployment safeguards.
-- [Hello GPT-4o](https://openai.com/index/hello-gpt-4o/) — historical family-level evidence for
-  end-to-end multimodal training.
-- [GPT-4V system card](https://openai.com/index/gpt-4v-system-card/) — historical image/text training,
-  RLHF, and multimodal risk evidence.
+- [OpenAI API model catalog](https://developers.openai.com/api/docs/models) — các bậc GPT-5.6,
+  modality, ngữ cảnh, suy luận và công cụ hiện tại.
+- [GPT-5.6 model guidance](https://developers.openai.com/api/docs/guides/latest-model) — hành vi
+  reasoning và original-image-detail hiện tại.
+- [Images and vision guide](https://developers.openai.com/api/docs/guides/images-vision) — các mức
+  detail, resizing/tokenization, chi phí và giới hạn vision.
+- [GPT-5.6 system card](https://deploymentsafety.openai.com/gpt-5-6) — các hạng mục huấn luyện, đánh
+  giá an toàn vision, hallucination và biện pháp bảo vệ khi triển khai.
+- [Hello GPT-4o](https://openai.com/index/hello-gpt-4o/) — bằng chứng lịch sử ở cấp độ họ model cho
+  huấn luyện đa phương thức đầu cuối.
+- [GPT-4V system card](https://openai.com/index/gpt-4v-system-card/) — bằng chứng lịch sử về huấn luyện
+  image/text, RLHF và rủi ro đa phương thức.
 
 ## Anthropic
 
-- [Claude models overview](https://platform.claude.com/docs/en/about-claude/models/overview) — current
-  models, modalities, context, and output behavior.
-- [Claude vision guide](https://platform.claude.com/docs/en/build-with-claude/vision) — formats,
-  ordering, patch accounting, resolution tiers, and multiple-image guidance.
+- [Claude models overview](https://platform.claude.com/docs/en/about-claude/models/overview) — các
+  model, modality, ngữ cảnh và hành vi đầu ra hiện tại.
+- [Claude vision guide](https://platform.claude.com/docs/en/build-with-claude/vision) — định dạng,
+  thứ tự, cách tính patch, các bậc độ phân giải và hướng dẫn nhiều ảnh.
 - [What&#39;s new in Claude Sonnet 5](https://platform.claude.com/docs/en/about-claude/models/whats-new-sonnet-5)
-  — adaptive thinking, tokenizer, sampling restrictions, and context.
+  — adaptive thinking, tokenizer, các hạn chế sampling và ngữ cảnh.
 - [Claude Sonnet 5 system card](https://www-cdn.anthropic.com/73ad94ca3c0502e75e46637cc62c8bd9532a7f2c/Claude%20Sonnet%205%20System%20Card.pdf)
-  — training categories, multimodal evaluation methodology, tools, limitations, and corrections.
+  — các hạng mục huấn luyện, phương pháp đánh giá đa phương thức, công cụ, giới hạn và hiệu chỉnh.
 
 ## Google
 
-- [Gemini 3.5 Flash model card](https://deepmind.google/models/model-cards/gemini-3-5-flash/) — current
-  modalities, context, benchmark methodology, and model dependency.
-- [Gemini 3.1 Pro model card](https://deepmind.google/models/model-cards/gemini-3-1-pro/) — complex
-  multimodal reasoning model, context, and evaluation.
+- [Gemini 3.5 Flash model card](https://deepmind.google/models/model-cards/gemini-3-5-flash/) — modality,
+  ngữ cảnh, phương pháp benchmark và model dependency hiện tại.
+- [Gemini 3.1 Pro model card](https://deepmind.google/models/model-cards/gemini-3-1-pro/) — model suy
+  luận đa phương thức phức tạp, ngữ cảnh và đánh giá.
 - [Gemini 3 Pro model card](https://storage.googleapis.com/deepmind-media/Model-Cards/Gemini-3-Pro-Model-Card.pdf)
-  — sparse-MoE native-multimodal architecture class and training-data categories.
-- [Gemini image-understanding guide](https://ai.google.dev/gemini-api/docs/image-understanding) — image
-  tiling, token accounting, media resolution, capabilities, and prompt order.
-- [Gemini video-understanding guide](https://ai.google.dev/gemini-api/docs/video-understanding) — frame
-  sampling, audio/video tokens, duration limits, timestamps, and prompt guidance.
-- [Gemini 1 technical report](https://deepmind.google/gemini/gemini_1_report.pdf) — foundational native
-  multimodal training and family history.
+  — lớp kiến trúc sparse-MoE đa phương thức native và các hạng mục dữ liệu huấn luyện.
+- [Gemini image-understanding guide](https://ai.google.dev/gemini-api/docs/image-understanding) — chia
+  tile ảnh, cách tính token, media resolution, năng lực và thứ tự prompt.
+- [Gemini video-understanding guide](https://ai.google.dev/gemini-api/docs/video-understanding) —
+  sampling frame, token audio/video, giới hạn thời lượng, timestamp và hướng dẫn prompt.
+- [Gemini 1 technical report](https://deepmind.google/gemini/gemini_1_report.pdf) — nền tảng huấn luyện
+  đa phương thức native và lịch sử họ model.
 
 ## Qwen
 
-- [Qwen3.6-35B-A3B model card](https://huggingface.co/Qwen/Qwen3.6-35B-A3B) — current open-weight
-  checkpoint, hybrid language backbone, model scale, context, modalities, and inference controls.
-- [Qwen3.6 official repository](https://github.com/QwenLM/Qwen3.6) — current code, deployment
-  guidance, and released checkpoints.
-- [Qwen3-VL technical report](https://arxiv.org/abs/2511.21631) — architecture, training recipe, data,
-  post-training, ablations, and evaluation limits.
-- [Qwen3-VL official repository](https://github.com/QwenLM/Qwen3-VL) — released variants, capabilities,
-  dates, code, and deployment links.
+- [Qwen3.6-35B-A3B model card](https://huggingface.co/Qwen/Qwen3.6-35B-A3B) — checkpoint open-weight,
+  backbone ngôn ngữ lai, quy mô model, ngữ cảnh, modality và điều khiển inference hiện tại.
+- [Qwen3.6 official repository](https://github.com/QwenLM/Qwen3.6) — code, hướng dẫn triển khai và các
+  checkpoint đã phát hành hiện tại.
+- [Qwen3-VL technical report](https://arxiv.org/abs/2511.21631) — kiến trúc, công thức huấn luyện, dữ
+  liệu, post-training, ablation và giới hạn đánh giá.
+- [Qwen3-VL official repository](https://github.com/QwenLM/Qwen3-VL) — các biến thể đã phát hành, năng
+  lực, ngày tháng, code và link triển khai.
 - [Qwen3-VL-235B-A22B-Thinking model card](https://huggingface.co/Qwen/Qwen3-VL-235B-A22B-Thinking)
-  — weight license, architecture summary, processor usage, and serving guidance.
-- [SigLIP 2 paper](https://arxiv.org/abs/2502.14786) — the vision-encoder family and its multilingual,
-  localization, dense-feature, and multi-resolution training recipe.
+  — license trọng số, tóm lược kiến trúc, cách dùng processor và hướng dẫn serving.
+- [SigLIP 2 paper](https://arxiv.org/abs/2502.14786) — họ vision-encoder cùng công thức huấn luyện đa
+  ngôn ngữ, localization, dense-feature và multi-resolution.
 
 ## Meta
 
 - [Llama 4 launch and technical overview](https://ai.meta.com/blog/llama-4-multimodal-intelligence/)
-  — early fusion, MoE, vision encoder, pretraining, post-training, context, and multi-image behavior.
-- [Llama 4 Maverick model card](https://huggingface.co/meta-llama/Llama-4-Maverick-17B-128E) — intended
-  use, training tokens, benchmark setup, tested image count, license, and safeguards.
+  — early fusion, MoE, vision encoder, pretraining, post-training, ngữ cảnh và hành vi nhiều ảnh.
+- [Llama 4 Maverick model card](https://huggingface.co/meta-llama/Llama-4-Maverick-17B-128E) — mục đích
+  sử dụng, token huấn luyện, thiết lập benchmark, số ảnh đã kiểm thử, license và biện pháp bảo vệ.
 
-## Foundational architecture and evaluation papers
+## Các paper nền tảng về kiến trúc và đánh giá
 
-- [Flamingo](https://arxiv.org/abs/2204.14198) — resampler, gated cross-attention, interleaved
-  image/video/text few-shot learning.
-- [BLIP-2](https://arxiv.org/abs/2301.12597) — frozen experts joined through a Q-Former.
-- [Visual Instruction Tuning / LLaVA](https://arxiv.org/abs/2304.08485) — projected vision features and
-  synthetic visual instruction data.
-- [LLaVA 1.5](https://arxiv.org/abs/2310.03744) — MLP connector, higher-resolution CLIP, and stronger
-  visual instruction baseline.
-- [VILA](https://arxiv.org/abs/2312.07533) — controlled findings on freezing, interleaved data, and
-  text-data reblending.
-- [POPE](https://arxiv.org/abs/2305.10355) — object-hallucination evaluation through polling-based
-  questions.
-- [HallusionBench](https://arxiv.org/abs/2310.14566) — language hallucination and visual-illusion
-  failure taxonomy.
-- [ChartMuseum](https://arxiv.org/abs/2505.13444) — chart-understanding evaluation with manually
-  curated questions and answer rationales.
-- [Video-MME](https://arxiv.org/abs/2405.21075) — multi-duration video-understanding evaluation with
-  optional subtitles.
-- [OSWorld](https://arxiv.org/abs/2404.07972) — multimodal computer-agent evaluation in real desktop
-  environments.
+- [Flamingo](https://arxiv.org/abs/2204.14198) — resampler, gated cross-attention và học few-shot
+  image/video/text xen kẽ.
+- [BLIP-2](https://arxiv.org/abs/2301.12597) — các frozen expert được kết nối qua một Q-Former.
+- [Visual Instruction Tuning / LLaVA](https://arxiv.org/abs/2304.08485) — projected vision feature và
+  dữ liệu visual instruction tổng hợp.
+- [LLaVA 1.5](https://arxiv.org/abs/2310.03744) — connector MLP, CLIP độ phân giải cao hơn và baseline
+  visual instruction mạnh hơn.
+- [VILA](https://arxiv.org/abs/2312.07533) — các phát hiện có kiểm soát về freezing, dữ liệu xen kẽ và
+  phối trộn lại dữ liệu văn bản.
+- [POPE](https://arxiv.org/abs/2305.10355) — đánh giá object-hallucination thông qua các câu hỏi dựa
+  trên polling.
+- [HallusionBench](https://arxiv.org/abs/2310.14566) — hệ thống phân loại lỗi hallucination ngôn ngữ
+  và ảo giác thị giác.
+- [ChartMuseum](https://arxiv.org/abs/2505.13444) — đánh giá khả năng hiểu biểu đồ với các câu hỏi và
+  diễn giải đáp án được tuyển chọn thủ công.
+- [Video-MME](https://arxiv.org/abs/2405.21075) — đánh giá khả năng hiểu video ở nhiều thời lượng với
+  phụ đề tùy chọn.
+- [OSWorld](https://arxiv.org/abs/2404.07972) — đánh giá computer-agent đa phương thức trong môi trường
+  desktop thực.
 
-## Notes on uncertainty
+## Lưu ý về tính bất định
 
-- Closed vendors can change architecture and preprocessing without publishing all details.
-- API documentation is an operational contract, not a full neural-network specification.
-- “Native multimodal” does not imply the same tokenization or fusion design across vendors.
-- Vendor benchmark tables use different model dates, image/frame budgets, tools, prompts, and graders.
-- Self-reported benchmark scores should guide test design, not replace application-specific evaluation.
-- Hosted behavior includes safety filters, hidden system instructions, tool policies, and routing that raw
-  open weights do not reproduce.
+- Các vendor đóng có thể thay đổi kiến trúc và tiền xử lý mà không công bố mọi chi tiết.
+- Tài liệu API là một hợp đồng vận hành, không phải đặc tả mạng neural đầy đủ.
+- “Đa phương thức native” không hàm ý thiết kế tokenization hay fusion giống nhau giữa các vendor.
+- Các bảng benchmark của vendor dùng ngày model, ngân sách image/frame, công cụ, prompt và grader khác nhau.
+- Điểm benchmark tự báo cáo nên định hướng thiết kế kiểm thử, không thay thế đánh giá dành riêng cho ứng dụng.
+- Hành vi hosted bao gồm bộ lọc an toàn, system instruction ẩn, policy công cụ và routing mà raw open
+  weight không tái hiện.

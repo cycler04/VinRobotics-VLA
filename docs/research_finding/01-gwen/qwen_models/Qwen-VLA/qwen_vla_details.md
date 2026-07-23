@@ -2,9 +2,9 @@
 
 ## 1. Tóm tắt
 
-Qwen-VLA là **mô hình hành động-ngôn ngữ-tầm nhìn tổng quát** mở rộng quy trình huấn luyện trước
-Mô hình ngôn ngữ thị giác Qwen3.5-4B với Biến áp khuếch tán tham số **1,15B
-(DiT) action expert**.
+Qwen-VLA là **mô hình hành động-ngôn ngữ-thị giác tổng quát**, mở rộng mô hình
+ngôn ngữ-thị giác Qwen3.5-4B đã được huấn luyện trước bằng một **action expert
+Diffusion Transformer (DiT) 1,15B tham số**.
 
 Mục tiêu thiết kế trung tâm của nó rộng hơn các VLA tập trung vào thao tác thông thường:
 
@@ -12,39 +12,39 @@ Mục tiêu thiết kế trung tâm của nó rộng hơn các VLA tập trung v
 - duy trì sự hiểu biết thị giác-ngôn ngữ và tạo văn bản;
 - tạo ra các hành động thao tác liên tục;
 - tạo quỹ đạo điểm điều hướng;
-- học hỏi từ quỹ đạo cổ tay và bàn tay ích kỷ của con người;
-- hỗ trợ nhiều phương án robot và các quy ước điều khiển với một bộ trọng lượng.
+- học từ quỹ đạo cổ tay và bàn tay góc nhìn thứ nhất của con người;
+- hỗ trợ nhiều hiện thân robot và quy ước điều khiển bằng một bộ trọng số.
 
 Kiến trúc có thể được tóm tắt như sau:
 
 ```text
 Images / observation history
             +
-Instruction + embodiment-aware prompt
+Chỉ dẫn + prompt nhận biết hiện thân
             ↓
-Qwen3.5-4B vision-language backbone
+Backbone ngôn ngữ-thị giác Qwen3.5-4B
             ↓
-Contextual hidden-state sequence
-            ├── Language head → text tokens
-            └── DiT action expert
+Chuỗi trạng thái ẩn theo ngữ cảnh
+            ├── Đầu ngôn ngữ → token văn bản
+            └── Action expert DiT
                     +
-                noisy action chunk
+                đoạn hành động nhiễu
                     +
-                flow timestep
+                bước thời gian của luồng
                     ↓
-            clean continuous action or trajectory chunk
+            đoạn hành động hoặc quỹ đạo liên tục sạch
 ```
 
 Điểm khác biệt quan trọng nhất là Qwen-VLA **hợp nhất giao diện thần kinh**,
-không phải là ý nghĩa vật lý của mọi chiều hướng hành động. Một điểm định hướng và một
-mục tiêu chung của robot vẫn khác nhau về mặt vật lý. Qwen-VLA đặt chúng vào cùng một
+không phải ý nghĩa vật lý của mọi chiều hành động. Một waypoint điều hướng và một
+mục tiêu khớp robot vẫn khác nhau về mặt vật lý. Qwen-VLA đặt chúng vào cùng một
 định dạng tensor đệm, xác định quy ước điều khiển của chúng thông qua văn bản và mặt nạ
 các kênh không được sử dụng trong quá trình huấn luyện.
 
 Điều chỉnh quan trọng thứ hai là khung Qwen-VLA mặc định **không
-sử dụng trạng thái robot có khả năng cảm thụ bản thân làm đầu vào**. Các tác giả đã thử nghiệm trạng thái góc khớp
-điều hòa, chỉ tìm thấy lợi ích cận biên trên RoboTwin và giữ lại
-Prompt văn bản nhận biết phương án làm đầu vào duy nhất dành riêng cho nền tảng. Điều này khác với
+sử dụng trạng thái proprioception của robot làm đầu vào**. Các tác giả đã thử điều kiện hóa
+bằng trạng thái góc khớp, nhưng chỉ thấy cải thiện nhỏ trên RoboTwin, nên giữ
+prompt văn bản nhận biết hiện thân làm đầu vào duy nhất dành riêng cho nền tảng. Điều này khác với
 các mô hình như π0, xử lý trạng thái robot một cách rõ ràng.
 
 ---
@@ -72,16 +72,16 @@ $$
 p_\theta
 \left(
 y_{t:t+H-1}
-\giữa
+\mid
 o_t, x, e, z
-\phải)
+\right)
 $$
 
 ở đâu:
 
 - $o_t$ là bối cảnh trực quan: một hình ảnh, nhiều camera, khung hình video hoặc lịch sử;
 - $x$ là lệnh nhiệm vụ;
-- $e$ là phương án văn bản và mô tả kiểm soát;
+- $e$ là mô tả hiện thân và điều khiển bằng văn bản;
 - $z$ là mã định danh tác vụ tùy chọn;
 - $H$ là chân trời dự đoán;
 - $y_{t:t+H-1}$ là chuỗi hành động hoặc quỹ đạo trong tương lai.
@@ -89,22 +89,22 @@ $$
 Do đó, đầu ra có thể có nghĩa khác nhau:
 
 ```text
-Manipulation:
-    future end-effector, joint, gripper, or hand actions
+Thao tác:
+    hành động end-effector, khớp, gripper hoặc bàn tay trong tương lai
 
-Navigation:
-    future relative waypoints
+Điều hướng:
+    waypoint tương đối trong tương lai
 
-Human egocentric modeling:
-    future wrist transforms and hand articulation
+Mô hình hóa góc nhìn thứ nhất của con người:
+    phép biến đổi cổ tay và khớp bàn tay trong tương lai
 
-Trajectory-centric prediction:
-    future spatial path of an embodied agent or other entity
+Dự đoán tập trung vào quỹ đạo:
+    đường đi không gian trong tương lai của một tác nhân có hiện thân hoặc thực thể khác
 ```
 
 Khái niệm trừu tượng được chia sẻ không phải là “tất cả các đầu ra đều là khớp nối của robot”. Đó là:
 
-> Với bối cảnh ngôn ngữ hình ảnh và đặc tả phương án/kiểm soát, hãy dự đoán
+> Với bối cảnh ngôn ngữ-thị giác và đặc tả hiện thân/điều khiển, hãy dự đoán
 > chuỗi các vectơ có giá trị thực có ý nghĩa vật lý theo thời gian.
 
 ---
@@ -140,8 +140,8 @@ Do đó, Qwen-VLA có hai đường dẫn đầu ra khác nhau về mặt khái 
 
 | Đường dẫn đầu ra | Mẫu đầu ra | Mục tiêu huấn luyện |
 | ----------------- | ----------------------------------- | ------------------------- |
-| Trưởng ngôn ngữ VLM | Token văn bản rời rạc | Entropy chéo token tiếp theo |
-| Action expert DiT | Tenor hành động/quỹ đạo liên tục | Khớp luồng có điều kiện |
+| Đầu ngôn ngữ VLM | Token văn bản rời rạc | Entropy chéo token tiếp theo |
+| Action expert DiT | Tensor hành động/quỹ đạo liên tục | Flow matching có điều kiện |
 
 VLM chịu trách nhiệm chủ yếu về nhận thức, nền tảng, hướng dẫn
 sự hiểu biết và lý luận theo ngữ cảnh. DiT chuyên về độ chính xác,
@@ -158,7 +158,7 @@ Qwen-VLA sử dụng **Qwen3.5-4B** làm xương sống nhận thức.
 Xương sống nhận được:
 
 - token văn bản từ hướng dẫn;
-- token văn bản từ prompt nhận biết phương án;
+- token văn bản từ prompt nhận biết hiện thân;
 - token trực quan được tạo bởi bộ mã hóa thị giác;
 - có thể có nhiều hình ảnh hoặc quan sát trực quan theo thời gian.
 
@@ -237,7 +237,7 @@ Chuyên gia có khoảng **1,15B thông số**, bao gồm:
 - đầu ra điều chế AdaLN.
 
 DiT không chỉ là một người đứng đầu chính sách tuyến tính nhỏ. Đó là một điều đáng kể
-Máy biến áp dành riêng cho quỹ đạo liên tục.
+Transformer dành riêng cho quỹ đạo liên tục.
 
 ## 5.2 Đầu vào của action expert
 
@@ -255,13 +255,13 @@ $$
 
 ở đâu:
 
-- $H$ là chân trời tác động cực đại chung;
+- $H$ là chân trời hành động cực đại dùng chung;
 - $K$ là số lượng kênh hành động tối đa phổ biến.
 
 MLP đầu vào ánh xạ từng vectơ hành động thô vào chiều rộng ẩn DiT:
 
 $$
-A_\tau = \operatorname{MLP__{\text{in}}(Y_\tau)
+A_\tau = \operatorname{MLP}_{\text{in}}(Y_\tau)
 $$
 
 Sau đó, mô hình sẽ kết hợp các token bối cảnh và hành động thành một chuỗi:
@@ -284,7 +284,7 @@ flowchart TD
     X --> R1["Thêm dư"]
     SA --> R1
     R1 --> N2["AdaLN được điều chỉnh theo dấu thời gian dòng chảy"]
-    N2 --> FFN["MLP chuyển tiếp nguồn cấp dữ liệu"]
+    N2 --> FFN["MLP feed-forward"]
     R1 --> R2["Thêm dư"]
     FFN --> R2
     R2 --> Y["Khối DiT tiếp theo"]
@@ -293,7 +293,7 @@ flowchart TD
 Chuyên gia sử dụng:
 
 - tự chú ý chung;
-- các lớp MLP chuyển tiếp nguồn cấp dữ liệu;
+- các lớp MLP feed-forward;
 - chuẩn hóa lớp thích ứng;
 - điều hòa dấu thời gian;
 - RoPE nhiều phần thẳng hàng với đường trục.
@@ -312,7 +312,7 @@ $$
 =
 \gamma(\tau)
 \odot
-\operatorname{Định mức}(x)
+\operatorname{Norm}(x)
 +
 \beta(\tau)
 $$
@@ -329,9 +329,9 @@ $$
 v_\theta
 \left(
 Y_\tau,\tau
-\giữa
+\mid
 o,x,e,z
-\phải)
+\right)
 \in
 \mathbb{R}^{H\times K}
 $$
@@ -352,20 +352,20 @@ Qwen-VLA **không** chuyển đổi tất cả các tập dữ liệu thành m�
 Nó bảo tồn ngữ nghĩa kiểm soát gốc của mỗi tập dữ liệu, chẳng hạn như:
 
 ```text
-Dataset A:
-    delta end-effector translation + Euler rotation + gripper
+Tập dữ liệu A:
+    tịnh tiến end-effector dạng delta + góc quay Euler + gripper
 
-Dataset B:
-    absolute joint positions
+Tập dữ liệu B:
+    vị trí khớp tuyệt đối
 
-Dataset C:
-    dual-arm joint positions + two grippers
+Tập dữ liệu C:
+    vị trí khớp hai tay máy + hai gripper
 
-Dataset D:
-    relative navigation waypoints
+Tập dữ liệu D:
+    waypoint điều hướng tương đối
 
-Dataset E:
-    human wrist SE(3) motion + hand eigengrasps
+Tập dữ liệu E:
+    chuyển động cổ tay SE(3) của người + eigengrasp của bàn tay
 ```
 
 Nó chỉ thống nhất:
@@ -392,7 +392,7 @@ $$
 Y_0[0:H_{\text{task}},\,0:c]
 $$
 
-Phần còn lại là không đệm.
+Phần còn lại được đệm bằng 0.
 
 Mặt nạ nhị phân chỉ định các mục nhập hợp lệ:
 
@@ -405,10 +405,10 @@ với:
 $$
 M_{h,k}
 =
-\bắt đầu{trường hợp}
+\begin{cases}
 1, & h < H_{\text{task}}\ \text{and}\ k<c \\
-0, & \text{others}
-\end{trường hợp}
+0, & \text{otherwise}
+\end{cases}
 $$
 
 Ví dụ với $H=4$ và $K=8$:
@@ -456,7 +456,7 @@ kế hoạch.
 Về mặt khái niệm:
 
 $$
-\tilde{y__{h,k}
+\tilde{y}_{h,k}
 =
 \frac{
 y_{h,k}-\mu_{\mathcal{D},k}
@@ -552,7 +552,7 @@ Một đoạn là:
 
 $$
 Y =
-\bắt đầu{bmatrix}
+\begin{bmatrix}
 \Delta x_1 & \Delta y_1 & \Delta\theta_1 \\
 \Delta x_2 & \Delta y_2 & \Delta\theta_2 \\
 \vdots & \vdots & \vdots \\
@@ -572,12 +572,12 @@ khung cổ tay:
 - xoay góc trục với ba chiều;
 - 10 hệ số khớp nối tay PCA được gọi là eigengrasps.
 
-Mỗi tay:
+Mỗi bàn tay:
 
 $$
-6\ \text{kích thước cổ tay}
+6\ \text{chiều cổ tay}
 +
-10\ \text{kích thước bàn tay}
+10\ \text{chiều bàn tay}
 =
 16
 $$
@@ -588,10 +588,10 @@ $$
 16\times2=32
 $$
 
-Do đó, mỗi dấu thời gian lấy cái tôi làm trung tâm của con người chứa đựng 32 chiều hành động.
+Do đó, mỗi bước thời gian góc nhìn thứ nhất của con người chứa 32 chiều hành động.
 
-Những mục tiêu này không phải là lệnh của động cơ robot ngay lập tức. Họ cung cấp một cách rộng rãi
-thao tác của con người trước và có thể hỗ trợ việc chuyển giao hoặc nhắm mục tiêu lại robot sau này.
+Những mục tiêu này không trực tiếp là lệnh động cơ robot. Chúng cung cấp prior thao tác
+rộng từ con người và có thể hỗ trợ chuyển giao hoặc retargeting sang robot sau này.
 
 ---
 
@@ -602,11 +602,11 @@ thao tác của con người trước và có thể hỗ trợ việc chuyển g
 Báo cáo chỉ định prompt có dạng sau:
 
 ```text
-The robot is {robot_tag} with {single arm / dual arms}
-[, waist][, and mobile base].
-The control frequency is {FPS} Hz.
-Please predict the next {chunk_size} control actions to execute
-the following task: {instruction}.
+Robot là {robot_tag}, có {một tay máy / hai tay máy}
+[, eo][, và đế di động].
+Tần số điều khiển là {FPS} Hz.
+Hãy dự đoán {chunk_size} hành động điều khiển tiếp theo để thực hiện
+nhiệm vụ sau: {instruction}.
 ```
 
 Prompt truyền đạt:
@@ -628,13 +628,13 @@ chứa các giới hạn chung, độ dài liên kết hoặc triển khai bộ 
 Thay vào đó, các ví dụ huấn luyện lặp đi lặp lại sẽ dạy cho mô hình một sự liên kết:
 
 ```text
-Embodiment/control prompt
+Prompt về hiện thân/điều khiển
         ↔
-Observation distribution
+Phân phối quan sát
         ↔
-Action dimensions and normalization
+Số chiều hành động và cách chuẩn hóa
         ↔
-Typical dynamics and motion patterns
+Động lực học và mẫu chuyển động điển hình
 ```
 
 Ví dụ:
@@ -659,7 +659,7 @@ người mẫu hiểu được robot đó.
 
 Khái quát hóa vẫn phụ thuộc vào:
 
-- liệu các phương án tương tự có xuất hiện trong quá trình huấn luyện hay không;
+- liệu các hiện thân tương tự có xuất hiện trong quá trình huấn luyện hay không;
 - liệu các kênh hành động mới có tương thích hay không;
 - liệu chuẩn hóa và giải mã có được xác định hay không;
 - liệu hình thức trực quan và động lực học có đủ giống nhau hay không;
@@ -671,7 +671,7 @@ Prompt văn bản là giao diện điều hòa, không phải là sự thay th�
 
 ## 9. Điểm quan trọng: Qwen-VLA mặc định không sử dụng trạng thái robot
 
-Nhiều VLA action expert hiện đại cung cấp khả năng nhận thức quyền sở hữu một cách rõ ràng như:
+Nhiều VLA có action expert hiện đại cung cấp proprioception rõ ràng như:
 
 $$
 s_t =
@@ -691,28 +691,28 @@ Trên RoboTwin-2.0, kết quả được báo cáo là:
 | ------------------- | ------------: | ------------: |
 | Không có trạng thái |          88,7 |          87,4 |
 | Trạng thái trong dấu nhắc VLM |          89,3 |          88,7 |
-| Bang trong DiT |          89,4 |          88,3 |
+| Trạng thái trong DiT |          89,4 |          88,3 |
 
 Sự cải thiện là nhỏ. Các tác giả gán điều này cho:
 
 - hình ảnh nhiều chế độ xem đã hiển thị cấu hình robot hiện tại;
 - dự đoán hành động tương đối làm giảm sự phụ thuộc vào tham chiếu trạng thái tuyệt đối;
-- chi phí kỹ thuật để duy trì nhiều giao diện trạng thái theo phương án cụ thể.
+- chi phí kỹ thuật để duy trì nhiều giao diện trạng thái riêng cho từng hiện thân.
 
 Do đó, mô hình mặc định giữ:
 
 ```text
-Images
+Hình ảnh
 +
-Instruction
+Chỉ dẫn
 +
-Embodiment-aware text prompt
+Prompt văn bản nhận biết hiện thân
 ```
 
 và không yêu cầu:
 
 ```text
-Joint-angle state vector
+Vectơ trạng thái góc khớp
 ```
 
 Đây là một quyết định thiết kế, không phải là khẳng định rằng khả năng cảm nhận bản thể nói chung là vô dụng.
@@ -748,8 +748,8 @@ $$
 Vì vậy:
 
 ```text
-τ = 0 → clean action
-τ = 1 → pure noise
+τ = 0 → hành động sạch
+τ = 1 → nhiễu thuần túy
 ```
 
 Vận tốc mục tiêu dọc theo đường tuyến tính này là:
@@ -766,10 +766,10 @@ $$
 v_\theta
 \left(
 Y_\tau,\tau
-\giữa
+\mid
 o,x,e,z
-\phải)
-\xấp xỉ
+\right)
+\approx
 Y_1-Y_0
 $$
 
@@ -796,21 +796,21 @@ $$
 Sau đó, nó tính trung bình đồng đều trên các kênh hoạt động $c$:
 
 $$
-\mathcal{L__{\text{act}}
+\mathcal{L}_{\text{act}}
 =
 \mathbb{E}
 \left[
 \frac{1}{c}
 \sum_{k=0}^{c-1}
 \ell_k
-\phải]
+\right]
 $$
 
 Việc tính trung bình hai cấp độ này rất quan trọng vì nếu không thì:
 
 - các mục được đệm có thể ảnh hưởng đến độ dốc;
 - các mẫu có tầm nhìn dài có thể chiếm ưu thế;
-- các phương án có nhiều kênh hành động hơn có thể gây ra nhiều tổn thất hơn chỉ vì
+- các hiện thân có nhiều kênh hành động hơn có thể tạo loss lớn hơn chỉ vì
   chúng có chiều cao hơn.
 
 ## 10.3 Mục tiêu thị giác-ngôn ngữ
@@ -819,7 +819,7 @@ Việc tính trung bình hai cấp độ này rất quan trọng vì nếu khôn
 huấn luyện:
 
 $$
-\mathcal{L__{\text{vl}}
+\mathcal{L}_{\text{vl}}
 =
 -\sum_i
 \log
@@ -844,10 +844,10 @@ $$
 \mathcal{L}
 =
 \lambda_{\text{act}}
-\mathcal{L__{\text{act}}
+\mathcal{L}_{\text{act}}
 +
 \lambda_{\text{vl}}
-\mathcal{L__{\text{vl}}
+\mathcal{L}_{\text{vl}}
 $$
 
 Các hệ số được chọn để cân bằng độ lớn gradient giữa tác động
@@ -864,7 +864,7 @@ Việc huấn luyện toàn bộ kiến trúc cùng nhau ngay từ đầu là kh
 - một DiT mới ban đầu tạo ra những gradient ồn ào, thiếu thông tin;
 - mã hóa hình ảnh đắt tiền;
 - bộ giải mã phải đồng thời tìm hiểu cấu trúc hoạt động, động lực học dòng chảy,
-  điều hòa phương án và nền tảng thị giác.
+  điều kiện hóa theo hiện thân và nền tảng thị giác.
 
 Qwen-VLA chia các vấn đề này thành bốn giai đoạn.
 
@@ -912,7 +912,7 @@ Compact language:
             ↓
 
 High-dimensional trajectory:
-    hundreds or thousands of continuous values
+    hàng trăm hoặc hàng nghìn giá trị liên tục
 ```
 
 Giai đoạn này dạy DiT:
@@ -920,7 +920,7 @@ Giai đoạn này dạy DiT:
 - hình học tổng thể của phân phối hành động;
 - sự gắn kết về mặt thời gian giữa các khối hành động;
 - cách ngôn ngữ tác vụ chọn một họ hành vi;
-- cách gợi ý của phương án thay đổi tham số động cơ;
+- cách prompt về hiện thân thay đổi tham số hóa hành động;
 - làm thế nào để giải quyết vấn đề khử nhiễu phù hợp với dòng chảy.
 
 Vì không có hình ảnh nên DiT không thể sử dụng lối tắt trực quan. Đầu tiên nó học một
@@ -960,7 +960,7 @@ Giai đoạn này dạy:
 
 - nền tảng đối tượng và mục tiêu;
 - lập bản đồ không gian và động học;
-- chuyển giao chéo phương án;
+- chuyển giao giữa các hiện thân;
 - quỹ đạo điều hướng;
 - ưu tiên chuyển động của robot và con người;
 - tiếp tục khả năng thị giác-ngôn ngữ.
@@ -982,7 +982,7 @@ Nó cùng sử dụng các ví dụ được tuyển chọn từ:
 - nối đất không gian;
 - các nhiệm vụ thể hiện khác.
 
-Dữ liệu được lấy mẫu với sự cân bằng giữa nhiệm vụ và phương án để một tập dữ liệu vượt trội thực hiện
+Dữ liệu được lấy mẫu với sự cân bằng giữa tác vụ và hiện thân để một tập dữ liệu vượt trội
 không áp đảo các nhóm nhiệm vụ nhỏ hơn.
 
 ### SFT robot thật
@@ -999,7 +999,7 @@ SFT tối đa hóa khả năng bắt chước, nhưng khả năng trình diễn 
 trực tiếp tối ưu hóa việc thực hiện vòng kín thành công.
 
 Do đó, Qwen-VLA áp dụng học tăng cường bắt đầu từ SFT đa nhiệm
-trạm kiểm soát.
+checkpoint.
 
 Thiết lập RL được báo cáo sử dụng:
 
@@ -1011,7 +1011,7 @@ Về mặt khái niệm:
 
 $$
 \max_\theta
-\mathbb{E__{\pi_\theta}
+\mathbb{E}_{\pi_\theta}
 [
 R(\text{quỹ đạo đã thực hiện})
 ]
@@ -1032,7 +1032,7 @@ Hỗn hợp tiếp tục huấn luyện trước được báo cáo là:
 | Họ dữ liệu | Tỷ lệ lấy mẫu |
 | ------------------------------------- | ------------------: |
 | Quỹ đạo thao tác của robot |               74,2% |
-| Quỹ đạo ích kỷ của con người |                6,0% |
+| Quỹ đạo góc nhìn thứ nhất của con người |                6,0% |
 | Quỹ đạo điều hướng |                7,5% |
 | Quỹ đạo mô phỏng tổng hợp |                3,7% |
 | Dữ liệu thị giác-ngôn ngữ chung |                3,4% |
@@ -1044,23 +1044,23 @@ Hỗn hợp tiếp tục huấn luyện trước được báo cáo là:
 Hỗn hợp kết hợp một số loại giám sát:
 
 ```text
-Robot trajectories
-    → executable motor and controller priors
+Quỹ đạo robot
+    → prior về động cơ và bộ điều khiển có thể thực thi
 
-Human egocentric trajectories
-    → scalable object-interaction and dexterity priors
+Quỹ đạo góc nhìn thứ nhất của con người
+    → prior có khả năng mở rộng về tương tác vật thể và sự khéo léo
 
-Navigation trajectories
-    → long-horizon instruction following and spatial progression
+Quỹ đạo điều hướng
+    → làm theo chỉ dẫn dài hạn và tiến triển trong không gian
 
-Synthetic trajectories
-    → controllable diversity and long-tail configurations
+Quỹ đạo tổng hợp
+    → độ đa dạng có thể kiểm soát và các cấu hình đuôi dài
 
 Spatial grounding and VQA
-    → object reference, geometry, and semantic reasoning
+    → tham chiếu vật thể, hình học và suy luận ngữ nghĩa
 
-General VL data
-    → preservation of broad visual-language capability
+Dữ liệu VL tổng quát
+    → duy trì năng lực ngôn ngữ-thị giác rộng
 ```
 
 Thao tác của robot chiếm đa số, nhưng dữ liệu không phải của robot không chỉ đơn thuần
@@ -1100,10 +1100,10 @@ Target:
 ### 13.2 Prompt bằng văn bản
 
 ```text
-The robot is ALOHA with dual arms.
-The control frequency is 50 Hz.
-Please predict the next 32 control actions to execute the following task:
-Place the red bowl on top of the blue bowl.
+Robot là ALOHA với hai tay máy.
+Tần số điều khiển là 50 Hz.
+Hãy dự đoán 32 hành động điều khiển tiếp theo để thực hiện nhiệm vụ:
+Đặt bát đỏ lên trên bát xanh.
 ```
 
 ### 13.3 Mục tiêu hành động
@@ -1126,7 +1126,7 @@ $$
 và mục tiêu gốc có hình dạng:
 
 $$
-A_{\text{bản địa}}
+A_{\text{native}}
 \in
 \mathbb{R}^{32\times16}
 $$
@@ -1181,12 +1181,12 @@ Mất hành động chỉ được đánh giá khi $M=1$.
 Một minibatch có thể chứa:
 
 ```text
-Sample 1: ALOHA bimanual joint actions
-Sample 2: WidowX end-effector deltas
-Sample 3: VLN relative waypoints
-Sample 4: human bimanual wrist and hand trajectories
-Sample 5: spatial-grounding text answer
-Sample 6: general image question answering
+Mẫu 1: hành động khớp hai tay ALOHA
+Mẫu 2: delta end-effector của WidowX
+Mẫu 3: waypoint tương đối VLN
+Mẫu 4: quỹ đạo cổ tay và bàn tay hai bên của người
+Mẫu 5: câu trả lời văn bản về spatial grounding
+Mẫu 6: trả lời câu hỏi hình ảnh tổng quát
 ```
 
 Không phải mọi mẫu đều sử dụng cả hai tổn thất:
@@ -1201,7 +1201,7 @@ mẫu hành động liên tục
 
 ---
 
-## 14. Luồng dữ liệu suy luận end-to-end: thao tác
+## 14. Luồng dữ liệu suy luận đầu-cuối: thao tác
 
 Hãy xem xét:
 
@@ -1222,10 +1222,10 @@ Observation:
 ### Bước 1: xây dựng prompt
 
 ```text
-The robot is {robot tag} with a single arm.
-The control frequency is 10 Hz.
-Please predict the next 16 control actions to execute the following task:
-Pick up the red cup.
+Robot là {robot tag}, có một tay máy.
+Tần số điều khiển là 10 Hz.
+Hãy dự đoán 16 hành động điều khiển tiếp theo để thực hiện nhiệm vụ:
+Nhấc chiếc cốc đỏ lên.
 ```
 
 ### Bước 2: mã hóa hình ảnh
@@ -1252,10 +1252,10 @@ Token trực quan và nhắc nhở đi qua Qwen3.5.
 Chuỗi ẩn theo ngữ cảnh mã hóa thông tin như:
 
 ```text
-the red cup is left of center
-the gripper is below and behind it
-the requested object is the cup, not the bowl
-the active interface is a 7D delta end-effector action
+chiếc cốc đỏ nằm bên trái tâm ảnh
+gripper nằm thấp hơn và phía sau nó
+vật thể được yêu cầu là chiếc cốc, không phải chiếc bát
+giao diện đang hoạt động là hành động end-effector dạng delta 7D
 ```
 
 Những tuyên bố này là những diễn giải mang tính khái niệm của sự biểu đạt; người mẫu
@@ -1315,15 +1315,15 @@ Chỉ có bảy kênh đầu tiên được giữ lại, sau đó không chuẩn
 ### Bước 7: thực thi bộ điều khiển
 
 ```text
-Predicted end-effector deltas
+Delta end-effector dự đoán
         ↓
-Cartesian impedance or IK controller
+Bộ điều khiển trở kháng Cartesian hoặc IK
         ↓
-Joint targets
+Mục tiêu khớp
         ↓
-Motor controller
+Bộ điều khiển động cơ
         ↓
-Physical motion
+Chuyển động vật lý
 ```
 
 ### Bước 8: tái quy hoạch khép kín
@@ -1345,7 +1345,7 @@ flowchart LR
 
 ---
 
-## 15. Luồng dữ liệu suy luận end-to-end: điều hướng
+## 15. Luồng dữ liệu suy luận đầu-cuối: điều hướng
 
 Hãy xem xét:
 
@@ -1354,8 +1354,8 @@ Instruction:
     "Go through the doorway and stop beside the sofa."
 
 Embodiment:
-    mobile navigation agent
-    relative waypoint convention
+    tác nhân điều hướng di động
+    quy ước waypoint tương đối
     5 Hz
     8-waypoint horizon
 ```
@@ -1390,7 +1390,7 @@ Ví dụ:
 
 Đây là một quỹ đạo địa phương ngắn. Sau đó, bộ điều khiển điều hướng sẽ xử lý:
 
-- lệnh bánh xe hoặc đầu máy;
+- lệnh bánh xe hoặc bộ truyền động;
 - theo dõi đường dẫn cấp thấp;
 - ràng buộc động;
 - tránh va chạm, tùy thuộc vào sự tích hợp hệ thống.
@@ -1426,7 +1426,7 @@ action token 2
         ↓
 ...
         ↓
-decode tokens into continuous control
+giải mã token thành điều khiển liên tục
 ```
 
 Thay vào đó, Qwen-VLA sử dụng:
@@ -1441,15 +1441,15 @@ continuous flow-matching DiT
 parallel multi-step action tensor
 ```
 
-| Bất động sản | RT-2 / kiểu OpenVLA gốc | Qwen-VLA |
+| Thuộc tính | RT-2 / kiểu OpenVLA gốc | Qwen-VLA |
 | ---------------------------------- | --------------------------------------- | ------------------------------------------------------ |
 | Tạo hành động | Token rời rạc tự động | Kết hợp dòng chảy liên tục |
-| Bộ giải mã hành động chính | Trưởng ngôn ngữ VLM | Riêng 1,15B DiT |
+| Bộ giải mã hành động chính | Đầu ngôn ngữ VLM | DiT 1,15B riêng |
 | Dạng tạm thời | Thường là hành động tiếp theo hoặc hành động tuần tự | Đoạn hành động |
 | Lượng tử hóa | Bắt buộc | Không cần thiết cho đầu ra hành động |
 | Phạm vi chính | Thao tác robot | Thao tác, điều hướng, con người và các quỹ đạo khác |
-| Nhiều quy ước hành động | Ánh xạ lại/token tập dữ liệu | Tenor chia sẻ có đệm + mặt nạ + dấu nhắc |
-| Tạo văn bản | Cùng một cái đầu tự thoái lui | Đầu ngôn ngữ VLM vẫn tách biệt |
+| Nhiều quy ước hành động | Ánh xạ lại/token theo tập dữ liệu | Tensor dùng chung có đệm + mặt nạ + prompt |
+| Tạo văn bản | Cùng một đầu tự hồi quy | Đầu ngôn ngữ VLM vẫn tách biệt |
 | Mô hình quỹ đạo tần số cao | Khó khăn hơn do tuần tự hóa | Dự đoán chunk liên tục tự nhiên |
 
 ## 16.2 So với π0 và π0.5
@@ -1459,13 +1459,13 @@ parallel multi-step action tensor
 - VLM được huấn luyện trước;
 - action expert phù hợp với dòng chảy riêng biệt;
 - khối hành động liên tục;
-- huấn luyện theo phương án chéo.
+- huấn luyện trên nhiều hiện thân.
 
 Điểm khác biệt chính không phải là “Qwen-VLA có DiT trong khi π0 không có action expert”.
 Cả hai đều thuộc nhóm action expert VLM-plus-flow-action hiện đại, mặc dù
 tích hợp Transformer cụ thể khác nhau.
 
-| Bất động sản | họ π0 | Qwen-VLA |
+| Thuộc tính | họ π0 | Qwen-VLA |
 | --------------------- | ------------------------------------------------------- | ------------------------------------------------------------------------ |
 | Trọng tâm cốt lõi | Thao tác robot nói chung và thao tác di động | Các tác vụ được thể hiện thống nhất bao gồm thao tác và điều hướng |
 | Xương sống | VLM có nguồn gốc từ PaliGemma trong π0 | VLM đa phương thức gốc Qwen3.5-4B |
@@ -1474,7 +1474,7 @@ tích hợp Transformer cụ thể khác nhau.
 | Action expert | Trọng lượng chuyên gia dành riêng cho robot | DiT 16 khối luồng đơn |
 | Điều hòa | Các quy ước về hình ảnh, ngôn ngữ, trạng thái và cách thể hiện/dữ liệu | Prompt văn bản nhận biết hình ảnh, ngôn ngữ và cách thể hiện |
 | Họ đầu ra | Hành động của robot trên nhiều cấu hình | Hành động của robot, điểm tham chiếu, quỹ đạo của con người, mục tiêu quỹ đạo rộng hơn |
-| Cơ chế thống nhất | Thiết kế chính sách robot đa phương án | Đã sửa lỗi giao diện$H\times K$, phần đệm, mặt nạ và prompt kênh hàng đầu |
+| Cơ chế thống nhất | Thiết kế chính sách robot đa hiện thân | Giao diện $H\times K$ cố định, phần đệm, mặt nạ và prompt cho các kênh đầu |
 | Khởi động luyện tập | Công thức tổng hợp trước/sau huấn luyện | Giai đoạn Chuyển văn bản thành hành động không có hình ảnh rõ ràng trước CPT đa phương thức |
 | Giai đoạn RL | Phụ thuộc vào kiểu máy/phiên bản và công thức | Đã báo cáo giai đoạn RL thành công thưa thớt rõ ràng cho Qwen-VLA-Instruct |
 
@@ -1498,11 +1498,11 @@ khung quỹ đạo.
 Sự đánh đổi là:
 
 ```text
-Specialist head:
-    simpler and cheaper for one output type
+Đầu chuyên biệt:
+    đơn giản và rẻ hơn cho một loại đầu ra
 
-Unified DiT:
-    more expensive, but can share action and trajectory priors across tasks
+DiT thống nhất:
+    tốn kém hơn, nhưng có thể chia sẻ prior hành động và quỹ đạo giữa các tác vụ
 ```
 
 ---
@@ -1534,7 +1534,7 @@ mô hình có thể tìm hiểu các quy luật rộng rãi:
 Do đó T2A học được:
 
 $$
-p(Y\giữa x,e)
+p(Y\mid x,e)
 $$
 
 CPT sau đó học được cách phân phối dựa trên cảnh sắc nét hơn:
@@ -1550,10 +1550,10 @@ Một cách giải thích hữu ích là:
 
 ```text
 T2A:
-    learn what trajectories of this task and embodiment usually look like
+    học hình dạng thường gặp của quỹ đạo cho tác vụ và hiện thân này
 
 CPT:
-    learn which specific trajectory fits this observed scene
+    học quỹ đạo cụ thể nào phù hợp với cảnh quan sát được
 ```
 
 ---
@@ -1701,13 +1701,13 @@ Cùng một DiT xử lý số lượng kênh và phạm vi kênh thông qua dấ
 
 ```text
 VLM:
-    semantic and spatial understanding
+    hiểu biết ngữ nghĩa và không gian
 
 DiT:
-    continuous temporal action generation
+    sinh hành động liên tục theo thời gian
 
-Robot adapter:
-    physical interpretation and execution
+Bộ điều hợp robot:
+    diễn giải vật lý và thực thi
 ```
 
 ### Lộ trình huấn luyện có cấu trúc
@@ -1762,13 +1762,13 @@ hệ thống triển khai.
 Cách chính xác nhất để hiểu Qwen-VLA là:
 
 ```text
-It is not one universal robot controller with one universal action meaning.
+Đây không phải một bộ điều khiển robot phổ quát với một ý nghĩa hành động phổ quát.
 
-It is one shared multimodal model and one shared continuous trajectory generator
-that can learn several embodiment-specific action languages.
+Đây là một mô hình đa phương thức dùng chung và một bộ sinh quỹ đạo liên tục dùng chung,
+có thể học nhiều ngôn ngữ hành động dành riêng cho từng hiện thân.
 ```
 
-Prompt phương án cho mô hình biết ngôn ngữ hành động nào đang hoạt động. Các đệm
+Prompt hiện thân cho mô hình biết ngôn ngữ hành động nào đang hoạt động. Tensor đệm
 tensor và mặt nạ cung cấp một cấu trúc tính toán chung. Nguồn cung cấp VLM
 sự hiểu biết đa phương thức. DiT biến sự hiểu biết đó thành một sự mạch lạc
 trình tự liên tục.

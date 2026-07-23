@@ -1,16 +1,17 @@
 # Rotary Position Embedding (RoPE)
 
-**Improves:** additive absolute position embeddings used by the original
-Transformer.
-**Primary goal:** make attention scores depend naturally on relative position
-while encoding position through a cheap, deterministic transformation of Q and K, remove the need of learned position encoding or fixed encoding.
+**Cải thiện:** embedding vị trí tuyệt đối dạng cộng được Transformer gốc sử dụng.
+**Mục tiêu chính:** khiến điểm attention phụ thuộc tự nhiên vào vị trí tương đối,
+đồng thời mã hóa vị trí bằng phép biến đổi xác định, chi phí thấp trên Q và K,
+không cần embedding vị trí học được hoặc cố định.
 
-Simple explaination: Spin the **Q, K value** by an angle (with sin, cos), rotation speed change base on position.
+**Giải thích đơn giản:** xoay **Q và K** theo góc dùng sin/cos, với tốc độ quay
+phụ thuộc vị trí.
 
-## What changed from absolute position embeddings
+## Điều gì đã thay đổi từ việc nhúng vị trí tuyệt đối
 
-The original Transformer adds a position vector `p_m` to the content embedding
-at position `m`:
+Transformer ban đầu thêm vectơ vị trí `p_m` vào phần nhúng nội dung
+tại vị trí `m`:
 
 $$
 \begin{aligned}
@@ -20,12 +21,12 @@ k_m &= W_kh_m
 \end{aligned}
 $$
 
-Position and content are mixed before all projections. Learned absolute tables
-also have a fixed trained range; sinusoidal tables can be evaluated farther out,
-but the attention score does not obtain a relative-position form by construction.
+Vị trí và nội dung được trộn lẫn trước mọi dự đoán. Đã học bảng tuyệt đối
+cũng có phạm vi đào tạo cố định; bảng hình sin có thể được đánh giá xa hơn,
+nhưng điểm chú ý không đạt được dạng vị trí tương đối bằng cách xây dựng.
 
-RoPE instead projects content first, then **rotates pairs of Q and K** dimensions by an angle determined by token position. For frequency `theta_i` and the
-two-dimensional pair `(2i, 2i+1)`:
+Thay vào đó, RoPE chiếu nội dung trước, sau đó **xoay cặp kích thước Q và K** theo một góc được xác định bởi vị trí mã thông báo. Đối với tần số `theta_i` và
+cặp hai chiều `(2i, 2i+1)`:
 
 $$
 \begin{bmatrix}
@@ -43,8 +44,8 @@ q_{2i+1}
 \end{bmatrix}
 $$
 
-The same operation is applied to K. Values V are normally not rotated. In
-compact notation:
+Thao tác tương tự được áp dụng cho K. Giá trị V thường không được xoay. TRONG
+ký hiệu thu gọn:
 
 $$
 \begin{aligned}
@@ -56,12 +57,12 @@ k'_n &= R_nk_n, \\
 \end{aligned}
 $$
 
-Because rotations compose by angle difference, the dot product contains the
-relative displacement `n - m`, even though each vector was transformed using
-its absolute position. This is the core RoPE result.
+Bởi vì các phép quay được tạo thành bởi hiệu số góc nên tích chấm chứa
+độ dịch chuyển tương đối `n - m`, mặc dù mỗi vectơ được biến đổi bằng cách sử dụng
+vị trí tuyệt đối của nó. Đây là kết quả RoPE cốt lõi.
 ([RoFormer, §3](https://arxiv.org/abs/2104.09864))
 
-## Dataflow example
+## Ví dụ về luồng dữ liệu
 
 ```mermaid
 flowchart LR
@@ -76,52 +77,52 @@ flowchart LR
     V --> O[P V]
 ```
 
-Consider the phrase `the robot grasped it`, with `robot` at position 1 and `it`
-at position 3. The compatibility score between the query for `it` and the key
-for `robot` includes rotations corresponding to displacement `1 - 3 = -2`.
-If the same local relation occurs later in a document, the absolute positions
-change but the relative displacement term can remain the same.
+Hãy xét cụm từ `robot đã nắm lấy nó`, với `robot` ở vị trí 1 và `nó`
+ở vị trí 3. Điểm tương thích giữa truy vấn `it` và khóa
+đối với `robot` bao gồm các phép quay tương ứng với độ dịch chuyển `1 - 3 = -2`.
+Nếu mối quan hệ cục bộ tương tự xuất hiện sau này trong tài liệu thì các vị trí tuyệt đối
+thay đổi nhưng số hạng dịch chuyển tương đối có thể giữ nguyên.
 
-## What RoPE improves—and what it does not
+## RoPE cải thiện những gì - và những gì không
 
-RoPE is attractive because it adds no learned position table, preserves vector
-norm under rotation, is cheap to fuse into attention kernels, and exposes
-relative displacement directly in Q/K dot products. The RoFormer paper also
-derives a long-range decay property for its frequency schedule.
-([RoFormer analysis](https://arxiv.org/abs/2104.09864))
+RoPE hấp dẫn vì nó không thêm bảng vị trí đã học, bảo toàn vectơ
+định mức theo vòng quay, rất rẻ để kết hợp vào các hạt nhân chú ý và hiển thị
+chuyển vị tương đối trực tiếp trong tích Q/K chấm. Bài báo RoFormer cũng
+lấy được đặc tính phân rã tầm xa cho biểu đồ tần số của nó.
+([Phân tích RoFormer](https://arxiv.org/abs/2104.09864))
 
-However, “can calculate rotations at any position” is not the same as “the model
-generalizes to any length.” At positions much longer than training:
+Tuy nhiên, “có thể tính toán phép quay ở vị trí bất kỳ” không giống như “mô hình
+khái quát hóa đến bất kỳ chiều dài nào.” Ở những vị trí lâu hơn nhiều so với thời gian đào tạo:
 
-- high-frequency dimensions may rotate through unfamiliar phases;
-- different positions can become hard to distinguish because of phase aliasing;
-- attention logits and learned circuits were optimized only on shorter relative
-  distances;
-- changing the RoPE base or scaling frequencies trades short-range resolution
-  against long-range coverage.
+- các chiều tần số cao có thể quay qua các pha lạ;
+- các vị trí khác nhau có thể trở nên khó phân biệt do hiện tượng răng cưa pha;
+- nhật ký chú ý và mạch học chỉ được tối ưu hóa trên các thiết bị tương đối ngắn hơn
+  khoảng cách;
+- thay đổi tần số cơ sở RoPE hoặc tần số chia tỷ lệ sẽ mang lại độ phân giải tầm ngắn
+  chống lại sự bao phủ tầm xa.
 
-This is why later systems combine RoPE with techniques such as a larger base
-frequency, [YaRN](YaRN.md), position interpolation, or [DCA](DCA.md). The YaRN paper explicitly starts
-from the observation that ordinary RoPE models fail to generalize reliably past
-their trained length. ([Peng et al., 2023](https://arxiv.org/abs/2309.00071))
+Đây là lý do tại sao các hệ thống sau này kết hợp RoPE với các kỹ thuật như đế lớn hơn
+tần số, [YaRN](YaRN.md), nội suy vị trí hoặc [DCA](DCA.md). Bài báo YaRN bắt đầu một cách rõ ràng
+từ quan sát rằng các mô hình RoPE thông thường không khái quát hóa được quá khứ một cách đáng tin cậy.
+chiều dài được đào tạo của họ. ([Peng và cộng sự, 2023](https://arxiv.org/abs/2309.00071))
 
-## How Qwen uses it
+## Qwen sử dụng nó như thế nào
 
-**Verified:** Qwen2 keeps RoPE from Qwen, increases the base frequency from
-10,000 to 1,000,000 during long-context training, and combines it with YaRN and
-DCA for inference up to 131,072 tokens.
-([Qwen2 Technical Report, §§2.2 and 3.2](https://arxiv.org/abs/2407.10671))
+**Đã xác minh:** Qwen2 giữ RoPE khỏi Qwen, tăng tần số cơ bản từ
+10.000 đến 1.000.000 trong quá trình đào tạo theo ngữ cảnh dài và kết hợp nó với YaRN và
+DCA để suy luận lên tới 131.072 mã thông báo.
+([Báo cáo kỹ thuật Qwen2, §§2.2 và 3.2](https://arxiv.org/abs/2407.10671))
 
-**Verified:** Qwen3 retains RoPE and the long-context recipe: its final
-pretraining stage again uses base frequency 1,000,000 with YaRN and DCA.
-([Qwen3 Technical Report, §§2 and 3.2](https://arxiv.org/abs/2505.09388))
+**Đã xác minh:** Qwen3 giữ lại RoPE và công thức ngữ cảnh dài: cuối cùng của nó
+giai đoạn tiền huấn luyện lại sử dụng tần số cơ bản 1.000.000 với YaRN và DCA.
+([Báo cáo kỹ thuật Qwen3, §§2 và 3.2](https://arxiv.org/abs/2505.09388))
 
-**Verified:** Qwen3-Next applies RoPE only to the first 25% of the head
-dimensions in its gated full-attention layers. This “partial RoPE” leaves other
-dimensions position-independent, an explicit long-context extrapolation design
-choice rather than ordinary full-dimensional RoPE.
-([official Qwen3-Next architecture post](https://qwen.ai/blog?id=e34c4305036ce60d55a0791b170337c2b70ae51d))
+**Đã xác minh:** Qwen3-Next chỉ áp dụng RoPE cho 25% phần đầu đầu tiên
+kích thước trong các lớp chú ý đầy đủ được kiểm soát của nó. “RoPE một phần” này để lại phần còn lại
+kích thước không phụ thuộc vào vị trí, thiết kế ngoại suy theo ngữ cảnh dài rõ ràng
+sự lựa chọn thay vì RoPE đầy đủ chiều thông thường.
+([bài đăng kiến ​​trúc Qwen3-Next chính thức](https://qwen.ai/blog?id=e34c4305036ce60d55a0791b170337c2b70ae51d))
 
-For Qwen-VL variants, multidimensional or multimodal RoPE extends the same idea
-to temporal/height/width axes. That is a modality-fusion extension and is not
-identical to the one-dimensional text RoPE analyzed here.
+Đối với các biến thể Qwen-VL, RoPE đa chiều hoặc đa phương thức cũng mở rộng ý tưởng tương tự
+theo trục thời gian/chiều cao/chiều rộng. Đó là một phần mở rộng kết hợp phương thức và không phải
+giống hệt với văn bản một chiều RoPE được phân tích ở đây.
