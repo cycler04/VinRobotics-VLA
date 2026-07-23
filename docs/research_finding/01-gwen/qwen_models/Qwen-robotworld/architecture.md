@@ -19,48 +19,32 @@ Ngôn ngữ là action interface chung cho robot gắp vật, xe tự hành, nav
 ### End-to-end data flow
 
 ```text
-┌─────────────────────────────────────────────────────────────┐
-│ Inputs: language action S, current observation x₀            │
-│ Optional: multi-view / scene video / robot reference        │
-└───────────────────────────────┬─────────────────────────────┘
-                                │
-                ┌───────────────┴───────────────┐
-                ▼                               ▼
-       Frozen Qwen2.5-VL                  Wan-VAE Encoder
-                │                               │
-        action semantics h                visual latent z
-                │                               │
-        trainable connector               condition mask + noise
-                ▼                               ▼
-       Understanding tokens              Patchified video tokens
-                │                               │
-                └──────────────┬────────────────┘
-                               ▼
-                  60 × Double-Stream MMDiT
-                  ┌───────────────────────────┐
-                  │ Joint attention per layer │
-                  │ 3D asymmetric RoPE        │
-                  │ timestep conditioning     │
-                  │ language ↔ video fusion   │
-                  └───────────────────────────┘
-                               │
-                               ▼
-                      Predicted velocity field
-                               │
-                               ▼
-                     Flow-matching integration
-                               │
-                               ▼
-                       Clean future latents
-                               │
-                               ▼
-                           Unpatchify
-                               │
-                               ▼
-                       Wan-VAE Decoder
-                               │
-                               ▼
-             Physically plausible future visual trajectory
+Language action
+      ↓
+Frozen Qwen2.5-VL
+      ↓
+Action semantic tokens
+      ↓
+Trainable connector
+      ↓
+                         ┌─────────────────────┐
+Current frame/video ────>│                     │
+      ↓                  │  Double-stream     │
+Wan-VAE Encoder          │  MMDiT × 60        │
+      ↓                  │                     │
+Visual latent + noise ──>│ Action ↔ Video     │
+                         │ Joint Attention    │
+                         └──────────┬──────────┘
+                                    ↓
+                         Predicted velocity field
+                                    ↓
+                           Flow-matching sampling
+                                    ↓
+                           Clean future latent
+                                    ↓
+                           Wan-VAE Decoder
+                                    ↓
+                         Future video trajectory
 ```
 
 Trong training, target video được encode thành clean latent, trộn với Gaussian noise ở timestep `t`; MMDiT học velocity field để đi từ noise về clean latent. Khi inference, flow-matching được tích phân qua nhiều timestep để tạo trajectory tương lai.

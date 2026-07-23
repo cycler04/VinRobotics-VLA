@@ -103,12 +103,12 @@ Mục tiêu là duy trì consistency trong iterative coding và agent loop, đ�
 
 ## 7. Khác Qwen3.5
 
-| Qwen3.5 | Qwen3.6 |
-|---|---|
-| Foundation → SFT → reasoning/agent post-training | Giữ nền tảng, tăng trọng tâm agentic coding |
-| Thinking theo lượt gần nhất | Có training/option `preserve_thinking` |
-| General multimodal agents | Frontend, repository, terminal và tool workflows nổi bật hơn |
-| Không có training recipe đầy đủ | Vẫn không công bố recipe đầy đủ |
+| Qwen3.5                                            | Qwen3.6                                                          |
+| -------------------------------------------------- | ---------------------------------------------------------------- |
+| Foundation → SFT → reasoning/agent post-training | Giữ nền tảng, tăng trọng tâm agentic coding                |
+| Thinking theo lượt gần nhất                    | Có training/option`preserve_thinking`                         |
+| General multimodal agents                          | Frontend, repository, terminal và tool workflows nổi bật hơn |
+| Không có training recipe đầy đủ              | Vẫn không công bố recipe đầy đủ                          |
 
 Qwen3.6 được mô tả là xây dựng trên nền Qwen3.5. Cách hiểu thận trọng là **continued/post-training update**:
 
