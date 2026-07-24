@@ -92,9 +92,7 @@ Velocity này chỉ hướng mà action chunk hiện tại nên di chuyển tron
 Từ velocity này, code ước lượng action chunk sạch:
 
 $$
-\hat A_1
-=
-x_\tau+(1-\tau)v_\theta.
+\hat A_1 = x_\tau + (1-\tau)v_\theta.
 $$
 
 Phép ước lượng này nằm trong hàm `denoiser` bên trong
@@ -109,9 +107,7 @@ $$
 Sai số được nhân với soft mask `W`:
 
 $$
-e
-=
-W\odot(Y-\hat A_1).
+e = W\odot(Y-\hat A_1).
 $$
 
 `W` quyết định vị trí nào phải bám chặt vào chunk cũ, vị trí nào chỉ bám nhẹ, và vị trí nào được sinh tự do.
@@ -119,9 +115,7 @@ $$
 Correction được backpropagate qua denoiser bằng VJP:
 
 $$
-\Delta v
-=
-J^\top e.
+\Delta v = J^\top e.
 $$
 
 Hai dòng `jax.vjp(...)` và `vjp_fun(...)` hiện thực trực tiếp phép tính này tại
@@ -130,9 +124,7 @@ Hai dòng `jax.vjp(...)` và `vjp_fun(...)` hiện thực trực tiếp phép t�
 **Velocity cuối cùng là:**
 
 $$
-v_{\text{RTC}}
-=
-v_\theta+\lambda(\tau)\Delta v,
+v_{\text{RTC}} = v_\theta + \lambda(\tau)\Delta v,
 $$
 
 trong đó:
@@ -162,7 +154,7 @@ $$
 - $Y-\hat A_1$: sai số giữa kế hoạch cũ và kế hoạch mới.
 - $W$: **soft-mask weight**, quyết định timestep nào phải bám chặt vào kế hoạch cũ và timestep nào được thay đổi tự do.
 - $e = W\odot(Y-\hat A_1)$: weighted error chỉ giữ lại phần sai số cần được ưu tiên sửa. Coi như là hướng chỉnh của velocity.
-- $J=\dfrac{\partial\hat A_1}{\partial x_t}$: Jacobian của denoiser, biểu diễn độ nhạy của clean chunk đối với thay đổi của noisy chunk. Coi như là 1 mapping giữa $\hat A_1$ và $x_\tau$.
+- $J=\dfrac{\partial\hat A_1}{\partial x_t}$: Jacobian của denoiser, biểu diễn độ nhạy của clean chunk đối với thay đổi của noisy chunk. Coi như là một mapping giữa $\hat A_1$ và $x_t$.
 - $J^\top e$: **VJP (Vector-Jacobian Product)**, backpropagate weighted error từ clean chunk về noisy chunk để tạo correction cho velocity.
 - $\lambda(\tau)$: hệ số guidance được tính từ
 
@@ -171,8 +163,8 @@ $$
 =
 \min
 \left(
-c(\tau)\,r^{-2}(\tau),
-\beta
+ c(\tau)\,r^{-2}(\tau),
+ \beta
 \right),
 $$
 
@@ -185,7 +177,7 @@ trong đó:
 Phần tính guidance scale và clipping nằm tại [`model.py` dòng 247–251](../../../../../third_party/01_real-time-chunking-kinetix/src/model.py#L247).
 Evaluation mặc định đặt `β = 5` tại [`eval_flow.py` dòng 29–33](../../../../../third_party/01_real-time-chunking-kinetix/src/eval_flow.py#L29).
 
-Euler update sau đó dùng `v_RTC` thay cho velocity gốc.
+Euler update sau đó d��ng `v_RTC` thay cho velocity gốc.
 
 Điểm quan trọng: code không dựng Jacobian đầy đủ và không tính pseudoinverse tường minh.
 `jax.vjp` chỉ tính trực tiếp vector-Jacobian product `Jᵀe`.
@@ -202,11 +194,11 @@ Euler update sau đó dùng `v_RTC` thay cho velocity gốc.
 
 Ba vùng của chunk mới là:
 
-| Vùng          |     Weight | Ý nghĩa                                |
-| -------------- | ---------: | ---------------------------------------- |
-| `i < d`      |      `1` | Action đã cam kết, phải giữ chắc   |
-| `d <= i < e` | giảm dần | Soft overlap, ưu tiên tính liên tục |
-| `i >= e`     |      `0` | Không còn guidance, sinh tự do        |
+| Vùng         | Weight   | Ý nghĩa                              |
+| ------------ | --------: | ------------------------------------ |
+| `i < d`      | `1`       | Action đã cam kết, phải giữ chắc      |
+| `d <= i < e` | giảm dần  | Soft overlap, ưu tiên tính liên tục   |
+| `i >= e`     | `0`       | Không còn guidance, sinh tự do        |
 
 Các schedule được hiện thực trong
 [`get_prefix_weights`, `model.py` dòng 40–63](../../../../../third_party/01_real-time-chunking-kinetix/src/model.py#L40).
@@ -399,8 +391,8 @@ Sự tương đồng có thể tóm tắt như sau:
 
 | Image inpainting   | RTC                  |
 | ------------------ | -------------------- |
-| Ảnh gốc          | Chunk cũ            |
-| Known pixels       | Action đã cam kết |
+| Ảnh gốc            | Chunk cũ             |
+| Known pixels       | Action đã cam kết    |
 | Soft boundary      | Soft overlap         |
 | Missing region     | Free postfix         |
 | Denoising guidance | Flow VJP guidance    |
@@ -417,10 +409,10 @@ trọng số giảm dần theo tương lai.
 
 ## Hai branch trong `realtime_action`
 
-| Điều kiện                    | Cách sampling                                     |
-| ------------------------------- | -------------------------------------------------- |
-| `simulated_delay is None`     | Dùng inference-time VJP guidance                  |
-| `simulated_delay is not None` | Dùng hard-prefix sampling, không gọi`jax.vjp` |
+| Điều kiện                   | Cách sampling                                     |
+| --------------------------- | -------------------------------------------------- |
+| `simulated_delay is None`   | Dùng inference-time VJP guidance                  |
+| `simulated_delay is not None` | Dùng hard-prefix sampling, không gọi `jax.vjp`   |
 
 Hai branch được chọn tại
 [`model.py` dòng 253–260](../../../../../third_party/01_real-time-chunking-kinetix/src/model.py#L253).
@@ -442,10 +434,10 @@ Hai branch được chọn tại
 - [`src/model.py`](../../../../../third_party/01_real-time-chunking-kinetix/src/model.py):
   - time embedding: [dòng 21–34](../../../../../third_party/01_real-time-chunking-kinetix/src/model.py#L21);
   - prefix schedules: [dòng 40–63](../../../../../third_party/01_real-time-chunking-kinetix/src/model.py#L40);
-  - model input và broadcast time: [dòng 140–158](../../../../../third_party/01_real-time-chunking-kinetix/src/model.py#L140);
-  - sampler tiêu chuẩn: [dòng 160–171](../../../../../third_party/01_real-time-chunking-kinetix/src/model.py#L160);
-  - RTC VJP guidance: [dòng 219–265](../../../../../third_party/01_real-time-chunking-kinetix/src/model.py#L219).
-- [`eval_flow.py` dòng 29–33](../../../../../third_party/01_real-time-chunking-kinetix/src/eval_flow.py#L29)
+  - model input và broadcast time: [dòng 140–158](../../../../../third_party/01-real-time-chunking-kinetix/src/model.py#L140);
+  - sampler tiêu chuẩn: [dòng 160–171](../../../../../third_party/01-real-time-chunking-kinetix/src/model.py#L160);
+  - RTC VJP guidance: [dòng 219–265](../../../../../third_party/01-real-time-chunking-kinetix/src/model.py#L219).
+- [`eval_flow.py` dòng 29–33](../../../../../third_party/01-real-time-chunking-kinetix/src/eval_flow.py#L29)
   cho thiết lập evaluation mặc định.
 - *Real-Time Execution of Action Chunking Flow Policies*, Mục 3.1–3.3 và Phụ lục A.2, A.4:
   [PDF cục bộ](<../../../../papers/02-realtime-chunking/Real-Time Execution of Action Chunking Flow Policies.pdf>).
