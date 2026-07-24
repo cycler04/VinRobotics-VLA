@@ -16,10 +16,7 @@ Sau đó đọc đúng workflow trong [`.agents/workflows/`](.agents/workflows/)
 [`.agents/memory/MEMORY.md`](.agents/memory/MEMORY.md); kế hoạch nghiên cứu nằm ở
 [`.agents/plans/`](.agents/plans/).
 
-Codex tự discover skill trong `.agents/skills/`. Với việc đọc artifact hoặc tài liệu dài,
-delegate cho custom agent `dataset_artifact_reader` hoặc `research_reader`; wrapper nằm ở
-`.codex/agents/`, còn hướng dẫn thật vẫn nằm trong `.agents/agents/`. Sau khi sửa hạ tầng,
-chạy `python3 .agents/scripts/01_validate_workspace.py --full`.
+Các AI Agent (Antigravity, Codex, v.v.) tự discover skill trong `.agents/skills/`. Với việc đọc artifact hoặc tài liệu dài, delegate cho custom agent `dataset_artifact_reader` hoặc `research_reader`; wrapper của Codex nằm ở `.codex/agents/`, còn hướng dẫn thật cho agent nằm trong `.agents/agents/`. Sau khi sửa hạ tầng, chạy `python3 .agents/scripts/01_validate_workspace.py --full`.
 
 ## Ba bẫy nguy hiểm nhất
 
