@@ -150,14 +150,13 @@ $$
 
 $$
 \lambda(\tau)
-=
-\min\left(
+= \min\left(
  c(\tau)\,r^{-2}(\tau),
  \beta
-\right),
+\right).
 $$
 
-trong đó:
+Trong đó:
 
 - $c(\tau) = \dfrac{1-\tau}{\tau}$: correction factor lớn ở đầu quá trình sampling và giảm dần khi tiến tới endpoint.
 - $r^{-2}(\tau) = \dfrac{\tau^2 + (1-\tau)^2}{(1-\tau)^2}$: hệ số chuẩn hóa được suy ra từ bài toán inverse guidance của Flow Matching.
@@ -183,11 +182,11 @@ Euler update sau đó dùng `v_RTC` thay cho velocity gốc.
 
 Ba vùng của chunk mới là:
 
-| Vùng         | Weight   | Ý nghĩa                              |
-| ------------ | -------- | ------------------------------------ |
-| `i < d`      | `1`      | Action đã cam kết, phải giữ chắc      |
+| Vùng         | Weight  | Ý nghĩa                              |
+| ------------ | ------- | ------------------------------------ |
+| `i < d`      | `1`     | Action đã cam kết, phải giữ chắc      |
 | `d <= i < e` | giảm dần | Soft overlap, ưu tiên tính liên tục   |
-| `i >= e`     | `0`      | Không còn guidance, sinh tự do        |
+| `i >= e`     | `0`     | Không còn guidance, sinh tự do       |
 
 Các schedule được hiện thực trong
 [`get_prefix_weights`, `model.py` dòng 40–63](../../../../../third_party/01-real-time-chunking-kinetix/src/model.py#L40).
@@ -273,8 +272,8 @@ Giả sử tại một flow timestep:
 
 ```text
 v_\theta       = [0.4, 0.2, -0.2]
-J^\top e      = [0.1, 0.05, 0]
-\lambda(\tau)     = 2
+J^\top e       = [0.1, 0.05, 0]
+\lambda(\tau)  = 2
 ```
 
 Correction là:
@@ -398,10 +397,10 @@ trọng số giảm dần theo tương lai.
 
 ## Hai branch trong `realtime_action`
 
-| Điều kiện                     | Cách sampling                                   |
-| ----------------------------- | ---------------------------------------------- |
-| `simulated_delay is None`     | Dùng inference-time VJP guidance                |
-| `simulated_delay is not None` | Dùng hard-prefix sampling, không gọi `jax.vjp`   |
+| Điều kiện                    | Cách sampling                                   |
+| --------------------------- | ---------------------------------------------- |
+| `simulated_delay is None`   | Dùng inference-time VJP guidance                |
+| `simulated_delay is not None` | Dùng hard-prefix sampling, không gọi `jax.vjp` |
 
 Hai branch được chọn tại
 [`model.py` dòng 253–260](../../../../../third_party/01-real-time-chunking-kinetix/src/model.py#L253).
