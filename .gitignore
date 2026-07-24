@@ -69,10 +69,10 @@ htmlcov/
 *.swo
 *~
 
-# Local AI agent configuration and workspace state
+# Local AI agent state. Shared knowledge and the thin Codex adapter are tracked.
 /.agent/
-/.agents/
-/.codex/
+/.codex/*
+!/.codex/config.toml
 
 # Editors and OS metadata
 .idea/
