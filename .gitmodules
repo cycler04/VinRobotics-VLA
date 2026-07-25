@@ -1,3 +1,6 @@
 [submodule "third_party/01_real-time-chunking-kinetix"]
 	path = third_party/01_real-time-chunking-kinetix
 	url = https://github.com/Physical-Intelligence/real-time-chunking-kinetix.git
+[submodule "third_party/02_vla_core"]
+	path = third_party/02_vla_core
+	url = https://github.com/VietnamRobotics/vla_core.git
