@@ -1,150 +1,246 @@
-# Tổng quan `vla_core`
+# `vla_core`: tổng quan model, action head và contract dữ liệu
 
-## Câu hỏi nghiên cứu
+> **Phạm vi.** Đây là overview của implementation `third_party/02_vla_core`, đọc tĩnh
+> từ working tree ngày 2026-07-26 (HEAD `233396b`, có thay đổi chưa commit). Các shape
+> và phép biến đổi dưới đây là **Verified (static)** từ code; sample là **Illustrative**,
+> không phải một inference đã chạy. Chưa có runtime end-to-end vì workspace thiếu model
+> weights, `torch`, `transformers` và package `data_corpus`.
 
-Snapshot `third_party/02_vla_core` thực sự triển khai phần nào của một hệ thống
-Vision-Language-Action, dữ liệu đi qua model ra sao, và cần bổ sung bằng chứng gì trước khi
-có thể xem nó là pipeline train/inference dùng được?
+## Ý chính
 
-Phạm vi báo cáo chỉ gồm code có trong snapshot ngày 2026-07-24. Báo cáo không đánh giá chất
-lượng Qwen3.5, không kiểm chứng corpus bên ngoài và không suy diễn kết quả huấn luyện chưa có.
+`vla_core` không biến action thành token rồi autoregress từng động tác. Nó ghép một
+**Qwen3.5 vision-language backbone** với một **flow-matching action head** riêng:
 
-## Câu trả lời ngắn
+- Qwen đọc ảnh và câu lệnh, trả hidden state ở mọi layer.
+- Action head nhận một action chunk đang nhiễu, timestep của quá trình denoise, và các
+  hidden state đó; nó dự đoán **velocity field**, không phải robot command trực tiếp.
+- Sau bốn bước Euler, velocity field biến Gaussian noise thành một chunk action liên tục
+  `16 × 153`. Chunk này vẫn ở normalized action space; adapter chưa denormalize hay gửi
+  lệnh sang robot.
 
-`vla_core` là một prototype pretraining nhỏ, tập trung vào cầu nối từ hidden state của
-Qwen3.5-0.8B sang action chunk liên tục:
+Với config run-1, mỗi chunk bao phủ 1,6 giây tại 10 Hz. Đây là prototype pretraining
+cho human ego clips, không phải robot-control stack hoàn chỉnh.
 
-1. một ảnh ego và prompt được đóng gói theo chat template của Qwen;
-2. Qwen trả hidden state ở mọi layer;
-3. hidden state được tách thành vision token và narrative token;
-4. một `ActionHead` 24 block dùng cross-attention để dự đoán velocity field của action
-   chunk;
-5. lúc inference, velocity được tích phân Euler bốn bước từ Gaussian noise để tạo action.
+![VLA-Core architecture overview](model_overview.png)
 
-Run-1 dùng chunk `16 × 153`, tương ứng 1,6 giây ở 10 Hz. Mỗi step chứa chuyển động đầu và
-pose/keypoint của hai tay. Proprioception có module hỗ trợ nhưng bị tắt trong cấu hình run-1.
 
 ```mermaid
 flowchart TD
-    FRAME[Khung hình ego]
-    TEXT[Task, history, narrative]
-    PROC[VLAProcessor]
+    IMG[1–3 ảnh RGB]
+    TXT[Task + history]
+    PROC[Qwen processor / chat template]
     QWEN[Qwen3.5-0.8B]
-    SPLIT[Tách hidden state theo token]
-    VIS[Vision states mọi layer]
-    NAR[Narrative states mọi layer]
-    NOISE[Noisy action và timestep]
-    HEAD[ActionHead 24 block]
-    VEL[Velocity field]
-    ACT[Action chunk 16 x 153]
+    SPLIT[Tách image và non-image hidden states<br/>ở mọi layer]
+    NOISE[Noisy action chunk x_t<br/>B × 16 × 153]
+    TIME[Flow timestep t]
+    HEAD[ActionHead<br/>24 cross-attention blocks]
+    VEL[Velocity field v-hat<br/>B × 16 × 153]
+    EULER[4 bước Euler]
+    OUT[Normalized action chunk<br/>B × 16 × 153]
 
-    FRAME --> PROC
-    TEXT --> PROC
+    IMG --> PROC
+    TXT --> PROC
     PROC --> QWEN
     QWEN --> SPLIT
-    SPLIT --> VIS
-    SPLIT --> NAR
-    VIS --> HEAD
-    NAR --> HEAD
+    SPLIT --> HEAD
     NOISE --> HEAD
+    TIME --> HEAD
     HEAD --> VEL
-    VEL --> ACT
+    VEL --> EULER
+    EULER --> OUT
 ```
 
-Đây chưa phải VLA stack hoàn chỉnh. Snapshot phụ thuộc một repo `data_corpus` không đi kèm,
-không khai báo dependency có thể tái tạo, chưa có evaluation implementation, checkpoint
-loader, robot runtime hoặc bằng chứng một run end-to-end đã thành công.
+## Ba thành phần của model
 
-## Những gì đã xác minh
+| Thành phần                    | Vai trò                                                                 | Contract mặc định                                                                                                |
+| ------------------------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------- |
+| Qwen backbone                   | Mã hóa ảnh + ngôn ngữ, đồng thời có thể học narrative LM loss | `Qwen/Qwen3.5-0.8B`, 24 text layer, hidden width 1024; language model và vision model được freeze mặc định |
+| `ProprioEncoder` (tùy chọn) | Mã hóa proprioception thành một context token                        | `P → 512 → 512 → 1024`; **không active** khi `proprio_dim=None` ở run-1                              |
+| `ActionHead`                  | Sinh action chunk liên tục bằng conditional flow matching             | 24 block, width 1024, 8 attention head; input/output là`16 × 153`                                               |
 
-**Verified bằng đọc code tĩnh tại nested-repo commit
-`4c0f2d86d46df8935ade3f5c63ef83013d6c15a6`:**
+Qwen không bị ép thành một pooled feature. `extract_hidden_states()` giữ embedding output
+và hidden state mỗi layer, rồi tách chúng theo vị trí `image_token_id` thành hai stream:
 
-- Backbone mặc định là `Qwen/Qwen3.5-0.8B`; inner language model và vision model đều bị
-  freeze theo mặc định. Code không freeze rõ outer `lm_head`, nên trạng thái trainable của
-  output head còn phụ thuộc cấu trúc/tied-weight của model được tải
-  ([`model/config.py`](https://github.com/VietnamRobotics/vla_core/blob/4c0f2d86d46df8935ade3f5c63ef83013d6c15a6/model/config.py),
-  [`model/vla_model.py`](https://github.com/VietnamRobotics/vla_core/blob/4c0f2d86d46df8935ade3f5c63ef83013d6c15a6/model/vla_model.py)).
-- Action contract trong code là `16` step, `153` chiều/step; mask có cùng shape và cho phép
-  bỏ loss riêng từng hand block
-  ([`data/corpus_dataset.py`](https://github.com/VietnamRobotics/vla_core/blob/4c0f2d86d46df8935ade3f5c63ef83013d6c15a6/data/corpus_dataset.py)).
-- Training action dùng conditional flow matching: nội suy noise–action, dự đoán
-  `action - noise`, tối ưu masked MSE. Inference bắt đầu từ noise và chạy bốn bước Euler
-  ([`model/vla_model.py`](https://github.com/VietnamRobotics/vla_core/blob/4c0f2d86d46df8935ade3f5c63ef83013d6c15a6/model/vla_model.py)).
-- Dataloader hỗ trợ temperature sampling theo source và gradient accumulation
-  ([`data/collate.py`](https://github.com/VietnamRobotics/vla_core/blob/4c0f2d86d46df8935ade3f5c63ef83013d6c15a6/data/collate.py),
-  [`train/pretrain.py`](https://github.com/VietnamRobotics/vla_core/blob/4c0f2d86d46df8935ade3f5c63ef83013d6c15a6/train/pretrain.py)).
-- `python3 -m compileall -q third_party/02_vla_core` pass trong workspace ngày
-  2026-07-24.
+- **vision stream:** token do ảnh tạo ra;
+- **narrative stream:** toàn bộ token hợp lệ còn lại — gồm chat marker, instruction,
+  task, history và (khi train/inference two-pass) narrative response.
 
-**Chưa xác minh runtime:**
+Do đó, “narrative” là tên stream kỹ thuật, không chỉ riêng câu mô tả hành động.
 
-- Hai test không chạy được vì cả Python hệ thống lẫn `.venv` đều thiếu `torch`.
-- Môi trường cũng thiếu `transformers`, `cv2` và package `corpus`; chỉ binary FFmpeg có sẵn.
-- Không có model weight, corpus release hoặc checkpoint trong snapshot để chạy smoke test
-  model/data end-to-end.
+## Điểm khác biệt của action head
 
-## Các phát hiện quan trọng
+### 1. Action chunk là query, không phải learnable query hay text token
 
-### Narrative loss không fine-tune backbone như tên “dual loss” dễ gợi ý
+Tại flow time `t`, action head lấy noisy chunk `x_t` và tạo 16 action token:
 
-Code cộng `0.1 × narrative_loss` vào total loss, nhưng inner language model và vision model
-mặc định bị freeze, còn narrative loss không đi qua action head. Code không freeze rõ
-`self.qwen.lm_head`: nếu output head có parameter riêng, narrative loss có thể chỉ cập nhật
-head này; nếu weight được tie với embedding đã freeze, nó có thể chỉ là số đo. Cần inspect
-`requires_grad` sau khi load model và dùng backward hook để chốt hành vi runtime.
+$$
+z_0 = \operatorname{Linear}(x_t) + E_{position} + E_{time}(t).
+$$
 
-### “Multi-GPU via torchrun DDP” chưa được implement
+`E_position` là positional embedding học được theo từng step; `E_time` là sinusoidal
+embedding của flow timestep đi qua MLP. Nhờ vậy 16 bước được dự đoán song song nhưng vẫn
+phân biệt thứ tự trong chunk.
 
-Docstring của `pretrain.py` nói hỗ trợ DDP, nhưng file không init process group, không bọc
-model bằng `DistributedDataParallel`, không dùng `DistributedSampler` và mặc định mọi process
-đều chọn `cuda:0`. Lệnh `torchrun` vì vậy không đủ để tạo distributed training đúng.
+Trong train, với action sạch `a` và Gaussian noise `ε`:
 
-### Contract normalization nằm ngoài snapshot
+$$
+x_t=(1-t)ε+ta, \qquad v^*=a-ε.
+$$
 
-Action head yêu cầu action đã normalize, nhưng `pack_actions()` chỉ nối các giá trị raw nhận
-từ `Layer1PretrainSampler`; snapshot không có normalization statistics hoặc transform.
-Không thể kết luận dữ liệu train đúng miền `[-1, 1]` nếu chưa inspect repo `data_corpus`.
+Head học masked MSE giữa `v̂` và `v*`. Trong inference, khởi tạo `x ← N(0,I)` rồi lặp
+`x ← x + Δt · v̂(x,t)` bốn lần. Vì vậy `VLAModel.forward(..., actions_gt=...)` trả
+**velocity** trong `predicted_actions`; `predict_action()` mới trả action đã sampling.
 
-### Có rủi ro leakage ở narrative target
+### 2. Một action block condition theo đúng một layer Qwen
 
-Dataset đặt narrative vào `sample["text"]`; collator vừa đưa toàn bộ chuỗi này vào trường
-`task`, vừa dùng dòng đầu của cùng chuỗi làm assistant target. Vì target đã xuất hiện trong
-prompt, narrative LM task hiện có dấu hiệu target leakage. Cần inspect tokenized batch và
-chốt lại contract task/narrative trước khi train.
+`ActionHead` có 24 `CrossAttentionBlock`. Block thứ `i` lấy hidden state từ Qwen layer
+`i + 1` (bỏ embedding layer 0). Thay vì chỉ dùng last layer, head có đường condition tới
+toàn bộ hierarchy của backbone.
 
-### Một số mô tả đã lệch khỏi code
+Mỗi block dùng action tokens làm query và ghép ba nhóm key/value vào **một softmax chung**:
 
-Sơ đồ đầu `model/vla_model.py` vẫn ghi output `(B, 50, 23)`, trong khi config và data path đã
-chuyển sang `(B, 16, 153)`. README đúng ở phần action space nhưng các con số `4.48M windows`,
-group-disjoint validation và license `xp10m` không có source đi kèm trong snapshot, nên chỉ
-được xem là claim chưa tái kiểm.
+1. self-attention giữa 16 action tokens;
+2. cross-attention tới narrative tokens, cộng thêm proprio token nếu có;
+3. cross-attention tới vision tokens.
 
-## Kết luận
+Vision logits được nhân với `tanh(gating_factor)` học được, ban đầu bằng 0. Điều này cho
+phép model dần mở đường ảnh thay vì bắt mọi block phụ thuộc mạnh vào vision từ bước đầu.
+RoPE được áp dụng riêng cho action, narrative/proprio và vision sequences; padding của hai
+stream cũng bị mask trước softmax.
 
-Prototype đã có lõi ý tưởng rõ: tận dụng hidden state mọi layer của một VLM frozen để điều
-kiện hóa flow-matching action head. Phần đáng tin nhất hiện tại là shape/action packing,
-masking, action-head forward và loss formulation ở mức code.
+```mermaid
+flowchart LR
+    X[Action tokens]
+    SELF[Self K/V]
+    NAR[Narrative K/V<br/>+ optional proprio]
+    VIS[Vision K/V<br/>× tanh gate]
+    CAT[Concatenate score axis<br/>one softmax]
+    RES[Residual + LayerNorm/Linear/ReLU]
+    NEXT[Action state tới block kế]
 
-Ưu tiên trước một run lớn:
+    X --> SELF
+    X --> CAT
+    NAR --> CAT
+    VIS --> CAT
+    CAT --> RES
+    RES --> NEXT
+```
 
-1. vendoring hoặc pin dependency và contract `data_corpus`;
-2. tách task input khỏi narrative target, xác minh normalization;
-3. chạy test hiện có và thêm smoke test processor → model → backward;
-4. sửa hoặc bỏ claim DDP;
-5. thêm validation loop, checkpoint resume và inference/evaluation harness.
+## Input và output format
 
-## Đọc tiếp
+### Input model-level
 
-- [Kiến trúc và call graph](code_details/01_architecture.md)
-- [Dữ liệu, action contract và training](code_details/02_data_and_training.md)
-- [Cách chạy, trạng thái kiểm chứng và khoảng trống](code_details/03_runtime_status.md)
-- [Cấu trúc chi tiết của model](code_details/04_model_structure.md)
+| Field                   | Shape / type               | Ý nghĩa                                                                                    |
+| ----------------------- | -------------------------- | -------------------------------------------------------------------------------------------- |
+| `input_ids`           | `(B, S)`, `LongTensor` | Qwen chat tokens, gồm image placeholder tokens                                              |
+| `attention_mask`      | `(B, S)`                 | `1` ở text token hợp lệ, `0` ở right-padding                                         |
+| `pixel_values`        | `(ΣP_i, C_patch)`       | visual rows do Qwen processor tạo và nối theo batch; không nhất thiết là`(B,C,H,W)` |
+| `image_grid_thw`      | `(N_image, 3)`           | layout temporal/height/width của từng ảnh cho Qwen                                        |
+| `actions_gt` (train)  | `(B, 16, 153)`, float    | action target đã**phải** normalize                                                  |
+| `action_mask` (train) | `(B, 16, 153)`, float    | 1 tại thành phần có nhãn; cho phép mask độc lập hai tay                             |
+| `proprio` (optional)  | `(B, P)`, float          | chỉ hợp lệ nếu config bật`proprio_dim`                                                |
 
-## Nguồn
+Processor nhận 1–3 `PIL.Image` theo thứ tự `[head, left_wrist?, right_wrist?]` và tạo
+user message có ảnh + câu hỏi `What action should the robot take to {task}?`. Dataset run-1
+hiện chỉ đưa một ego RGB frame vào collator.
 
-- [`vla_core/README.md`](https://github.com/VietnamRobotics/vla_core/blob/4c0f2d86d46df8935ade3f5c63ef83013d6c15a6/README.md)
-- [`model/`](https://github.com/VietnamRobotics/vla_core/tree/4c0f2d86d46df8935ade3f5c63ef83013d6c15a6/model)
-- [`data/`](https://github.com/VietnamRobotics/vla_core/tree/4c0f2d86d46df8935ade3f5c63ef83013d6c15a6/data)
-- [`train/pretrain.py`](https://github.com/VietnamRobotics/vla_core/blob/4c0f2d86d46df8935ade3f5c63ef83013d6c15a6/train/pretrain.py)
-- [`tests/`](https://github.com/VietnamRobotics/vla_core/tree/4c0f2d86d46df8935ade3f5c63ef83013d6c15a6/tests)
+### Output
+
+| API / chế độ                   | Output                                      | Ý nghĩa đúng                                                                       |
+| --------------------------------- | ------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `forward(..., actions_gt=...)`  | `VLAOutput.predicted_actions: (B,16,153)` | predicted velocity`v̂`, cùng shape action nhưng **không** là action sạch |
+| `forward(..., actions_gt=None)` | `VLAOutput.predicted_actions: (B,16,153)` | action sau sampling flow                                                               |
+| `predict_action(...)`           | `(B,16,153)`                              | action sau narrative generation → re-encode → 4-step Euler sampling                  |
+| `generate_narrative(...)`       | token IDs                                   | narrative generated; đây không phải action                                         |
+
+Một step 153 chiều được pack như sau:
+
+```text
+[ 0: 3] head_d_pos                         3
+[ 3: 9] head_d_rot_6d                      6
+[ 9:12] left_pos_cam                       3
+[12:18] left_rot_cam_6d                    6
+[18:81] left_kp21_wrist_relative          63
+[81:84] right_pos_cam                      3
+[84:90] right_rot_cam_6d                   6
+[90:153] right_kp21_wrist_relative        63
+---------------------------------------------
+total                                     153
+```
+
+Rotation 6D là hai cột đầu của ma trận xoay `3 × 3`. Head block luôn được mask valid;
+block 72 chiều của mỗi tay chỉ valid ở timestep có hand annotation. Unit, coordinate frame,
+normalization statistics và thao tác post-processing sang robot command vẫn **Unknown** vì
+chúng nằm ngoài snapshot `data_corpus`.
+
+## Sample minh họa: một sample vào và ra
+
+Ví dụ dưới đây theo contract run-1, batch size 1. Các giá trị số chỉ để minh họa format.
+
+```python
+sample = {
+    # Dataset record trước processor
+    "image": "ego_rgb.png",                  # RGB uint8, H × W × 3
+    "task": "pick up the red cup",
+    "history": "hand moves toward the cup",
+    "actions_gt": "float32[16, 153]",        # normalized target chunk
+    "action_mask": "float32[16, 153]",       # head=1; missing hand fields=0
+}
+
+# VLAProcessor + VLACollator tạo batch (B=1)
+batch = {
+    "input_ids": "int64[1, S]",              # S phụ thuộc chat template/ảnh
+    "attention_mask": "int64[1, S]",
+    "pixel_values": "float[sum(P_i), C_patch]",
+    "image_grid_thw": "int64[1, 3]",
+    "actions_gt": "float32[1, 16, 153]",
+    "action_mask": "float32[1, 16, 153]",
+}
+
+# Train
+out = model(**batch)
+assert out.predicted_actions.shape == (1, 16, 153)  # velocity, not action
+assert out.action_loss.ndim == 0
+
+# Inference
+action_chunk = model.predict_action(
+    input_ids=batch["input_ids"],
+    attention_mask=batch["attention_mask"],
+    pixel_values=batch["pixel_values"],
+    image_grid_thw=batch["image_grid_thw"],
+)
+# action_chunk: normalized float tensor [1, 16, 153]
+```
+
+Ví dụ decode semantic của timestep `action_chunk[0, 0]`:
+
+```text
+0:3     Δ vị trí đầu
+3:9     orientation đầu ở representation 6D
+9:81    pose + 21 keypoint của tay trái trong camera frame
+81:153  pose + 21 keypoint của tay phải trong camera frame
+```
+
+Không được gửi trực tiếp vector này tới robot: cần một adapter ngoài repo để denormalize,
+kiểm tra mask, đổi representation/coordinate frame và map sang controller của robot đích.
+
+## Giới hạn cần nhớ
+
+- Cấu hình ngầm yêu cầu `Qwen hidden size == action_head_hidden_dim == 1024`; đổi sang
+  backbone Qwen width khác sẽ gây lỗi nếu không đổi action head cùng lúc.
+- `max_cameras=3` là capability của processor/config; đường dataset active chỉ dùng một ảnh.
+- `train_narrative=True` cộng narrative LM loss với trọng số 0,1, nhưng collator hiện tái sử
+  dụng text sample cho task và narrative target; cần kiểm tra leakage trước khi coi đó là
+  supervision narrative đáng tin cậy.
+- Không có denormalization, evaluation harness, checkpoint/runtime robot hoặc bằng chứng
+  inference end-to-end trong workspace này.
+
+## Đọc sâu hơn và nguồn code
+
+- [Tổng quan và bản đồ báo cáo](code_details/01_overview.md)
+- [Record format và training data](code_details/02_data_and_training.md)
+- [Kiến trúc model](code_details/03_model_architecture.md)
+- [Cơ chế riêng của ActionHead](code_details/04_action_head_mechanics.md)
+- [Tensor flow training](code_details/05_training_tensor_flow.md)
+- [Luồng inference](code_details/06_inference_flow.md)
+- [Action head](../../../third_party/02_vla_core/model/action_head.py), [VLA model](../../../third_party/02_vla_core/model/vla_model.py), [processor](../../../third_party/02_vla_core/data/processing.py), [dataset/action packing](../../../third_party/02_vla_core/data/corpus_dataset.py)
