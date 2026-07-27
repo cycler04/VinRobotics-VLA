@@ -1,0 +1,30 @@
+SOTA Long-Horizon Manipulation Papers (with Source Code)
+
+1.  LingBot-VA (RSS 2026) Paper: https://arxiv.org/abs/2601.21998
+    Project / Code: https://github.com/robbyant/lingbot-va
+
+2.  ACoT-VLA: Action Chain-of-Thought for Vision-Language-Action Models
+    (CVPR 2026) Paper: https://arxiv.org/abs/2601.11404 Code:
+    https://github.com/AgibotTech/ACoT-VLA
+
+3.  MemoryVLA: Perceptual-Cognitive Memory in Vision-Language-Action
+    Models for Robotic Manipulation (ICLR 2026) Paper:
+    https://arxiv.org/abs/2508.19236 Project:
+    https://shihao1895.github.io/MemoryVLA/ Code:
+    https://github.com/shihao1895/MemoryVLA
+
+4.  Seer: Predictive Inverse Dynamics Models are Scalable Learners for
+    Robotic Manipulation (ICLR 2025 Oral) Paper:
+    https://arxiv.org/abs/2412.15109 Code:
+    https://github.com/InternRobotics/Seer
+
+5.  SeedPolicy: Horizon Scaling via Self-Evolving Diffusion Policy for
+    Robot Manipulation (2026) Paper: https://arxiv.org/abs/2603.05117
+    Code: https://github.com/Youqiang-Gui/SeedPolicy
+
+Honorable Mention (Code not yet released)
+
+6.  Long-VLA: Unleashing Long-Horizon Capability of Vision Language
+    Action Model for Robot Manipulation (CoRL 2025) Paper:
+    https://arxiv.org/abs/2508.19958 Project:
+    https://long-vla.github.io/ Code: Coming Soon
