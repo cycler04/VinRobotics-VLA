@@ -125,8 +125,7 @@ sát nhưng **bỏ qua ràng buộc của người dùng**.
 ## 7. Liên hệ với workspace
 
 - Là bản "hai model" đối chiếu trực tiếp với bản "một model" của
-  [01_pi0_5.md](01_pi0_5.md) và [03_loho_vla.md](03_loho_vla.md). Ba paper này
-  nên đọc liền nhau.
+  [01_pi0_5.md](01_pi0_5.md). Hai paper này nên đọc liền nhau.
 - Với dataset tooling: pipeline này cần **skill segmentation 1–3 giây** trên
   episode dài, cộng thêm kênh dữ liệu tương tác người dùng (prompt + utterance)
   gắn theo timestep. Canonical episode v0.1 không có chỗ cho trường này.

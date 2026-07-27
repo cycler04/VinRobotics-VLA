@@ -153,8 +153,10 @@ action, không phải ở việc *có* foresight như auxiliary task.
 
 ### 5.5 Real world (Franka Research 3 + Robotiq-2f-85, pretrain DROID)
 
-100 demo/task, 15 Hz, 2 camera D435i (eye-on-hand + eye-on-base), 15 case × 3
-lần lặp mỗi task, >900 trial.
+100 demo/task, 15 Hz, 2 camera D435i (eye-on-hand + eye-on-base). Mỗi cặp
+method-task có 15 trial; mỗi trial cho tối đa 3 execution (45 execution cho mỗi
+method-task). Không dùng `>900` như một con số per-task vì đó chỉ có thể là phép
+cộng qua nhiều method và task trong bảng.
 
 | Method | Avg SR (%) / Score |
 |---|---|
@@ -195,9 +197,8 @@ Robustness (SR không pretrain → có pretrain): nhiều vật gây nhiễu 33.
 - Hai mẹo pretraining (state làm goal thay language; chặn attention tới lịch sử)
   áp dụng trực tiếp cho bất kỳ dataset nào mà `vla-data-tools` đọc vào có nhãn
   ngôn ngữ thiếu hoặc rời rạc — đúng tình huống RLDS/OXE.
-- Liên hệ với [02_reflective_planning.md](02_reflective_planning.md): cả hai đều
-  "tưởng tượng tương lai", nhưng Seer tưởng tượng ở **latent, mỗi bước, để sinh
-  action**; ReflectVLM tưởng tượng ở **pixel, mỗi $H$ bước, để sửa plan**.
+- Liên hệ với các hướng dự báo khác trong thư mục này: Seer tưởng tượng ở
+  **latent, mỗi bước, để sinh action**.
 
 ## 8. Thử nghiệm tiếp theo
 
