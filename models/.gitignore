@@ -1,0 +1,10 @@
+# Local model weights are machine-specific artifacts.
+*.gguf
+*.bin
+*.pt
+*.pth
+*.safetensors
+*.aria2
+
+# Portable Ollama runtime and its blob store.
+/ollama/

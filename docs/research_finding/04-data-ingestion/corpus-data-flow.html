@@ -1,0 +1,2806 @@
+<meta charset="utf-8">
+<title>Raw Video to Layer-1 Corpus — VinRobotics Data Flow</title>
+<style>
+:root{
+  --ground:#F3F5F6; --surface:#FFFFFF; --surface2:#E8ECEE; --line:#CFD8DD; --line2:#B4C0C7;
+  --ink:#101619; --ink2:#4B5A63; --ink3:#7C8B94;
+  --accent:#9A6608; --accent-bg:#F6EBD5;
+  --ax-x:#B8413C; --ax-y:#3F7A4B; --ax-z:#2F6A9C;
+  --src-a:#9A6608; --src-b:#1F6F70; --src-c:#7A4571;
+  --ok:#3F7A4B; --warn:#9A6608; --bad:#B8413C;
+  --mono:ui-monospace,"SF Mono","Cascadia Code","JetBrains Mono",Menlo,Consolas,monospace;
+  --sans:ui-sans-serif,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --ground:#0B0F12; --surface:#131A1F; --surface2:#1A232A; --line:#25313A; --line2:#33434E;
+    --ink:#E3EAEE; --ink2:#9BA9B3; --ink3:#697883;
+    --accent:#DDA032; --accent-bg:#2A2113;
+    --ax-x:#E0655D; --ax-y:#6FB57E; --ax-z:#5C9FD4;
+    --src-a:#DDA032; --src-b:#48A9A6; --src-c:#B98BB0;
+    --ok:#6FB57E; --warn:#DDA032; --bad:#E0655D;
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#0B0F12; --surface:#131A1F; --surface2:#1A232A; --line:#25313A; --line2:#33434E;
+  --ink:#E3EAEE; --ink2:#9BA9B3; --ink3:#697883;
+  --accent:#DDA032; --accent-bg:#2A2113;
+  --ax-x:#E0655D; --ax-y:#6FB57E; --ax-z:#5C9FD4;
+  --src-a:#DDA032; --src-b:#48A9A6; --src-c:#B98BB0;
+  --ok:#6FB57E; --warn:#DDA032; --bad:#E0655D;
+}
+:root[data-theme="light"]{
+  --ground:#F3F5F6; --surface:#FFFFFF; --surface2:#E8ECEE; --line:#CFD8DD; --line2:#B4C0C7;
+  --ink:#101619; --ink2:#4B5A63; --ink3:#7C8B94;
+  --accent:#9A6608; --accent-bg:#F6EBD5;
+  --ax-x:#B8413C; --ax-y:#3F7A4B; --ax-z:#2F6A9C;
+  --src-a:#9A6608; --src-b:#1F6F70; --src-c:#7A4571;
+  --ok:#3F7A4B; --warn:#9A6608; --bad:#B8413C;
+}
+*,*::before,*::after{box-sizing:border-box;}
+body{margin:0;background:var(--ground);color:var(--ink);font-family:var(--sans);
+  font-size:16px;line-height:1.5;-webkit-font-smoothing:antialiased;}
+.deck{position:relative;min-height:100vh;}
+.slide{display:none;min-height:100vh;padding:44px 56px 78px 84px;overflow-y:auto;
+  max-height:100vh;scrollbar-width:thin;}
+.slide.on{display:block;}
+.wrap{max-width:1180px;margin:0 auto;}
+
+/* ---- rail ---- */
+.rail{position:fixed;left:0;top:0;bottom:0;width:52px;background:var(--surface);
+  border-right:1px solid var(--line);display:flex;flex-direction:column;
+  align-items:center;padding:14px 0;gap:5px;z-index:20;}
+.rail b{font:600 10px/1 var(--mono);letter-spacing:.1em;color:var(--ink3);
+  writing-mode:vertical-rl;transform:rotate(180deg);margin-bottom:6px;}
+.rdot{width:7px;height:7px;border-radius:50%;background:var(--line2);flex:none;
+  border:none;padding:0;cursor:pointer;transition:background .15s,transform .15s;}
+.rdot:hover{background:var(--ink3);transform:scale(1.35);}
+.rdot.act{background:var(--accent);}
+.rdot.seen{background:var(--ink3);}
+.rdot:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
+
+/* ---- footer ---- */
+.foot{position:fixed;left:52px;right:0;bottom:0;height:38px;background:var(--surface);
+  border-top:1px solid var(--line);display:flex;align-items:center;gap:16px;
+  padding:0 18px;font:500 11px/1 var(--mono);letter-spacing:.06em;color:var(--ink3);z-index:20;}
+.foot .act{color:var(--ink2);text-transform:uppercase;}
+.foot .sp{flex:1;}
+.bar{position:fixed;left:52px;right:0;bottom:38px;height:2px;background:var(--line);z-index:21;}
+.bar i{display:block;height:100%;background:var(--accent);transition:width .2s;}
+.btn{background:none;border:1px solid var(--line2);color:var(--ink2);border-radius:3px;
+  font:500 11px/1 var(--mono);padding:5px 9px;cursor:pointer;letter-spacing:.05em;}
+.btn:hover{border-color:var(--accent);color:var(--accent);}
+.btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
+
+/* ---- type ---- */
+.eyebrow{font:600 11px/1 var(--mono);letter-spacing:.19em;text-transform:uppercase;
+  color:var(--accent);margin:0 0 14px;}
+h1{font-size:clamp(34px,4.6vw,62px);line-height:1.02;letter-spacing:-.032em;font-weight:800;
+  margin:0 0 18px;text-wrap:balance;}
+h2{font-size:clamp(25px,3vw,38px);line-height:1.08;letter-spacing:-.024em;font-weight:750;
+  margin:0 0 6px;text-wrap:balance;}
+h3{font-size:15px;font-weight:700;letter-spacing:-.005em;margin:22px 0 8px;}
+.sub{color:var(--ink2);font-size:16px;max-width:74ch;margin:0 0 22px;line-height:1.55;}
+.lede{font-size:19px;line-height:1.5;color:var(--ink);max-width:66ch;}
+p{margin:0 0 12px;max-width:76ch;}
+code,.m{font-family:var(--mono);font-size:.885em;}
+code{background:var(--surface2);padding:1px 5px;border-radius:3px;}
+b.k{font-weight:700;color:var(--ink);}
+small{font-size:12.5px;color:var(--ink3);}
+a{color:var(--accent);}
+
+/* ---- blocks ---- */
+.grid{display:grid;gap:14px;}
+.g2{grid-template-columns:repeat(2,1fr);} .g3{grid-template-columns:repeat(3,1fr);}
+.g4{grid-template-columns:repeat(4,1fr);}
+@media(max-width:900px){.g2,.g3,.g4{grid-template-columns:1fr;}}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:5px;padding:15px 17px;}
+.card h4{margin:0 0 7px;font-size:13px;font-weight:700;letter-spacing:.01em;}
+.card p{font-size:13.5px;color:var(--ink2);margin:0 0 7px;}
+.card p:last-child{margin-bottom:0;}
+.stat{background:var(--surface);border:1px solid var(--line);border-radius:5px;padding:13px 15px;}
+.stat .n{font:800 27px/1 var(--sans);letter-spacing:-.03em;font-variant-numeric:tabular-nums;}
+.stat .l{font:600 10px/1.3 var(--mono);letter-spacing:.13em;text-transform:uppercase;
+  color:var(--ink3);margin-top:6px;}
+.note{border-left:3px solid var(--accent);background:var(--accent-bg);padding:11px 15px;
+  border-radius:0 4px 4px 0;font-size:13.5px;margin:14px 0;}
+.note.bad{border-color:var(--bad);background:color-mix(in srgb,var(--bad) 9%,transparent);}
+.note.ok{border-color:var(--ok);background:color-mix(in srgb,var(--ok) 9%,transparent);}
+.note b{font-weight:700;}
+
+/* ---- tables ---- */
+.tw{overflow-x:auto;border:1px solid var(--line);border-radius:5px;background:var(--surface);margin:12px 0;}
+table{border-collapse:collapse;width:100%;font-size:12.5px;}
+th{background:var(--surface2);text-align:left;padding:8px 11px;font:600 10.5px/1.3 var(--mono);
+  letter-spacing:.1em;text-transform:uppercase;color:var(--ink2);white-space:nowrap;
+  border-bottom:1px solid var(--line);}
+td{padding:7px 11px;border-bottom:1px solid var(--line);vertical-align:top;
+  font-variant-numeric:tabular-nums;}
+tr:last-child td{border-bottom:none;}
+td.mono,th.mono{font-family:var(--mono);font-size:11.8px;}
+.num{text-align:right;font-variant-numeric:tabular-nums;}
+tbody tr:hover{background:var(--surface2);}
+
+/* ---- code / formula ---- */
+pre{background:var(--surface);border:1px solid var(--line);border-left:3px solid var(--line2);
+  border-radius:0 5px 5px 0;padding:12px 15px;overflow-x:auto;font-family:var(--mono);
+  font-size:12.5px;line-height:1.62;margin:12px 0;color:var(--ink);}
+pre.f{border-left-color:var(--accent);}
+pre .c{color:var(--ink3);}
+pre .hl{color:var(--accent);font-weight:600;}
+
+/* ---- chips ---- */
+.chip{display:inline-block;font:600 10.5px/1 var(--mono);letter-spacing:.09em;
+  text-transform:uppercase;padding:4px 8px;border-radius:3px;border:1px solid var(--line2);
+  color:var(--ink2);white-space:nowrap;}
+.chip.x{color:var(--ax-x);border-color:var(--ax-x);}
+.chip.y{color:var(--ax-y);border-color:var(--ax-y);}
+.chip.z{color:var(--ax-z);border-color:var(--ax-z);}
+.chip.a{color:var(--src-a);border-color:var(--src-a);}
+.chip.b{color:var(--src-b);border-color:var(--src-b);}
+.chip.c{color:var(--src-c);border-color:var(--src-c);}
+.chip.ok{color:var(--ok);border-color:var(--ok);}
+.chip.bad{color:var(--bad);border-color:var(--bad);}
+.chips{display:flex;gap:7px;flex-wrap:wrap;margin:10px 0;}
+.ax-x{color:var(--ax-x);font-weight:600;} .ax-y{color:var(--ax-y);font-weight:600;}
+.ax-z{color:var(--ax-z);font-weight:600;}
+
+/* ---- flow diagram ---- */
+.flow{display:flex;flex-direction:column;gap:9px;margin:16px 0;}
+.frow{display:grid;grid-template-columns:96px 1fr;gap:13px;align-items:stretch;}
+.flab{font:600 10px/1.3 var(--mono);letter-spacing:.11em;text-transform:uppercase;
+  color:var(--ink3);display:flex;align-items:center;justify-content:flex-end;text-align:right;}
+.fbox{background:var(--surface);border:1px solid var(--line);border-radius:4px;
+  padding:9px 13px;font-size:12.5px;display:flex;flex-direction:column;justify-content:center;}
+.fbox .t{font-weight:700;font-size:12.5px;}
+.fbox .d{color:var(--ink2);font-size:11.5px;font-family:var(--mono);margin-top:3px;}
+.fcols{display:grid;gap:9px;}
+.arrowr{text-align:center;color:var(--ink3);font-size:15px;line-height:1;padding:1px 0;}
+.stage{border-left:3px solid var(--accent);}
+.stage.gpu{border-left-color:var(--ax-z);}
+.stage.cpu{border-left-color:var(--ink3);}
+
+ul{margin:8px 0 12px;padding-left:20px;} li{margin-bottom:6px;font-size:14px;max-width:76ch;}
+ul.tight li{margin-bottom:3px;font-size:13px;}
+hr{border:none;border-top:1px solid var(--line);margin:22px 0;}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;font-size:13px;margin:10px 0;}
+.kv dt{font-family:var(--mono);font-size:12px;color:var(--ink3);}
+.kv dd{margin:0;}
+
+/* ---- index overlay ---- */
+.idx{position:fixed;inset:0;background:var(--ground);z-index:40;display:none;
+  overflow-y:auto;padding:38px 44px 44px;}
+.idx.on{display:block;}
+.idx h2{margin-bottom:18px;}
+.idxg{display:grid;grid-template-columns:repeat(auto-fill,minmax(285px,1fr));gap:22px;}
+.idxa{break-inside:avoid;}
+.idxa h5{font:600 10.5px/1 var(--mono);letter-spacing:.15em;text-transform:uppercase;
+  color:var(--accent);margin:0 0 8px;padding-bottom:6px;border-bottom:1px solid var(--line);}
+.idxa button{display:block;width:100%;text-align:left;background:none;border:none;
+  padding:3px 0;color:var(--ink2);font-size:13px;cursor:pointer;font-family:var(--sans);}
+.idxa button:hover{color:var(--accent);}
+.idxa button b{color:var(--ink3);font:500 11px var(--mono);margin-right:8px;}
+
+@media print{
+  .rail,.foot,.bar,.idx{display:none!important;}
+  .slide{display:block!important;page-break-after:always;min-height:0;max-height:none;
+    padding:14mm;overflow:visible;}
+}
+@media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important;}}
+@media(max-width:760px){.slide{padding:26px 18px 74px 62px;}}
+</style>
+
+<div class="deck" id="deck">
+
+<!-- ═══════════ ACT I — ORIENTATION ═══════════ -->
+
+<section class="slide on" data-act="Orientation">
+<div class="wrap">
+  <p class="eyebrow">VinRobotics · Data Platform · Schema 0.6.0</p>
+  <h1 data-title="Raw Video to Layer-1 Corpus">Raw Video<br>to Layer-1 Corpus</h1>
+  <p class="lede">Every stage, every column, every formula that turns egocentric human
+  video into a unified vision-language-action training corpus.</p>
+  <div class="grid g4" style="margin-top:34px">
+    <div class="stat"><div class="n">380,401</div><div class="l">clips</div></div>
+    <div class="stat"><div class="n">2,699.5</div><div class="l">hours</div></div>
+    <div class="stat"><div class="n">256.3 M</div><div class="l">annotated frames</div></div>
+    <div class="stat"><div class="n">4.48 M</div><div class="l">training windows</div></div>
+  </div>
+  <div class="chips" style="margin-top:26px">
+    <span class="chip a">egodex_v06</span><span class="chip b">egoverse_v06</span>
+    <span class="chip c">xp10m_v06</span><span class="chip ok">gate: pass ×3</span>
+  </div>
+  <p style="margin-top:26px"><small>Every number in this deck was measured from the
+  releases on disk or transcribed from the code that produces it. File:line references
+  throughout. Navigate with ← → · press <b class="k">i</b> for the index.</small></p>
+</div>
+</section>
+
+<section class="slide" data-act="Orientation">
+<div class="wrap">
+  <p class="eyebrow">The thesis</p>
+  <h2>One format, many capture rigs</h2>
+  <p class="sub">Five source datasets record humans doing manual work from a head-mounted
+  camera. Each ships a different pose convention, hand representation, frame rate and file
+  layout. The corpus normalises all of them into one per-frame Parquet record so a single
+  dataloader can feed a VLA model from every source at once.</p>
+
+  <div class="grid g3">
+    <div class="card"><h4>What every frame carries</h4>
+      <p>3D head/camera pose · 3D pose of both hands (wrist + 21 keypoints) ·
+      per-hand validity · source-native finger articulation.</p></div>
+    <div class="card"><h4>What every clip carries</h4>
+      <p>Intrinsics, gravity vector, licence, split + leakage group, stream registry,
+      and the provenance of every transform applied to it.</p></div>
+    <div class="card"><h4>What rides alongside</h4>
+      <p>Timestamped language: per-hand narration, sub-task captions, and synthesised
+      locomotion commands — 3,977,393 segments.</p></div>
+  </div>
+
+  <h3>Three consumers, one store</h3>
+  <ul class="tight">
+    <li><b class="k">VLA manipulation</b> — action chunks of head motion + both hands at 10&nbsp;Hz.</li>
+    <li><b class="k">VLN navigation</b> — head-only locomotion commands from a closed vocabulary.</li>
+    <li><b class="k">VLM embodied language</b> — narration targets conditioned on their generator.</li>
+  </ul>
+
+  <div class="note"><b>The governing rule.</b> Layer-1 stores raw metric world-frame state
+  <i>once</i> and never changes it. Every model-specific choice — control rate, chunk horizon,
+  anchor frame, rotation representation, normalisation — is a dataloader-time transform.
+  Nothing model-shaped is baked into a release.</div>
+</div>
+</section>
+
+<section class="slide" data-act="Orientation">
+<div class="wrap">
+  <p class="eyebrow">End to end</p>
+  <h2>The whole flow</h2>
+  <p class="sub">Two ingest paths converge on one schema. Native-annotation sources carry
+  their own head and hand tracking and skip the GPU pipeline entirely; pipeline sources are
+  raw video and must have pose and hands reconstructed first.</p>
+
+  <div class="flow">
+    <div class="frow"><div class="flab">Raw sources</div>
+      <div class="fcols g3">
+        <div class="fbox"><span class="t">Native annotation</span>
+          <span class="d">egodex · egoverse · xp10m</span></div>
+        <div class="fbox"><span class="t">Raw video only</span>
+          <span class="d">ego4d · EPIC-KITCHENS</span></div>
+        <div class="fbox"><span class="t">Media</span>
+          <span class="d">AV1 · HEVC · H.264</span></div>
+      </div></div>
+
+    <div class="arrowr">▼</div>
+
+    <div class="frow"><div class="flab">data_processing<br>GPU pipeline</div>
+      <div class="fcols g3">
+        <div class="fbox stage cpu"><span class="t">T · 0 — transcode, frames</span>
+          <span class="d">ffmpeg · 30 fps chunks</span></div>
+        <div class="fbox stage gpu"><span class="t">A · G — ViPE pose, gravity</span>
+          <span class="d">SLAM + UniDepth-L</span></div>
+        <div class="fbox stage gpu"><span class="t">B · C — WiLoR, Dyn-HaMR</span>
+          <span class="d">world_results.npz</span></div>
+      </div></div>
+
+    <div class="arrowr">▼</div>
+
+    <div class="frow"><div class="flab">data_corpus<br>adapters</div>
+      <div class="fcols"><div class="fbox stage">
+        <span class="t">Adapter → CanonicalClip → writer</span>
+        <span class="d">renormalise world to frame-0 camera · unify hands · compute validity · stamp provenance</span>
+      </div></div></div>
+
+    <div class="arrowr">▼</div>
+
+    <div class="frow"><div class="flab">Layer-1<br>release</div>
+      <div class="fcols g4">
+        <div class="fbox"><span class="t">annotations/</span><span class="d">1 parquet / clip</span></div>
+        <div class="fbox"><span class="t">narratives/</span><span class="d">language sidecar</span></div>
+        <div class="fbox"><span class="t">streams/</span><span class="d">extra modalities</span></div>
+        <div class="fbox"><span class="t">manifest.parquet</span><span class="d">1 row / clip</span></div>
+      </div></div>
+
+    <div class="arrowr">▼</div>
+
+    <div class="frow"><div class="flab">Layer-2<br>dataloader</div>
+      <div class="fcols g3">
+        <div class="fbox"><span class="t">Sampler + splits</span>
+          <span class="d">group-disjoint, 10 Hz</span></div>
+        <div class="fbox"><span class="t">Action chunks</span>
+          <span class="d">16 steps × 153 dims</span></div>
+        <div class="fbox"><span class="t">Normalisation</span>
+          <span class="d">q01/q99 → [−1, 1]</span></div>
+      </div></div>
+
+    <div class="arrowr">▼</div>
+
+    <div class="frow"><div class="flab">vla_core</div>
+      <div class="fcols"><div class="fbox stage">
+        <span class="t">Qwen3.5-0.8B (frozen) + 24-block flow-matching ActionHead</span>
+        <span class="d">dual loss: flow-MSE on actions + weighted narrative LM</span>
+      </div></div></div>
+  </div>
+
+  <div class="note"><b>Repo boundary.</b> <code>data_processing</code> ends at per-clip
+  artefacts. <code>data_corpus</code> owns the schema, adapters, validators and release gate.
+  <code>vla_core</code> owns everything model-shaped — including the 153-dim layout, which
+  <code>data_corpus</code> deliberately never names.</div>
+</div>
+</section>
+
+<section class="slide" data-act="Orientation">
+<div class="wrap">
+  <p class="eyebrow">Measured, not estimated</p>
+  <h2>Scale</h2>
+  <p class="sub">Read from the three <code>manifest.parquet</code> files and their gate reports.</p>
+
+  <div class="tw"><table>
+    <thead><tr><th>Metric</th><th class="num">egodex_v06</th><th class="num">egoverse_v06</th>
+      <th class="num">xp10m_v06</th><th class="num">Total</th></tr></thead>
+    <tbody>
+      <tr><td><b class="k">Clips</b></td><td class="num">318,055</td><td class="num">49,650</td>
+        <td class="num">12,696</td><td class="num"><b class="k">380,401</b></td></tr>
+      <tr><td><b class="k">Hours</b></td><td class="num">732.42</td><td class="num">987.03</td>
+        <td class="num">980.03</td><td class="num"><b class="k">2,699.48</b></td></tr>
+      <tr><td>Frames</td><td class="num">79,101,635</td><td class="num">106,598,737</td>
+        <td class="num">70,562,112</td><td class="num">256,262,484</td></tr>
+      <tr><td>Native fps</td><td class="num">30</td><td class="num">30</td>
+        <td class="num"><b class="k">20</b></td><td class="num">—</td></tr>
+      <tr><td>Codec</td><td class="mono num">av1</td><td class="mono num">hevc</td>
+        <td class="mono num">h264</td><td class="num">—</td></tr>
+      <tr><td>Resolution</td><td class="mono num">1920×1080</td>
+        <td class="mono num">640×360 · 640×480</td><td class="mono num">512×512</td><td class="num">—</td></tr>
+      <tr><td>Median clip</td><td class="num">5.4 s</td><td class="num">77.7 s</td>
+        <td class="num">297.2 s</td><td class="num">—</td></tr>
+      <tr><td>Leakage groups</td><td class="num">134</td><td class="num">14,702</td>
+        <td class="num">912</td><td class="num">15,748</td></tr>
+      <tr><td>Narrative segments</td><td class="num">1,570,870</td><td class="num">1,219,547</td>
+        <td class="num">1,186,976</td><td class="num"><b class="k">3,977,393</b></td></tr>
+      <tr><td>Train windows @10 Hz</td><td class="num">1,186,379</td><td class="num">1,634,007</td>
+        <td class="num">1,656,914</td><td class="num"><b class="k">4,477,300</b></td></tr>
+      <tr><td>Release bytes</td><td class="num">245 G</td><td class="num">76 G</td>
+        <td class="num">47 G</td><td class="num">368 G</td></tr>
+    </tbody></table></div>
+
+  <div class="grid g3" style="margin-top:16px">
+    <div class="card"><h4>Clip count lies</h4>
+      <p>egodex : egoverse : xp10m is <b class="k">25 : 3.9 : 1</b> by clips but
+      <b class="k">0.75 : 1.01 : 1</b> by hours. egodex clips are short (median 5.4 s);
+      xp10m episodes are a near-fixed 5 minutes.</p></div>
+    <div class="card"><h4>Windows are near-balanced</h4>
+      <p>At 10 Hz with a 2.0 s stride the training index is 26.5 % / 36.5 % / 37.0 %.
+      Temperature sampling barely moves it — τ over [0,1] shifts any source ≤7 pp.</p></div>
+    <div class="card"><h4>The release is not self-contained</h4>
+      <p>368 GB of annotation references <b class="k">2.7 TB</b> of source media by absolute
+      path. <code>source_video</code> points outside the release; no remap mechanism ships.</p></div>
+  </div>
+</div>
+</section>
+
+<!-- ═══════════ ACT II — CONVENTIONS ═══════════ -->
+
+<section class="slide" data-act="Conventions">
+<div class="wrap">
+  <p class="eyebrow">Fixed by contract · schema.py:57-71</p>
+  <h2>Coordinate conventions</h2>
+  <p class="sub">This dict is snapshotted verbatim into every clip's metadata under key
+  <code>conventions</code>. Consumers may assert on it. Get one of these wrong and every
+  downstream label silently flips.</p>
+
+  <pre class="f"><span class="c">CONVENTIONS = {</span>
+  "camera_model":       "opencv",                <span class="c"># X right, Y down, Z forward</span>
+  "world_frame":        "frame0_camera",         <span class="c"># world == camera pose at frame 0</span>
+  "rotation_storage":   "matrix_3x3_row_major",
+  "cam_pose_direction": "world_to_camera",       <span class="c"># cam_R, cam_t are w2c</span>
+  "translation_units":  "meters_approx",
+  "angle_units":        "radians",
+  "finger_format":      "source_native",         <span class="c"># see clip meta `hand_format`</span>
+  "fps_basis":          "native_per_clip",       <span class="c"># NOT resampled</span>
+  "frame_indexing":     "video_frame_absolute",
+  "gravity_frame":      "world_up_unit_vector",
+  "clip_span":          "hand_window",
+<span class="c">}</span></pre>
+
+  <div class="grid g2">
+    <div>
+      <h3>The camera frame</h3>
+      <div class="chips">
+        <span class="chip x">+X → right</span><span class="chip y">+Y → DOWN</span>
+        <span class="chip z">+Z → forward</span>
+      </div>
+      <p><span class="ax-y">+Y is down</span>, not up. Measured mean hand position in camera
+      frame is positive in Y for all three sources — hands sit below the optical axis.
+      Assuming Y-up flips every hand label.</p>
+      <pre>u = fx·X/Z + cx
+v = fy·Y/Z + cy      <span class="c">(valid for Z &gt; 0)</span>
+intrins = [fx, fy, cx, cy]   <span class="c">pixels, per clip</span></pre>
+    </div>
+    <div>
+      <h3>The world frame</h3>
+      <p>World is defined <b class="k">per clip</b> as the camera pose at its first frame,
+      so <code>cam_R[0] = I</code> and <code>cam_t[0] = 0</code> by construction.</p>
+      <pre>X_cam   = cam_R @ X_world + cam_t     <span class="c">w2c</span>
+p_head  = −cam_Rᵀ @ cam_t             <span class="c">head in world</span>
+R_c2w   = cam_Rᵀ
+gaze    = R_c2w[:, 2]                 <span class="c">optical axis in world</span>
+img_up  = −R_c2w[:, 1]</pre>
+      <div class="note bad"><b>World coordinates are a per-clip gauge.</b> They are never
+      comparable between clips. Anything cross-clip must go through camera-relative or
+      anchor-relative quantities. <code>gravity_up</code> differs for every one of the
+      380,401 clips — hard-coding <code>[0,−1,0]</code> is wrong for all of them.</div>
+    </div>
+  </div>
+</div>
+</section>
+
+<section class="slide" data-act="Conventions">
+<div class="wrap">
+  <p class="eyebrow">The unit of storage</p>
+  <h2>What a clip is</h2>
+
+  <div class="grid g2">
+    <div>
+      <h3>Identity</h3>
+      <pre class="f">clip_id = f"{source}/{orig_id}/shot-{shot}"</pre>
+      <p style="font-size:13.5px">Real examples on disk:</p>
+      <pre>egodex/test.add_remove_lid.ep000000/shot-0
+egoverse/2025-11-24-21-33-22-052000/shot-0
+xp10m/003dcaf0-…-187d2748f684_ep10/shot-0</pre>
+      <p><small><code>shot</code> is <code>0</code> for every clip in all three shipped
+      releases — the multi-shot branch exists in the contract but is unexercised.</small></p>
+
+      <h3>Time and frame axes</h3>
+      <pre>frame[row]  = video_frame_offset + row   <span class="c">contiguous +1</span>
+timestamp   = frame / fps               <span class="c">seconds</span></pre>
+      <div class="note bad"><b><code>timestamp</code> is absolute video time, not clip
+      time.</b> An egodex episode at offset 15,000 has
+      <code>timestamp[0] = 500.0 s</code>, not 0.</div>
+    </div>
+    <div>
+      <h3>Span</h3>
+      <div class="kv">
+        <dt>seq_interval</dt><dd><code>[s0, s1)</code> — the rows actually stored: the window
+          with an optimised hand track.</dd>
+        <dt>data_interval</dt><dd><code>[d0, d1]</code> — the full ViPE clip extent this shot
+          was cut from.</dd>
+        <dt>n_frames</dt><dd><code>T</code> = rows stored = <code>s1 − s0</code>.</dd>
+        <dt>n_frames_full</dt><dd>Full source length <code>N ≥ T</code>.</dd>
+      </div>
+
+      <h3>Metric scale</h3>
+      <p><code>world_scale</code> is <b class="k">1.0</b> on all 380,401 shipped clips —
+      translations are already metres.</p>
+      <div class="note bad"><b>Two docs disagree, so state the rule per path.</b>
+      <code>README.md:92</code> says "multiply by <code>world_scale</code> before treating
+      translations as metres". For the ViPE/Dyn-HaMR path that is <i>wrong</i> — the factor is
+      already multiplied in at <code>Dyn-HaMR/…/optim/params.py:145</code>. Correct today:
+      native sources are 1.0 (no-op); the WR path is already post-scale (do not multiply);
+      only <code>head_full/</code>'s <code>cam_t</code> needs <code>× world_scale_hint</code>.</div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ═══════════ ACT III — RAW SOURCES ═══════════ -->
+
+<section class="slide" data-act="Raw sources">
+<div class="wrap">
+  <p class="eyebrow">Five defined, three shipped</p>
+  <h2>The source matrix</h2>
+  <p class="sub">Two ingest paths. Native-annotation sources already carry head pose and hand
+  tracking from their capture rig — they never touch a GPU. Pipeline sources are raw video and
+  must have both reconstructed.</p>
+
+  <div class="tw"><table>
+    <thead><tr><th>Source</th><th>Rig</th><th>Path</th><th>Native hands</th>
+      <th>Head pose</th><th>fps</th><th class="num">Clips</th><th>Status</th></tr></thead>
+    <tbody>
+      <tr><td><span class="chip a">egodex</span></td><td>Apple Vision Pro</td>
+        <td>native</td><td class="mono">ARKit 24×SE(3)</td><td class="mono">ARKit (exact)</td>
+        <td class="num">30</td><td class="num">318,055</td><td><span class="chip ok">shipped</span></td></tr>
+      <tr><td><span class="chip b">egoverse</span></td><td>Aria-style, internal</td>
+        <td>native</td><td class="mono">21-kp mocap</td><td class="mono">Aria SLAM</td>
+        <td class="num">30</td><td class="num">49,650</td><td><span class="chip ok">shipped</span></td></tr>
+      <tr><td><span class="chip c">xp10m</span></td><td>HOMIE head rig</td>
+        <td>native</td><td class="mono">MANO-predicted 21-kp</td><td class="mono">HOMIE SLAM</td>
+        <td class="num">20</td><td class="num">12,696</td><td><span class="chip ok">shipped</span></td></tr>
+      <tr><td>epic</td><td>GoPro, EPIC-KITCHENS</td><td>ViPE + Dyn-HaMR</td>
+        <td class="mono">MANO 15×axis-angle</td><td class="mono">ViPE SLAM</td>
+        <td class="num">50→30</td><td class="num">—</td><td><span class="chip">adapter only</span></td></tr>
+      <tr><td>ego4d</td><td>various head-mounted</td><td>ViPE + Dyn-HaMR</td>
+        <td class="mono">MANO 15×axis-angle</td><td class="mono">ViPE SLAM</td>
+        <td class="num">→30</td><td class="num">—</td><td><span class="chip">adapter only</span></td></tr>
+    </tbody></table></div>
+
+  <div class="grid g3">
+    <div class="card"><h4>Why the split matters</h4>
+      <p>Native sources have <code>world_scale = 1.0</code> exactly and
+      <code>gravity_spread_deg = 0.0</code> — their gravity is an algebraic re-expression of a
+      known gravity-aligned world, not an estimate.</p></div>
+    <div class="card"><h4>What blocks EPIC / ego4d</h4>
+      <p><code>hand_views.py:52</code> raises <code>NotImplementedError</code> for
+      MANO→kp21 — it needs an offline forward pass. Two of three shipped sources have no MANO,
+      so kp21 became the interchange format instead.</p></div>
+    <div class="card"><h4>Licence is not uniform</h4>
+      <p>xp10m is <b class="k">NON-COMMERCIAL</b> and is 37.0 % of the training index.
+      Its terms explicitly extend to "derived artefacts including trained model weights".
+      Not a trace contaminant.</p></div>
+  </div>
+</div>
+</section>
+
+<section class="slide" data-act="Raw sources">
+<div class="wrap">
+  <p class="eyebrow"><span class="chip a">egodex</span> · Apple Vision Pro · 318,055 clips · 732.4 h</p>
+  <h2>egodex — native ARKit</h2>
+  <p class="sub">Consumed as a LeRobot v3.0 export. ARKit fuses device IMU and cameras on-device,
+  so head and hand tracking arrive clean and metric with no reconstruction step.</p>
+
+  <div class="grid g2">
+    <div>
+      <h3>On-disk layout consumed</h3>
+      <pre>&lt;root&gt;/&lt;split&gt;/&lt;task&gt;/
+  meta/info.json          <span class="c">fps 30, codebase_version v3.0</span>
+  meta/tasks.parquet      <span class="c">[task_index, task]</span>
+  meta/episodes/chunk-000/file-000.parquet
+                          <span class="c">ONE ROW PER EPISODE — the index</span>
+  data/chunk-000/file-NNN.parquet
+                          <span class="c">per-FRAME rows, ~79 episodes / 100 MB file</span>
+  videos/observation.images.camera/chunk-000/file-NNN.mp4
+                          <span class="c">AV1 1920×1080, ~66 episodes / 200 MB file</span></pre>
+
+      <h3>Data parquet — 75 columns, 54 read</h3>
+      <ul class="tight">
+        <li><code>observation.state.camera</code> — 4×4 SE(3), the head pose</li>
+        <li><code>observation.state.{left,right}Hand</code> — 4×4 SE(3) wrist</li>
+        <li>48 finger-joint columns (24 per hand), each a 4×4 SE(3)</li>
+        <li><code>camera_intrinsics</code> (3×3), <code>frame_index</code>, <code>episode_index</code></li>
+      </ul>
+      <p><small><b class="k">18 body joints are discarded</b> — hip, arms, forearms, shoulders,
+      neck1-4, spine1-7. Per-joint confidences never made it into the export
+      (<code>port_egodex.py:51-53</code> comments the whole block out).</small></p>
+    </div>
+    <div>
+      <h3>The ARKit 24-joint order</h3>
+      <p>Selection is <b class="k">alphabetical by column name</b>
+      (<code>egodex_adapter.py:37-41</code>) — not anatomical. This is why the kp21 remap table
+      looks scrambled.</p>
+      <div class="tw"><table>
+        <thead><tr><th class="num">idx</th><th>joint</th><th class="num">idx</th><th>joint</th></tr></thead>
+        <tbody>
+          <tr><td class="num">0-4</td><td class="mono">IndexFinger ×5</td>
+              <td class="num">15-19</td><td class="mono">RingFinger ×5</td></tr>
+          <tr><td class="num">5-9</td><td class="mono">LittleFinger ×5</td>
+              <td class="num">20-23</td><td class="mono">Thumb ×4</td></tr>
+          <tr><td class="num">10-14</td><td class="mono">MiddleFinger ×5</td>
+              <td class="num">—</td><td><small>thumb has no metacarpal</small></td></tr>
+        </tbody></table></div>
+      <p><small>Each five-joint group is, alphabetically:
+      <code>IntermediateBase, IntermediateTip, Knuckle, Metacarpal, Tip</code>
+      = PIP, DIP, MCP, metacarpal, tip. The four metacarpals are dropped by kp21.</small></p>
+
+      <div class="note"><b>Richer than kp21.</b> Each ARKit joint is a full SE(3), so per-joint
+      <i>rotations</i> exist. <code>to_kp21</code> keeps only the translation column and throws
+      the 3×3 blocks away.</div>
+      <div class="note bad"><b>The <code>_v2.1</code> directories are silently skipped.</b>
+      129 duplicate task dirs pass the <code>meta/</code> check, then contribute zero clips
+      because the <code>meta/episodes/chunk-*</code> glob returns empty. Emergent filter,
+      not an explicit one — and they still occupy disk in the 2.7 TB source tree.</div>
+    </div>
+  </div>
+</div>
+</section>
+
+<section class="slide" data-act="Raw sources">
+<div class="wrap">
+  <p class="eyebrow"><span class="chip b">egoverse</span> · internal Aria-style · 49,650 clips · 987.0 h</p>
+  <h2>egoverse — native mocap</h2>
+  <p class="sub">Internal recordings in zarr: head pose from Aria-style SLAM in a gravity-aligned
+  +Z-up world, hands as 21 mocap keypoints. The hard part is that the pose and the camera are
+  not the same sensor.</p>
+
+  <div class="grid g2">
+    <div>
+      <h3>The CPF problem</h3>
+      <p>Head pose is reported in the <b class="k">Central Pupil Frame</b>; the video comes from
+      the RGB camera. They differ by a fixed rotation nobody shipped, so hand keypoints projected
+      with the raw pose land off the hands.</p>
+      <p>Fix: a one-time extrinsic fit (<code>tools/fit_egoverse_extrinsic.py</code>) in two
+      stages — dump candidate frames from zarr, then fit the CPF→RGB rotation by maximising how
+      well projected wrists land inside YOLO-detected hand boxes. Result is a single 3×3 stored
+      in <code>adapters/egoverse_extrinsic.json</code>.</p>
+      <p><small>Rotation only. The CPF→RGB <b class="k">translation (lever arm) is never
+      applied</b> — the fit does not model it.</small></p>
+
+      <h3>Two storage families, one adapter</h3>
+      <p>A discriminator decides at runtime whether keypoints are already in the world frame:</p>
+      <pre>d_head = ‖wrist_raw − head_raw‖
+world_hands = 0.15 &lt; median(d_head) &lt; 1.2</pre>
+      <p><b class="k">Branch A</b> (world-native): exact, invert the raw pose, no extrinsic.<br>
+      <b class="k">Branch B</b> (head-fixed): apply <code>M = E @ G_axes</code>, where
+      <code>E</code> is the fitted extrinsic and <code>G_axes</code> is a signed permutation
+      chosen from 24 candidates by a projection score.</p>
+    </div>
+    <div>
+      <h3>Axis auto-detection — 24 candidates</h3>
+      <pre>score(M) = mean(front) + mean(inside) + 0.25·central
+front  : 0.1 &lt; z &lt; 1.2 m in camera frame
+inside : projected uv lands within the image
+central: 1 − mean normalised distance from centre
+reject if mean(front) &lt; 0.5 or mean(inside) &lt; 0.5</pre>
+      <p><small>argmax over all 24 proper signed permutation matrices (det = +1).
+      Raises if none survive.</small></p>
+
+      <div class="note bad"><b>Two incompatible cameras, not one.</b> Measured across
+      120 clips:<br>
+      <b class="k">640×360</b> (39,436 clips) — fx≈fy≈251, isotropic, HFOV ≈ 103.9°<br>
+      <b class="k">640×480</b> (10,214 clips) — fx≈174, fy≈209, <b class="k">fy/fx = 1.20</b><br>
+      A single "egoverse intrinsics" figure is wrong for one of the families. The 1.20 ratio
+      looks like an unrecorded 480/400 vertical stretch.</div>
+
+      <div class="note bad"><b>79 % of egoverse is labelled <code>task_name = "debug"</code></b>
+      — 39,436 clips, 782.5 h, correlating perfectly with the 640×360 family. Those clips still
+      carry real narration. Do not build a task-conditioned view on that column.</div>
+    </div>
+  </div>
+</div>
+</section>
+
+<section class="slide" data-act="Raw sources">
+<div class="wrap">
+  <p class="eyebrow"><span class="chip c">xp10m</span> · Ropedia Xperience-10M · 12,696 clips · 980.0 h · NON-COMMERCIAL</p>
+  <h2>xp10m — licensed, predicted hands</h2>
+  <p class="sub">In-the-wild manual labour captured on the HOMIE head rig. HDF5 with SLAM pose,
+  stereo calibration, and MANO hand predictions from a HaMeR-family model — the only source
+  whose hands are <i>predicted</i> rather than tracked or mocapped.</p>
+
+  <div class="grid g2">
+    <div>
+      <h3>What the rig gives</h3>
+      <div class="kv">
+        <dt>slam/quat_wxyz</dt><dd>world→body rotation, unit, w-first</dd>
+        <dt>slam/trans_xyz</dt><dd>world→body translation, metres</dd>
+        <dt>calibration/cam01/T_c0_b</dt><dd>body→stereo-left camera 4×4</dd>
+        <dt>calibration/cam01/K</dt><dd><code>[200, 200, 256, 256]</code> → 512×512, HFOV 104.0°</dd>
+        <dt>hand_mocap/*_mano_hand_global_orient</dt><dd>3×3 per frame</dd>
+        <dt>hand_mocap/joints_3d</dt><dd>21×3, metres, stereo-left camera frame</dd>
+        <dt>hand_mocap/betas</dt><dd>MANO shape, 10-vector</dd>
+      </div>
+
+      <h3>The 61°-down camera</h3>
+      <p>The record camera points steeply downward — good for hands, bad for heading. Yaw jitter
+      is amplified ×2.1 relative to a level camera, which is why xp10m carries a separate
+      <code>head_body_pose</code> stream at 20 Hz and the action labels override their heading
+      from it rather than from the camera.</p>
+      <p><small>Only stream in the entire corpus: 12,696 sidecars, and the only release with a
+      populated <code>streams/</code> directory.</small></p>
+    </div>
+    <div>
+      <h3>Left-hand de-mirroring</h3>
+      <p>HaMeR predicts left hands by mirroring the image and running the MANO-<i>right</i> model,
+      so the exported left orientation is claimed to live in an x-mirrored frame. The adapter
+      conjugates it back:</p>
+      <pre class="f">F = diag(−1, +1, +1)         <span class="c">F = Fᵀ = F⁻¹, det F = −1</span>
+
+R_hand_cam = R                 <span class="c">right hand</span>
+R_hand_cam = <span class="hl">F @ R @ F</span>         <span class="c">left hand</span>
+
+det(F R F) = det(F)²·det(R) = +1   <span class="c">still proper</span></pre>
+
+      <div class="note bad"><b>Measured residual says this fires where it should not.</b>
+      Checking the shipped left <code>global_orient</code> against the shipped left joints
+      gives 0.49 cm on the right hand but <b class="k">3.15 cm on the left</b> — the source's
+      left orientation already matched its joints, so the conjugation introduces the error it
+      was meant to remove. It flows into <code>rot_cam</code> → action dims 12:18 for every
+      xp10m left hand. <code>kp21</code> is unaffected (it comes from the joints, not the
+      orientation). Fix if confirmed:
+      <code>R_true = F @ (cam_R @ wrist_rot_l) @ F</code>.</div>
+
+      <div class="note"><b>Validity is genuinely low here.</b> Frame-weighted valid rate is
+      0.658 (L) / 0.670 (R) versus ~1.00 for egodex. Occlusion and dropout are real; mask,
+      never assume.</div>
+    </div>
+  </div>
+</div>
+</section>
+
+<section class="slide" data-act="Raw sources">
+<div class="wrap">
+  <p class="eyebrow">epic · ego4d — the reconstruction path</p>
+  <h2>Pipeline sources</h2>
+  <p class="sub">Raw video with no pose and no hands. Everything downstream of the pixels has to
+  be computed by the GPU pipeline, and the adapter reads its output rather than the dataset's.</p>
+
+  <div class="grid g2">
+    <div>
+      <h3>What the adapter consumes</h3>
+      <p><code>WorldResultsAdapter</code> reads Dyn-HaMR's per-sequence
+      <code>*_world_results.npz</code> plus the ViPE <code>pose/</code> and
+      <code>intrinsics/</code> npz files — not the source dataset's own annotations.</p>
+      <div class="kv">
+        <dt>world_results.npz</dt><dd>MANO params, per-frame hand tracks, side labels,
+          world scale, the optimised sequence interval</dd>
+        <dt>pose/&lt;seq&gt;.npz</dt><dd>ViPE camera-to-world 4×4 per frame</dd>
+        <dt>intrinsics/&lt;seq&gt;.npz</dt><dd><code>[fx, fy, cx, cy]</code> per frame</dd>
+        <dt>gravity/&lt;seq&gt;.json</dt><dd><code>up_world</code>, method, spread, flag</dd>
+      </div>
+      <p><code>fps</code> comes from <code>_read_clip_fps</code>, which is authoritative and
+      must match the rate frames were extracted at in Stage 0 — a mismatch silently rescales
+      every velocity gate.</p>
+
+      <h3>Chunked video bookkeeping</h3>
+      <p>Long videos are cut into 300 s chunks, so <code>chunks.json</code> maps each chunk back
+      to <code>{orig_id, chunk_idx, start_frame, source_video, fps}</code> and the adapter
+      re-anchors frame indices onto the original video's timeline.</p>
+    </div>
+    <div>
+      <h3>Distinct finger format</h3>
+      <p>These are the only sources using
+      <code>mano_axis_angle_15x3</code> — 45 floats, radians, MANO joint-local residual
+      rotations. Every shipped release uses a kp21 or ARKit format instead.</p>
+
+      <h3>Handedness gate</h3>
+      <pre>valid *= [round(is_right[t]) == want]
+want = 0 for 'l', 1 for 'r'</pre>
+      <p>A per-frame side-flip zeroing: when the tracker swaps hands mid-sequence, those frames
+      are marked invalid rather than mislabelled.</p>
+
+      <div class="note bad"><b>Not productionised.</b> Neither EPIC nor ego4d appears in any
+      certified release. <code>epic_contact_adapter.py</code> is explicitly labelled a
+      prototype — "stored hand translation is not clean metric Layer-1 supervision" — and
+      MANO→kp21 is unimplemented, so these clips cannot enter a mixed training view even
+      once packaged.</div>
+
+      <div class="note"><b>Where the raw data sits.</b> Ego4D staging lives under
+      <code>/mnt/SSD2/dataset/vinrobotics/ego4d</code> (63 MB <code>ego4d.json</code>, uid
+      chunk lists, HF/OSS upload logs); EPIC IMU under
+      <code>…/EPIC-KITCHENS/&lt;PNN&gt;/meta_data/</code>.</div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ═══════════ ACT IV — GPU PIPELINE ═══════════ -->
+
+<section class="slide" data-act="GPU pipeline">
+<div class="wrap">
+  <p class="eyebrow">data_processing · stages/corpus_batch.sh</p>
+  <h2>The GPU pipeline</h2>
+  <p class="sub">Seven stages, selected by letter in the <code>--stages</code> string. Two conda
+  environments, because ViPE and Dyn-HaMR need incompatible torch builds. Only pipeline sources
+  run this; native sources skip straight to the adapter.</p>
+
+  <div class="tw"><table>
+    <thead><tr><th>Stage</th><th>Does</th><th>Produces</th><th>Model</th><th>Env</th>
+      <th>GPU</th><th>Skip condition</th></tr></thead>
+    <tbody>
+      <tr><td><b class="k">T</b> transcode</td><td>raw → 30 fps H.264 chunks</td>
+        <td class="mono">&lt;stem&gt;_cNNN.mp4 · chunks.json</td><td>—</td><td class="mono">—</td>
+        <td>opt. NVDEC/NVENC</td><td>chunk exists</td></tr>
+      <tr><td><b class="k">0</b> frames</td><td>decode to jpg</td>
+        <td class="mono">images/&lt;seq&gt;/*.jpg</td><td>—</td><td class="mono">dynhamr</td>
+        <td>no</td><td>dir populated</td></tr>
+      <tr><td><b class="k">A</b> vipe</td><td>SLAM camera track</td>
+        <td class="mono">pose/ · intrinsics/ npz</td><td>ViPE</td><td class="mono">vipe</td>
+        <td>yes</td><td><b class="k">both</b> npz present</td></tr>
+      <tr><td><b class="k">G</b> gravity</td><td>world-UP per clip</td>
+        <td class="mono">gravity/&lt;seq&gt;.json</td><td>UniDepth-L</td><td class="mono">vipe</td>
+        <td>yes</td><td>json exists</td></tr>
+      <tr><td><b class="k">B</b> preproc</td><td>detect + track hands</td>
+        <td class="mono">track_preds/*/track.npz</td><td>YOLO + WiLoR</td><td class="mono">dynhamr</td>
+        <td>yes</td><td>npz exists</td></tr>
+      <tr><td><b class="k">C</b> optimize</td><td>fit hands in world</td>
+        <td class="mono">*_world_results.npz + .DONE</td><td>Dyn-HaMR</td><td class="mono">dynhamr</td>
+        <td>yes</td><td><code>.DONE</code> sentinel</td></tr>
+      <tr><td><b class="k">D</b> package</td><td>build the release</td>
+        <td class="mono">Layer-1 parquet</td><td>—</td><td class="mono">dynhamr</td>
+        <td>no</td><td>cross-repo, opt-in</td></tr>
+    </tbody></table></div>
+
+  <div class="grid g3">
+    <div class="card"><h4>Resident batching</h4>
+      <p>Each model loads <b class="k">once per stage</b> and is reused across every clip.
+      This supersedes the older per-clip driver — model load dominated wall clock at
+      1k+ clips.</p></div>
+    <div class="card"><h4>Idempotent, fail-isolated</h4>
+      <p>Every stage skips finished clips. Per-clip failures land in
+      <code>failed_{0,A,B,C}.txt</code> and the run continues. Stage C is only "done" when a
+      <code>.DONE</code> sentinel is written after exit 0.</p></div>
+    <div class="card"><h4>Two-pass for big corpora</h4>
+      <p>Pass 1 <code>--stages TAG</code> leaves ~5 MB/chunk and never materialises jpgs.
+      Pass 2 <code>--stages 0BC --package</code> per shard. Extracting frames for every clip up
+      front would fill the disk.</p></div>
+  </div>
+
+  <div class="note bad"><b>These scripts do not run from the current repo layout.</b>
+  <code>corpus_batch.sh</code> self-locates to <code>data_processing/stages/</code> and then
+  looks for <code>stages/Dyn-HaMR</code>, <code>stages/vipe</code> and
+  <code>stages/pipeline.env</code> — all three are one level up. <code>ops/pass1_wave.sh</code>
+  invokes <code>corpus_batch.frozen.sh</code>, which is created at deploy time and is not in the
+  repo. Fix the paths before re-running any of this.</div>
+</div>
+</section>
+
+<section class="slide" data-act="GPU pipeline">
+<div class="wrap">
+  <p class="eyebrow">Stage T · 0 — media conditioning</p>
+  <h2>Transcode and frames</h2>
+
+  <div class="grid g2">
+    <div>
+      <h3>Chunking arithmetic</h3>
+      <pre class="f">DUR      = floor(ffprobe duration)        <span class="c">integer seconds</span>
+NCHUNKS  = max(1, ceil(DUR / CHUNK))      <span class="c">CHUNK = 300 s</span>
+START(K) = K · CHUNK                      <span class="c">seconds</span>
+start_frame(K) = START(K) · FPS           <span class="c">on the ORIGINAL fps timeline</span>
+SEQ(K)   = "&lt;stem&gt;_c%03d" % K</pre>
+      <p><code>start_frame</code> is what lets chunks be packaged later as concatenable shots of
+      one <code>orig_id</code>. The <code>floor</code> on duration can drop under a second of
+      tail.</p>
+
+      <h3>GPU transcode path</h3>
+      <p>NVDEC decode + <code>h264_nvenc</code> encode, with per-codec cuvid decoders for
+      hevc/h264/av1. ViPE never touches the encode/decode silicon, so that capacity is free —
+      the header claims 485× less CPU than libx264 at marginally better PSNR/SSIM.</p>
+    </div>
+    <div>
+      <h3>Dual rendition, one frame set</h3>
+      <p>A downscaled ViPE-only rendition (<code>--vipe-height 540</code>) is emitted from a
+      <b class="k">single</b> decode→fps→split filter graph so both renditions hold exactly the
+      same frames. Frame-count parity is then asserted via <code>ffprobe nb_frames</code> and
+      the run exits <code>FATAL</code> on mismatch.</p>
+
+      <div class="note"><b>Why parity is load-bearing.</b> Poses are computed on the 540p
+      rendition but hands on full-res frames. If the two frame sets ever diverge by one, every
+      hand is fitted against the wrong camera pose — silently, with plausible-looking output.</div>
+
+      <h3>Stage 0</h3>
+      <p>Plain ffmpeg CPU decode to <code>images/&lt;seq&gt;/*.jpg</code>. The extraction rate
+      here <b class="k">must</b> match <code>data.frame_opts.fps</code> in Stage C —
+      <code>wr_adapter._read_clip_fps</code> treats the declared value as authoritative and
+      will not detect the mismatch.</p>
+    </div>
+  </div>
+</div>
+</section>
+
+<section class="slide" data-act="GPU pipeline">
+<div class="wrap">
+  <p class="eyebrow">Stage A — ViPE</p>
+  <h2>Camera track</h2>
+  <p class="sub">NVIDIA's Video Pose Engine, vendored with 22 local patch sites, produces the
+  per-frame camera-to-world pose and intrinsics that everything else is anchored to.</p>
+
+  <div class="grid g2">
+    <div>
+      <h3>Outputs</h3>
+      <div class="kv">
+        <dt>pose/&lt;seq&gt;.npz</dt><dd>OpenCV cam2world 4×4 per frame</dd>
+        <dt>intrinsics/&lt;seq&gt;.npz</dt><dd><code>[fx, fy, cx, cy]</code> per frame, in ViPE's
+          own input pixel units</dd>
+        <dt>rgb/, mask/</dt><dd>intermediate renditions, pruned after use</dd>
+      </div>
+      <p>A clip only counts as done when <b class="k">both</b> npz files exist —
+      <code>vidproc.preprocess_cameras</code> needs the pair.</p>
+
+      <h3>Local patches that matter</h3>
+      <ul class="tight">
+        <li><code>VIPE_BACKEND_WINDOW</code> — fixed-lag backend, turns O(t<sup>2.7</sup>)
+          bundle adjustment into roughly linear. Validated drift &lt; 0.3 % of path.</li>
+        <li><code>VIPE_BACKEND_DEDUP</code>, <code>VIPE_BACKEND_EVERY</code> — A/B-gated
+          edge-selection savings.</li>
+        <li>Disk-cache spill so long sequences fit in VRAM (<code>SLAM_BUFFER</code>,
+          3.31 MB per slot).</li>
+      </ul>
+      <p><small>Never set <code>VIPE_DISK_CACHE_FP16=1</code> — it changes output. One doc
+      sample env sets it; the README and the full-video handoff both forbid it. The README
+      is authoritative.</small></p>
+    </div>
+    <div>
+      <h3>Intrinsics rescale — the silent tilt</h3>
+      <p>Downstream stages may decode at a different resolution than ViPE consumed, so every
+      consumer rescales:</p>
+      <pre class="f">W_vipe   = 2 · cx_vipe        <span class="c">assumes centred principal point</span>
+s        = W_frame / W_vipe
+fx_used  = s · fx_vipe</pre>
+      <p>Dyn-HaMR implements the same rule independently and additionally asserts the aspect
+      ratios agree to 1e-2 before scaling all four entries. Without this the unprojection is off
+      by the resolution ratio and <b class="k">gravity silently tilts</b>.</p>
+
+      <h3>Validating a pose track</h3>
+      <p><code>ops/cmp_pose.py</code> compares two trajectories that differ by a Sim(3):
+      Umeyama-align the translations, then report ATE (median/p95/max, absolute and as % of path)
+      plus gauge-free frame-to-frame rotation. This is the acceptance test used as the noise
+      floor when evaluating a ViPE patch.</p>
+    </div>
+  </div>
+</div>
+</section>
+
+<section class="slide" data-act="GPU pipeline">
+<div class="wrap">
+  <p class="eyebrow">Stage G — the most mathematical stage</p>
+  <h2>Gravity estimation</h2>
+  <p class="sub">One world-UP unit vector per clip. Everything that decomposes motion into
+  forward / right / up depends on it, so it gets three independent estimators and an arbitration
+  gate. Primary source is depth-plane geometry, not IMU.</p>
+
+  <div class="grid g2">
+    <div>
+      <h3>1 · Sample and unproject</h3>
+      <pre class="f"><span class="c"># 40 frames, uniformly spaced in row index</span>
+idxs = linspace(0, N−1, 40).astype(int)
+
+<span class="c"># UniDepth-L, resident, conditioned fx = fy = f</span>
+D = model.estimate(rgb).metric_depth   <span class="c"># (H,W) metres</span>
+
+cx, cy = W/2, H/2
+u, v   = grid(stride_px = 8)
+z      = D[v, u]
+mask   = isfinite(z) ∧ (0.1 &lt; z &lt; 8.0)
+
+X = [ (u−cx)/fx_used · z,
+      (v−cy)/fx_used · z,
+      z ]                    <span class="c"># camera coords, metres</span></pre>
+      <p><small><b class="k">fy never appears</b> — the v term divides by <code>fx_used</code>.
+      Correct given UniDepth was conditioned isotropically, but it means ViPE's reported
+      <code>fy</code> is discarded here.</small></p>
+
+      <h3>2 · Peel planes by RANSAC</h3>
+      <pre class="f">for p in 1..4:
+    if |X| &lt; 400: break
+    n̂, inl, Xc = ransac(X, thr=0.03 m, iters=250)
+    if |inl| &lt; 0.10·|X|: break
+    normals += R_c2w(i) @ sign_up(n̂, Xc)
+    weights += |inl|
+    X = X[¬inl]              <span class="c"># peel and continue</span></pre>
+      <p>Refit is total least squares: the plane normal is the right singular vector of the
+      smallest singular value of the centred inlier set.</p>
+    </div>
+    <div>
+      <h3>3 · Sign each normal toward the camera</h3>
+      <pre class="f">sign_up(n, centroid):
+    return −n  if (n · centroid) &gt; 0
+           n   otherwise
+<span class="c"># post-condition: n_up · centroid ≤ 0</span></pre>
+      <p>The camera centre is the origin, so UP points from the support surface toward the
+      camera: <code>up ∝ (origin − centroid) = −centroid</code>. This is why the estimator
+      survives steeply down-looking rigs where the naive "camera −Y is up" heuristic fails.</p>
+
+      <h3>4 · Pool by spherical RANSAC</h3>
+      <pre class="f">ct   = cos(12°) ≈ 0.9781
+D    = N̂ N̂ᵀ                     <span class="c">SIGNED cosine</span>
+best = argmax_i Σ_j w_j·1[D_ij &gt; ct]
+inl  = {k : D[best,k] &gt; ct}
+axis = unit(Σ_inl w_k n̂_k / Σ_inl w_k)
+inl  = {k : n̂_k · axis &gt; ct}     <span class="c">one refit pass</span>
+axis = unit(weighted mean again)
+spread_deg = P90(angle(n̂_k, axis))
+frac = Σ_inl w / Σ_all w</pre>
+      <p>Every horizontal surface — floor, worktop, ironing board — votes the <i>same</i> up
+      direction, so its cluster wins; walls and objects scatter. The cosine is
+      <b class="k">signed</b>, so an antipodal normal is an outlier rather than being folded in
+      — correct only because step 3 pre-signed everything.</p>
+
+      <div class="note"><b>Arbitration.</b> Depth-plane, EPIC accelerometer IMU (resampled onto
+      the video clock, 0.5 s boxcar low-pass, brute-force axis map) and trajectory PCA each
+      produce a candidate. <code>select_gravity</code> takes the lowest-spread estimate that
+      passes the 12° gate; if none does, the clip is flagged and its head-derived targets are
+      excluded downstream. Needs ≥6 pooled planes or there is no depth candidate at all.</div>
+    </div>
+  </div>
+</div>
+</section>
+
+<section class="slide" data-act="GPU pipeline">
+<div class="wrap">
+  <p class="eyebrow">Stage B · C — hands</p>
+  <h2>Detection, tracking, world fitting</h2>
+
+  <div class="grid g2">
+    <div>
+      <h3>Stage B — resident preproc</h3>
+      <p>YOLO detector plus <b class="k">WiLoR</b> (<code>HAND_MODEL=wilor</code>, the vendored
+      default) run over every sequence in one resident pass, writing
+      <code>track_preds/*/track.npz</code> — per-frame hand boxes, keypoints and side labels.</p>
+
+      <h3>Stage C — Dyn-HaMR optimisation</h3>
+      <p><code>run_opt.py</code> fits MANO hands into the <i>world</i> frame, jointly with the
+      ViPE camera track, producing <code>*_world_results.npz</code>. This is where per-frame 2D
+      predictions become a temporally coherent metric 3D trajectory.</p>
+      <pre>data.frame_opts.fps = $FPS    <span class="c">MUST equal Stage 0 rate</span>
+data.vipe_dir       = $VR
+HF_HUB_OFFLINE      = 1       <span class="c">default</span>
+STRICT_DONE=1                 <span class="c">refuse sentinel-less skips</span></pre>
+
+      <div class="note"><b>The <code>.DONE</code> sentinel is the contract.</b> It is written
+      only after <code>run_opt.py</code> exits 0. Without <code>STRICT_DONE</code>, legacy
+      output directories that look complete but are truncated get skipped as finished.</div>
+    </div>
+    <div>
+      <h3>Weights the pipeline pulls at runtime</h3>
+      <p>~8.6 GB, gitignored, not in the repo — must be staged on any new host:</p>
+      <ul class="tight">
+        <li>WiLoR checkpoint (2.4 G), HaMeR checkpoints (2.6 G), MANO model</li>
+        <li>UniDepth-v2-ViTL, GeoCalib, SAM (vit_b), GroundingDINO (swint), BERT-base</li>
+        <li>DROID / AOT hub weights, YOLO detector</li>
+      </ul>
+
+      <h3>Pruning policy</h3>
+      <p>With <code>PRUNE=1</code> derived artefacts are deleted as soon as they are consumed —
+      masks after A, rgb after G, images and optimiser state after C is <code>DONE</code>.
+      Residual drops from <b class="k">~0.82 GB to ~40 MB per clip</b>, which is what makes a
+      thousand-clip corpus fit on the box at all.</p>
+
+      <div class="note bad"><b>Stage G has no failure file and no summary line</b>, and the
+      driver always exits 0. A gravity daemon that silently produced nothing looks identical to
+      one that succeeded — check for the presence of <code>gravity/&lt;seq&gt;.json</code>,
+      not the exit code.</div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ═══════════ ACT V — ADAPTERS ═══════════ -->
+
+<section class="slide" data-act="Adapters">
+<div class="wrap">
+  <p class="eyebrow">src/corpus/adapters/ — where sources become one thing</p>
+  <h2>The adapter contract</h2>
+  <p class="sub">An adapter's whole job is to answer the same eleven questions for every source,
+  in the same units and frames. Everything after this point in the corpus is source-agnostic.</p>
+
+  <div class="flow">
+    <div class="frow"><div class="flab">discover</div>
+      <div class="fcols"><div class="fbox"><span class="t">yield ClipRef per episode</span>
+        <span class="d">group IO so each big source file is read once</span></div></div></div>
+    <div class="arrowr">▼</div>
+    <div class="frow"><div class="flab">load</div>
+      <div class="fcols g2">
+        <div class="fbox"><span class="t">native pose + hands</span>
+          <span class="d">zarr · hdf5 · LeRobot parquet · world_results.npz</span></div>
+        <div class="fbox"><span class="t">intrinsics + media dims</span>
+          <span class="d">verified against ffprobe</span></div>
+      </div></div>
+    <div class="arrowr">▼</div>
+    <div class="frow"><div class="flab">renormalise</div>
+      <div class="fcols"><div class="fbox stage">
+        <span class="t">A′(t) = inv_se3(A(0)) @ A(t)</span>
+        <span class="d">world becomes the frame-0 camera · cam_R[0]=I, cam_t[0]=0</span></div></div></div>
+    <div class="arrowr">▼</div>
+    <div class="frow"><div class="flab">unify hands</div>
+      <div class="fcols g3">
+        <div class="fbox"><span class="t">trans</span><span class="d">world wrist, m</span></div>
+        <div class="fbox"><span class="t">wrist_rot</span><span class="d">hand→world 3×3</span></div>
+        <div class="fbox"><span class="t">fingers</span><span class="d">source-native + tag</span></div>
+      </div></div>
+    <div class="arrowr">▼</div>
+    <div class="frow"><div class="flab">validate</div>
+      <div class="fcols g2">
+        <div class="fbox"><span class="t">geometric_valid + per-source guards</span>
+          <span class="d">→ valid_l / valid_r</span></div>
+        <div class="fbox"><span class="t">CanonicalClip.validate()</span>
+          <span class="d">shape, SO(3), intrinsics sanity</span></div>
+      </div></div>
+    <div class="arrowr">▼</div>
+    <div class="frow"><div class="flab">write</div>
+      <div class="fcols"><div class="fbox stage">
+        <span class="t">one zstd parquet + clip-meta JSON in file-level key <code>clip</code></span>
+        <span class="d">provenance: git sha, config snapshot, migration lineage</span></div></div></div>
+  </div>
+
+  <div class="grid g2">
+    <div class="note"><b>Renormalisation is what makes clips comparable at all.</b> Each source
+    has its own global frame — Aria's gravity-aligned +Z-up world, HOMIE's SLAM world, ARKit's
+    session origin. Conjugating every pose by the inverse of frame 0 erases that difference and
+    gives one definition of "world" that holds for all 380,401 clips.</div>
+    <div class="note bad"><b>SE(3) inversion is guarded, and it raises.</b>
+    <code>inv_se3</code> asserts <code>max|R Rᵀ − I| ≤ 1e-3</code> and
+    <code>|det R − 1| ≤ 1e-3</code> before inverting. A source shipping a non-orthonormal
+    rotation fails loudly at build time rather than producing a plausible wrong corpus.</div>
+  </div>
+</div>
+</section>
+
+<section class="slide" data-act="Adapters">
+<div class="wrap">
+  <p class="eyebrow"><span class="chip a">egodex</span> transform chain</p>
+  <h2>ARKit → Layer-1</h2>
+
+  <div class="grid g2">
+    <div>
+      <h3>Head</h3>
+      <pre class="f">A(t)     = observation.state.camera[t]     <span class="c">4×4 c2w</span>
+A′(t)    = inv_se3(A(0)) @ A(t)
+cam_R[t] = A′(t)[:3,:3]ᵀ
+cam_t[t] = −cam_R[t] @ A′(t)[:3,3]</pre>
+
+      <h3>Wrist</h3>
+      <pre class="f">W(t)         = observation.state.{left,right}Hand[t]
+trans[t]     = A′⁻¹-lifted W(t)[:3,3]     <span class="c">world, m</span>
+wrist_rot[t] = corresponding 3×3          <span class="c">hand→world</span></pre>
+
+      <h3>Fingers — kept native</h3>
+      <pre class="f">fingers[t] = 24 joints × row-major 3×4 [R|t]
+           = <span class="hl">288 floats</span>, wrist-relative SE(3), metres
+hand_format = "arkit_joints_se3_wrist_relative"</pre>
+      <p>Nothing is converted at write time. The 24×SE(3) payload is stored exactly as ARKit
+      produced it and the <code>hand_format</code> tag tells consumers how to read it.</p>
+    </div>
+    <div>
+      <h3>Gravity — exact, not estimated</h3>
+      <pre>gravity_method     = "arkit"
+gravity_spread_deg = 0.0
+gravity_flagged    = False</pre>
+      <p>ARKit's world is already gravity-aligned, so <code>gravity_up</code> is an algebraic
+      re-expression into the clip frame, not a measurement. Same story for egoverse
+      (<code>aria_slam</code>) and xp10m (<code>xp10m_slam</code>).</p>
+
+      <div class="note"><b><code>gravity_spread_deg = 0.0</code> means exact, not
+      unmeasured.</b> All 380,401 clips. A "gravity quality" histogram is a single spike at
+      zero — the depth-plane estimator with its real spread values only fires on the
+      unshipped pipeline path.</div>
+
+      <h3>Splits and exclusions</h3>
+      <div class="kv">
+        <dt>split_group</dt><dd>the <b class="k">task</b> — the LeRobot v3 export carries no
+          recording-session id, so task-level grouping is used. Coarser than session, therefore
+          strictly safer against leakage.</dd>
+        <dt>excluded</dt><dd>27 episodes with upstream 0×0 intrinsics, listed by id in
+          <code>release_info.json</code> and <code>data/egodex_excluded27.json</code>.</dd>
+      </div>
+      <p><small>Accounting closes: 314,839 − 27 = 314,812 train + 3,243 test = 318,055.</small></p>
+
+      <div class="note bad"><b><code>task_name == split_group</code> on all 318,055 rows.</b>
+      The language task label and the leakage unit are literally the same string — so any
+      task-conditioned view is also a leakage-group-conditioned view.</div>
+    </div>
+  </div>
+</div>
+</section>
+
+<section class="slide" data-act="Adapters">
+<div class="wrap">
+  <p class="eyebrow"><span class="chip b">egoverse</span> transform chain</p>
+  <h2>Two branches, one output</h2>
+
+  <div class="grid g2">
+    <div>
+      <h3>Head — quaternion to normalised world</h3>
+      <pre class="f">R_c2w[t] = quat_to_R(hp[t,3:7])   <span class="c">wxyz, unit</span>
+t_c2w[t] = hp[t,0:3]              <span class="c">metres, +Z-up world</span>
+
+<span class="c"># conjugate by frame 0</span>
+cam_R[t] = R_c2w[t]ᵀ R0
+cam_t[t] = −R_c2w[t]ᵀ (t_c2w[t] − t0)
+
+<span class="c"># verified: cam_R[0] = I, cam_t[0] = 0</span></pre>
+
+      <h3>Gravity</h3>
+      <pre>u = R0ᵀ @ [0,0,1]
+gravity_up = u / ‖u‖</pre>
+
+      <h3>Branch A — world-native keypoints</h3>
+      <pre class="f">kp_cam[t,k]   = R_c2wᵀ (kp[t,k] − t_c2w[t])
+wrist_cam[t]  = R_c2wᵀ (wp[t,0:3] − t_c2w[t])
+R_hand_cam[t] = R_c2wᵀ @ quat_to_R(wp[t,3:7])</pre>
+      <p><small>Exact — no extrinsic, no axis guess.</small></p>
+
+      <h3>Branch B — head-fixed keypoints</h3>
+      <pre class="f">M = E @ G_axes        <span class="c">fitted extrinsic ∘ detected permutation</span>
+kp_cam[t,k]   = M @ kp[t,k]
+wrist_cam[t]  = M @ wp[t,0:3]
+R_hand_cam[t] = M @ quat_to_R(wp[t,3:7])</pre>
+      <p><small>Pure rotation — the CPF→RGB lever arm is never applied.</small></p>
+    </div>
+    <div>
+      <h3>Shared lift to the normalised world</h3>
+      <pre class="f">trans[t]     = R_c2w′[t] @ wrist_cam[t] + t_c2w′[t]
+wrist_rot[t] = R_c2w′[t] @ R_hand_cam[t]
+fingers[t]   = (kp_cam[t] − <span class="hl">kp_cam[t,0]</span>).reshape(63)</pre>
+      <p>Note the subtraction is against <b class="k">keypoint 0</b> (the wrist keypoint), not
+      <code>wrist_cam</code> (which comes from a different array,
+      <code>obs_wrist_pose</code>). That is why <code>fingers[0:3] ≡ 0</code> exactly — verified
+      <code>max|fingers_r[:, :3]| = 0.0</code>.</p>
+
+      <h3>Splits</h3>
+      <div class="kv">
+        <dt>split_group</dt><dd><b class="k">user_id</b>. Clips without one become singleton
+          groups and are <b class="k">pinned to train</b> — a singleton val group measures
+          nothing, and its unlabelled session-mates could leak.</dd>
+      </div>
+      <div class="note bad"><b>The singleton figure in the docs is understated.</b> Docs say
+      "~20.6 % of egoverse has no user_id" — measured, <code>split_group == orig_id</code> on
+      10,214 clips (20.57 %) ✓, but clips sitting in <code>count == 1</code> groups number
+      <b class="k">11,658 (23.48 %)</b>, because 1,444 real user_ids appear exactly once. The
+      pin keys on group count, so 23.48 % of egoverse can never be validation.</div>
+
+      <div class="note bad"><b>184 shipped clips violate the schema's own intrinsics guard.</b>
+      <code>base.py:138-143</code> requires <code>|2cy − height| ≤ 0.15·height</code>; 184 of the
+      10,214 clips in the 640×480 family fail it today (worst rel-err 0.156). They shipped
+      because the v06 migration rewrites tables without calling
+      <code>CanonicalClip.validate()</code>, and the release gate's clip validator contains no
+      intrinsics test at all.</div>
+    </div>
+  </div>
+</div>
+</section>
+
+<section class="slide" data-act="Adapters">
+<div class="wrap">
+  <p class="eyebrow"><span class="chip c">xp10m</span> transform chain</p>
+  <h2>SLAM body pose → camera → world</h2>
+
+  <div class="grid g2">
+    <div>
+      <h3>Compose the camera track</h3>
+      <pre class="f"><span class="c"># body pose from SLAM</span>
+R_w2b(t) = quat_to_R(slam/quat_wxyz[t])
+t_w2b(t) = slam/trans_xyz[t]
+
+<span class="c"># body → stereo-left camera, from calibration</span>
+R_c0b = T_c0_b[:3,:3];  t_c0b = T_c0_b[:3,3]
+
+<span class="c"># world → camera</span>
+w2c[t][:3,:3] = R_c0b @ R_w2b(t)
+w2c[t][:3, 3] = R_c0b @ t_w2b(t) + t_c0b
+
+<span class="c"># i.e. T_w2c(t) = T_c0_b ∘ T_w2b(t)</span></pre>
+
+      <h3>Renormalise and store</h3>
+      <pre class="f">c2w(t)      = inv_se3(w2c(t))
+A0_inv      = inv_se3(c2w(0))
+c2w_clip(t) = A0_inv @ c2w(t)
+cam_R[t]    = inv_se3(c2w_clip(t))[:3,:3]
+cam_t[t]    = inv_se3(c2w_clip(t))[:3, 3]
+
+up_src   = [0,0,1]                 <span class="c">SLAM world is Z-up</span>
+gravity_up = unit(A0_inv[:3,:3] @ up_src)</pre>
+
+      <h3>Image geometry from calibration</h3>
+      <pre>K = [fx,fy,cx,cy] = [200, 200, 256, 256]
+width  = round(2·cx) = 512
+height = round(2·cy) = 512
+HFOV   = 2·atan(cx/fx) = 103.99°</pre>
+    </div>
+    <div>
+      <h3>Hands</h3>
+      <pre class="f">kp(t)        = nan_to_num(joints_3d[t])   <span class="c">(21,3) m, cam frame</span>
+wrist_cam(t) = kp(t)[0]
+
+trans(t)     = R_c2w(t) @ wrist_cam(t) + p_c2w(t)
+wrist_rot(t) = R_c2w(t) @ R_hand_cam(t)
+fingers(t)   = (kp(t) − kp(t)[0:1]).reshape(63)</pre>
+
+      <h3>Degenerate-orientation repair</h3>
+      <pre class="f">go_ok(t) = isfinite(go(t)).all()
+         ∧ |det(nan_to_num(go(t))) − 1| &lt; 0.1
+
+<span class="c"># nearest-valid-frame fill, ties → smaller index</span>
+go(bad) ← go(argmin |bad − i|, i ∈ ok)
+<span class="c"># if none valid at all: identity</span>
+n_fill → config_snapshot["wrist_rot_nan_filled"]</pre>
+      <p><small>The fill count is recorded per clip per side, so a consumer can tell how much of
+      a clip's wrist orientation is interpolated rather than measured.</small></p>
+
+      <h3>MANO betas</h3>
+      <pre>betas_out = mean over finite frames  <span class="c">10-vector</span></pre>
+      <p>xp10m is the only source shipping real <code>betas</code>; egodex and egoverse write
+      <code>null</code>.</p>
+      <div class="note"><b><code>betas</code> has zero consumers today.</b> Nothing in
+      <code>labels/</code>, <code>qa/</code> or <code>vla_core</code> reads it. Purely archival
+      for run-1 — it exists for future mesh supervision.</div>
+
+      <h3>Splits</h3>
+      <p><code>split_group</code> = the <b class="k">session uuid</b>. 912 groups, median size
+      10, max 51, 64 singletons.</p>
+    </div>
+  </div>
+</div>
+</section>
+
+<section class="slide" data-act="Adapters">
+<div class="wrap">
+  <p class="eyebrow">geometry.py:95-103 + per-source guards</p>
+  <h2>Validity — the mask everything depends on</h2>
+  <p class="sub">One shared geometric test, then a different extra factor per source. The
+  <code>valid</code> column is the single most load-bearing number in the corpus: every hand loss
+  is masked by it, and invalid frames contain filler, not zeros.</p>
+
+  <div class="grid g2">
+    <div>
+      <h3>The shared test</h3>
+      <pre class="f">finite(t)      = all(isfinite(trans(t)))
+prev_finite(t) = finite(t−1),  prev_finite(0) = True
+dist(t)        = ‖trans(t) − p_head(t)‖
+jump(t)        = ‖trans(t) − trans(t−1)‖,  jump(0) = 0
+
+jump_bad(t) = finite(t) ∧ prev_finite(t)
+              ∧ (jump(t) ≥ max_vel / fps)
+
+valid(t) = finite(t)
+         ∧ (dist(t) &gt; 0.05)      <span class="c">STRICT</span>
+         ∧ (dist(t) &lt; 1.20)      <span class="c">STRICT</span>
+         ∧ ¬jump_bad(t)</pre>
+      <div class="kv">
+        <dt>min_hand_head_dist_m</dt><dd>0.05</dd>
+        <dt>max_hand_head_dist_m</dt><dd>1.20</dd>
+        <dt>max_hand_vel_mps</dt><dd>3.0</dd>
+      </div>
+
+      <div class="note bad"><b>The same 3.0 m/s cap is 1.5× more permissive for xp10m.</b>
+      The gate is <code>max_vel / fps</code>, so it is 0.100 m/frame at 30 fps but
+      <b class="k">0.150 m/frame at 20 fps</b>. Not a per-source tuning decision — a
+      consequence of the frame rate.</div>
+    </div>
+    <div>
+      <h3>Per-source extra factor</h3>
+      <div class="tw"><table>
+        <thead><tr><th>Source</th><th>Additional multiplier</th></tr></thead>
+        <tbody>
+          <tr><td><span class="chip a">egodex</span></td><td class="mono">none</td></tr>
+          <tr><td><span class="chip b">egoverse</span></td><td class="mono">Σ|kp| &gt; 1e-6</td></tr>
+          <tr><td><span class="chip c">xp10m</span></td>
+            <td class="mono">Σ|kp| &gt; 1e-6 ∧ all isfinite(kp)</td></tr>
+          <tr><td>epic / ego4d</td><td class="mono">round(is_right) == want</td></tr>
+        </tbody></table></div>
+      <p><small>Recomputing <code>geometric_valid</code> alone will <b class="k">not</b>
+      reproduce the shipped column for two of three sources.</small></p>
+
+      <h3>Measured validity</h3>
+      <div class="tw"><table>
+        <thead><tr><th>Source</th><th class="num">valid L</th><th class="num">valid R</th></tr></thead>
+        <tbody>
+          <tr><td><span class="chip a">egodex</span></td><td class="num">0.99999</td><td class="num">0.99999</td></tr>
+          <tr><td><span class="chip b">egoverse</span></td><td class="num">0.97996</td><td class="num">0.99703</td></tr>
+          <tr><td><span class="chip c">xp10m</span></td><td class="num">0.65786</td><td class="num">0.67003</td></tr>
+        </tbody></table></div>
+      <p><small>Frame-weighted. Clip-mean and clip-median differ — for xp10m they are
+      0.645 and 0.735. Label whichever you quote.</small></p>
+
+      <div class="note bad"><b><code>valid == 0</code> never means NaN.</b> Absent hands are
+      NaN-filled with <code>valid = 0</code>. Present-but-invalid frames keep whatever the source
+      produced — for xp10m, NaN joints are zeroed <i>before</i> the maths, so an all-NaN frame
+      yields <code>trans == head position</code>. Always mask; never NaN-test.</div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ═══════════ ACT VI — ON DISK ═══════════ -->
+
+<section class="slide" data-act="On disk">
+<div class="wrap">
+  <p class="eyebrow">A certified release</p>
+  <h2>Directory layout</h2>
+
+  <div class="grid g2">
+    <div>
+      <pre class="f">&lt;release&gt;_v06/
+├── manifest.parquet          <span class="c">1 row per clip — the discovery index</span>
+├── release_info.json         <span class="c">provenance, exclusions, git sha</span>
+├── gate_report.json          <span class="c">A–G verdict + manifest_sha256</span>
+├── SCHEMA.md                 <span class="c">rendered FROM schema.py</span>
+├── DATASET_CARD.md
+├── LICENSES.md
+├── CHANGELOG.md
+├── annotations/&lt;source&gt;/chunk-000/&lt;clip&gt;.parquet
+│                             <span class="c">GEOMETRY — 1 row per frame</span>
+├── narratives/&lt;source&gt;/chunk-000/&lt;clip&gt;.parquet
+│                             <span class="c">LANGUAGE — 1 row per segment</span>
+└── streams/&lt;name&gt;/&lt;source&gt;/chunk-000/&lt;clip&gt;.parquet
+                              <span class="c">EXTRA MODALITIES (xp10m only)</span></pre>
+
+      <div class="note bad"><b><code>chunk-NNN</code> is always <code>chunk-000</code>.</b>
+      Hardcoded in the writer, head_full, streams and narrate_join. egodex_v06 therefore holds
+      <b class="k">318,055 parquet files in one flat directory</b> — expect slow
+      <code>ls</code>, and do not build a chunk-sharded loader.</div>
+
+      <h3>What is NOT in a release</h3>
+      <p>No <code>videos/</code>. <code>source_video</code> is an absolute path into the source
+      dataset — 368 GB of annotation referencing <b class="k">2.7 TB</b> of media. Also absent
+      from all three: <code>head_full/</code>, <code>raw/</code>.</p>
+    </div>
+    <div>
+      <h3>Four record types</h3>
+      <div class="tw"><table>
+        <thead><tr><th>File</th><th>Grain</th><th>Meta key</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">annotations/…</td><td>1 row / frame</td><td class="mono">clip</td></tr>
+          <tr><td class="mono">narratives/…</td><td>1 row / segment</td>
+            <td class="mono"><span class="chip bad">none</span></td></tr>
+          <tr><td class="mono">streams/…</td><td>1 row / sample</td><td class="mono">stream</td></tr>
+          <tr><td class="mono">manifest.parquet</td><td>1 row / clip</td><td class="mono">—</td></tr>
+        </tbody></table></div>
+      <p>Per-clip constants live in the parquet <b class="k">file-level</b> key/value metadata,
+      as one JSON blob:</p>
+      <pre>meta = json.loads(
+  pq.ParquetFile(p).schema_arrow.metadata[b"clip"])</pre>
+      <p><small>Written with <code>compression="zstd"</code>. Sidecars join to geometry by
+      <code>clip_id</code>; core geometry files are immutable and sidecars are additive.</small></p>
+
+      <h3>Release provenance chain</h3>
+      <p>Verified clean today for all three releases:</p>
+      <pre>sha256sum manifest.parquet
+  == gate_report.manifest_sha256
+  == action_norm.provenance.manifest_sha256</pre>
+      <p><small>And <code>find annotations narratives streams -newer manifest.parquet</code>
+      returns zero files — gate check F still passes.</small></p>
+    </div>
+  </div>
+</div>
+</section>
+
+<section class="slide" data-act="On disk">
+<div class="wrap">
+  <p class="eyebrow">annotations/…/&lt;clip&gt;.parquet · schema.py:108-121</p>
+  <h2>Geometry — every column</h2>
+  <p class="sub">One row per video frame, in emission order. <code>_flist(n)</code> returns a
+  <b class="k">fixed-size</b> list of <code>n</code> float32 — except <code>n=1</code>, which
+  returns a bare scalar.</p>
+
+  <div class="tw"><table>
+    <thead><tr><th class="num">#</th><th>Column</th><th>Arrow dtype</th><th>Len</th>
+      <th>Units</th><th>Frame</th><th>Semantics</th><th>Fill if hand absent</th></tr></thead>
+    <tbody>
+      <tr><td class="num">0</td><td class="mono"><b class="k">frame</b></td><td class="mono">int32</td>
+        <td class="num">—</td><td>index</td><td>source video</td>
+        <td><code>video_frame_offset + row</code>, contiguous +1</td><td>—</td></tr>
+      <tr><td class="num">1</td><td class="mono">timestamp</td><td class="mono">double</td>
+        <td class="num">—</td><td>seconds</td><td>video clock</td><td><code>frame / fps</code></td><td>—</td></tr>
+      <tr><td class="num">2</td><td class="mono">trans_l</td><td class="mono">fixed_size_list&lt;float&gt;</td>
+        <td class="num">3</td><td>metres</td><td><b class="k">world</b></td>
+        <td>left wrist position</td><td class="mono">[NaN×3]</td></tr>
+      <tr><td class="num">3</td><td class="mono">wrist_rot_l</td><td class="mono">fixed_size_list&lt;float&gt;</td>
+        <td class="num">9</td><td>—</td><td><b class="k">hand→world</b></td>
+        <td>row-major 3×3</td><td class="mono">[NaN×9]</td></tr>
+      <tr><td class="num">4</td><td class="mono">valid_l</td>
+        <td class="mono"><span class="chip bad">float32 scalar</span></td>
+        <td class="num">1</td><td>{0,1}</td><td>—</td><td>per-frame validity</td><td class="mono">0.0</td></tr>
+      <tr><td class="num">5</td><td class="mono">fingers_l</td>
+        <td class="mono">list&lt;float&gt; <b class="k">variable</b></td>
+        <td class="num">var</td><td>per tag</td><td>per tag</td>
+        <td>source-native articulation</td><td class="mono">[] empty</td></tr>
+      <tr><td class="num">6</td><td class="mono">trans_r</td><td class="mono">fixed_size_list&lt;float&gt;</td>
+        <td class="num">3</td><td>metres</td><td>world</td><td>right wrist position</td><td class="mono">[NaN×3]</td></tr>
+      <tr><td class="num">7</td><td class="mono">wrist_rot_r</td><td class="mono">fixed_size_list&lt;float&gt;</td>
+        <td class="num">9</td><td>—</td><td>hand→world</td><td>row-major 3×3</td><td class="mono">[NaN×9]</td></tr>
+      <tr><td class="num">8</td><td class="mono">valid_r</td><td class="mono">float32 scalar</td>
+        <td class="num">1</td><td>{0,1}</td><td>—</td><td>per-frame validity</td><td class="mono">0.0</td></tr>
+      <tr><td class="num">9</td><td class="mono">fingers_r</td><td class="mono">list&lt;float&gt; variable</td>
+        <td class="num">var</td><td>per tag</td><td>per tag</td><td>source-native</td><td class="mono">[] empty</td></tr>
+      <tr><td class="num">10</td><td class="mono">cam_R</td><td class="mono">fixed_size_list&lt;float&gt;</td>
+        <td class="num">9</td><td>—</td><td><b class="k">world→camera</b></td>
+        <td>row-major 3×3, always written</td><td>n/a</td></tr>
+      <tr><td class="num">11</td><td class="mono">cam_t</td><td class="mono">fixed_size_list&lt;float&gt;</td>
+        <td class="num">3</td><td>metres</td><td>world→camera</td>
+        <td>always written</td><td>n/a</td></tr>
+    </tbody></table></div>
+
+  <div class="grid g3">
+    <div class="note bad"><b>Two opposite pose directions in one row.</b>
+    <code>wrist_rot</code> is <b class="k">hand→world</b>; <code>cam_R</code> is
+    <b class="k">world→camera</b>. And <code>fingers</code> is in a third frame that depends on
+    the <code>hand_format</code> tag.</div>
+    <div class="note bad"><b><code>valid_*</code> is a scalar, not a length-1 list.</b>
+    Code that assumes every hand column is a list breaks on it.</div>
+    <div class="note bad"><b>Invalid rows carry filler, not zeros.</b> Measured
+    <code>|pos_cam|</code> at invalid steps reaches <b class="k">402.59 m</b> versus 0.787 m max
+    on valid rows. Mask before you compute anything.</div>
+  </div>
+</div>
+</section>
+
+<section class="slide" data-act="On disk">
+<div class="wrap">
+  <p class="eyebrow">clip meta · hand_format</p>
+  <h2>The five finger encodings</h2>
+  <p class="sub">The one place the corpus deliberately does <i>not</i> unify. Converting every
+  source to MANO would mean an offline fitting pass; converting to keypoints loses ARKit's
+  per-joint rotations. So the payload stays native and carries a tag.</p>
+
+  <div class="tw"><table>
+    <thead><tr><th>hand_format</th><th class="num">len</th><th>Layout</th><th>Units</th>
+      <th>Frame of reference</th><th>Sources</th><th>In v06?</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">arkit_joints_se3_wrist_relative</td><td class="num"><b class="k">288</b></td>
+        <td>24 joints × 3×4 row-major [R|t]</td><td>m</td>
+        <td><b class="k">wrist frame</b></td><td><span class="chip a">egodex</span></td>
+        <td><span class="chip ok">318,055</span></td></tr>
+      <tr><td class="mono">egoverse_kp21x3_wrist_relative_cam</td><td class="num"><b class="k">63</b></td>
+        <td>21 keypoints × xyz</td><td>m</td>
+        <td>wrist-relative, <b class="k">camera axes</b></td><td><span class="chip b">egoverse</span></td>
+        <td><span class="chip ok">49,650</span></td></tr>
+      <tr><td class="mono">xp10m_kp21x3_wrist_relative_cam</td><td class="num"><b class="k">63</b></td>
+        <td>21 keypoints × xyz</td><td>m</td>
+        <td>wrist-relative, stereo-left camera axes</td><td><span class="chip c">xp10m</span></td>
+        <td><span class="chip ok">12,696</span></td></tr>
+      <tr><td class="mono">mano_axis_angle_15x3</td><td class="num">45</td>
+        <td>15 MANO joints × axis-angle</td><td>radians</td>
+        <td>MANO joint-local residual</td><td>epic · ego4d</td>
+        <td><span class="chip bad">none</span></td></tr>
+      <tr><td class="mono">none</td><td class="num">0</td><td>empty list</td><td>—</td>
+        <td>—</td><td>hand absent</td><td><span class="chip">n/a</span></td></tr>
+    </tbody></table></div>
+
+  <div class="grid g2">
+    <div>
+      <h3>kp21 joint order</h3>
+      <pre>0        wrist  (≡ 0 by construction)
+1-4      thumb    proximal → tip
+5-8      index    proximal → tip
+9-12     middle   proximal → tip
+13-16    ring     proximal → tip
+17-20    pinky    proximal → tip</pre>
+      <p><small>Same order for both kp21 formats. Keypoint 0 is identically zero because the
+      encoding is wrist-relative — which is exactly why 6 dims of the action vector are
+      structurally dead.</small></p>
+    </div>
+    <div>
+      <div class="note bad"><b>Width is never validated against the tag.</b>
+      <code>base.py:150-152</code> only asserts row count. A 63-float payload mistagged
+      <code>arkit_joints_se3_wrist_relative</code> passes write-time validation and blows up much
+      later inside <code>to_kp21</code>'s <code>reshape(T,24,3,4)</code>. Always dispatch on
+      <code>hand_format</code>; there is no schema-level guard.</div>
+      <div class="note bad"><b><code>xp10m_kp21x3_wrist_relative_cam</code> is missing from the
+      in-repo <code>SCHEMA.md</code> table</b> — it exists only in <code>schema.py:95</code> and
+      the per-release rendered SCHEMA.md. The in-repo copy is also still stamped
+      <b class="k">v0.5.0</b> while the code is at 0.6.0.</div>
+    </div>
+  </div>
+</div>
+</section>
+
+<section class="slide" data-act="On disk">
+<div class="wrap">
+  <p class="eyebrow">The formula consumers get wrong</p>
+  <h2>Reconstruction — branch on the tag</h2>
+  <p class="sub">There is no single "reconstruction recipe". The MANO-family version is printed
+  in the README and the math report; it is <b class="k">wrong for egodex</b>, whose fingers are
+  wrist-frame SE(3), not camera-axis xyz.</p>
+
+  <div class="grid g2">
+    <div>
+      <h3>kp21 formats — egoverse, xp10m</h3>
+      <pre class="f">wrist_cam    = cam_R @ trans + cam_t
+kp_cam[i]    = wrist_cam + fingers[3i : 3i+3]
+kp_world[i]  = trans + cam_Rᵀ @ fingers[3i : 3i+3]</pre>
+      <p><small>Fingers are already in camera axes, so the camera-frame reconstruction is a plain
+      addition. Going to world needs only the rotation, never the translation — an offset is a
+      direction-like quantity here, anchored at the wrist.</small></p>
+
+      <h3>ARKit format — egodex</h3>
+      <pre class="f">F        = fingers.reshape(T, 24, 3, 4)
+p_j      = F[:, j, :3, 3]          <span class="c">wrist-FRAME position, m</span>
+
+p_world  = trans + wrist_rot @ p_j
+p_cam    = cam_R @ p_world + cam_t
+
+<span class="c"># canonical kp21 view:</span>
+kp21[j]  = (cam_R @ wrist_rot) @ p_j</pre>
+      <p><small>The per-joint 3×3 rotation block — 9 of the 12 floats — is discarded by
+      <code>to_kp21</code>.</small></p>
+    </div>
+    <div>
+      <h3>Projecting to pixels</h3>
+      <pre class="f">u = fx · X/Z + cx
+v = fy · Y/Z + cy        <span class="c">Z &gt; 0, camera frame</span>
+intrins = [fx, fy, cx, cy]   <span class="c">from clip meta</span></pre>
+      <p>This round-trip — parquet row → 3D hand → pixel overlay on the video frame — is the
+      single check that exercises the entire contract. If the dots land on the hand, every frame
+      convention was read correctly.</p>
+
+      <div class="note bad"><b>Anatomy is not identical across sources.</b> Measured index-finger
+      chain, right hand, cm:
+      <div class="tw" style="margin-top:8px"><table>
+        <thead><tr><th>Source</th><th class="num">wrist→MCP</th><th class="num">MCP→PIP</th>
+          <th class="num">DIP→TIP</th></tr></thead>
+        <tbody>
+          <tr><td>egodex (ARKit)</td><td class="num">9.25</td><td class="num"><b class="k">4.28</b></td>
+            <td class="num"><b class="k">2.14</b></td></tr>
+          <tr><td>egoverse (MANO)</td><td class="num">9.27</td><td class="num">3.40</td><td class="num">2.57</td></tr>
+          <tr><td>xp10m (MANO)</td><td class="num">9.08</td><td class="num">3.31</td><td class="num">2.53</td></tr>
+        </tbody></table></div>
+      Joint <i>selection</i> is right — wrist→MCP agrees to 2 %. But ARKit's
+      <code>IntermediateBase</code> sits ~0.9 cm more distal than MANO's PIP. A per-joint
+      regressor trained on the mixture is learning a source-dependent target, and nothing in the
+      repo measures or documents this.</div>
+    </div>
+  </div>
+</div>
+</section>
+
+<section class="slide" data-act="On disk">
+<div class="wrap">
+  <p class="eyebrow">parquet file-level key <code>clip</code> · schema.py:127-171</p>
+  <h2>Clip metadata — every key</h2>
+
+  <div class="grid g2">
+    <div>
+      <h3>Identity &amp; media</h3>
+      <div class="kv">
+        <dt>schema_version</dt><dd><code>"0.6.0"</code></dd>
+        <dt>clip_id</dt><dd><code>&lt;source&gt;/&lt;orig_id&gt;/shot-&lt;N&gt;</code></dd>
+        <dt>source, orig_id, shot</dt><dd>components of the above</dd>
+        <dt>fps</dt><dd>rate of the <b class="k">stored rows</b>, not the container</dd>
+        <dt>width, height</dt><dd>pixels, verified against ffprobe</dd>
+        <dt>n_frames</dt><dd><code>T</code> = rows stored</dd>
+        <dt>intrins</dt><dd><code>[fx, fy, cx, cy]</code>, pixels</dd>
+        <dt>source_video</dt><dd><b class="k">absolute host path</b>, outside the release</dd>
+        <dt>video_frame_offset</dt><dd>absolute frame index of row 0</dd>
+      </div>
+
+      <h3>Hands</h3>
+      <div class="kv">
+        <dt>hand_format</dt><dd>one of the five tags</dd>
+        <dt>fingers_schema</dt><dd>free-text joint-name order + provenance notes</dd>
+        <dt>betas_l, betas_r</dt><dd>MANO shape 10-vector, or <code>null</code></dd>
+        <dt>has_left, has_right</dt><dd>derived from whether trans was supplied</dd>
+      </div>
+
+      <h3>World &amp; gravity</h3>
+      <div class="kv">
+        <dt>world_scale</dt><dd>metricisation factor; <code>null</code> = up-to-scale gauge.
+          All v06 = 1.0</dd>
+        <dt>gravity_up</dt><dd>anti-gravity UP unit vector <b class="k">in the clip world
+          frame</b></dd>
+        <dt>gravity_method</dt><dd><code>arkit</code> · <code>aria_slam</code> ·
+          <code>xp10m_slam</code> · <code>depth-plane</code> · <code>imu</code></dd>
+        <dt>gravity_spread_deg</dt><dd>P90 cone spread; 0.0 = exact</dd>
+        <dt>gravity_flagged</dt><dd>gate failed ⇒ head twist untrusted</dd>
+        <dt>conventions</dt><dd>verbatim <code>CONVENTIONS</code> snapshot</dd>
+      </div>
+    </div>
+    <div>
+      <h3>Splits &amp; QA</h3>
+      <div class="kv">
+        <dt>split</dt><dd><code>"train"</code> | <code>"test"</code> — written by
+          <b class="k">migrations only</b>, never by the writer</dd>
+        <dt>split_group</dt><dd>leakage unit: task / user_id / session uuid</dd>
+        <dt>ego_pose_flagged</dt><dd><code>null</code> = never assessed, distinct from
+          <code>False</code></dd>
+        <dt>ego_pose_flags</dt><dd><code>scale_invalid</code> ·
+          <code>downlooking_locomotion</code> · <code>gravity_untrusted</code></dd>
+        <dt>head_only</dt><dd>VLN locomotion record, no hands</dd>
+      </div>
+
+      <h3>Span, streams, calibration</h3>
+      <div class="kv">
+        <dt>seq_interval</dt><dd><code>[s0,s1)</code> stored rows, absolute frames</dd>
+        <dt>data_interval</dt><dd><code>[d0,d1]</code> full source extent</dd>
+        <dt>n_frames_full</dt><dd>full length <code>N ≥ T</code></dd>
+        <dt>embodiment</dt><dd><code>human_ego</code> · <code>human_bimanual</code> ·
+          <code>human_{left,right}_arm</code></dd>
+        <dt>streams</dt><dd><code>{name: registry entry}</code>, self-describing</dd>
+        <dt>calibration</dt><dd><code>{sensor: {parent_frame, T_parent_sensor, version}}</code></dd>
+      </div>
+
+      <h3>Provenance</h3>
+      <div class="kv">
+        <dt>git_sha</dt><dd>short SHA at write time</dd>
+        <dt>config_snapshot</dt><dd>run config — adapter name, task, repair counts</dd>
+        <dt>migration</dt><dd>release-to-release transform lineage</dd>
+        <dt>extracted_at</dt><dd>ISO-8601 UTC</dd>
+        <dt>vipe/hamer/dynhamr/narrative_version</dt>
+          <dd>literal string <code>"unknown"</code> on every v06 clip — populated, not missing</dd>
+        <dt>license</dt><dd>inherited usage terms</dd>
+        <dt>narratives_populated</dt><dd>reserved, hardcoded <code>False</code></dd>
+      </div>
+
+      <div class="note bad"><b><code>CLIP_META_KEYS</code> is documentation only</b> — grep
+      returns zero uses. The actual key set is the literal dict in
+      <code>writer.py:215-247</code>.</div>
+    </div>
+  </div>
+</div>
+</section>
+
+<section class="slide" data-act="On disk">
+<div class="wrap">
+  <p class="eyebrow">manifest.parquet · 44 columns · identical across all three releases</p>
+  <h2>The manifest — every column</h2>
+  <p class="sub">One row per clip. Its whole purpose is to let you filter, curate and build a
+  training index <b class="k">without opening a single per-clip file</b>.</p>
+
+  <div class="grid g3">
+    <div>
+      <h4 style="font-size:11px;font-family:var(--mono);letter-spacing:.12em;color:var(--accent);text-transform:uppercase">Identity &amp; media</h4>
+      <pre style="font-size:11.5px">clip_id        string
+source         string
+orig_id        string
+shot           int32
+fps            double
+width          int32
+height         int32
+n_frames       int32
+n_frames_full  int32
+duration_s     double
+media_codec    string
+source_video   string
+annotation_path string
+sha256         string</pre>
+    </div>
+    <div>
+      <h4 style="font-size:11px;font-family:var(--mono);letter-spacing:.12em;color:var(--accent);text-transform:uppercase">Hands &amp; validity</h4>
+      <pre style="font-size:11.5px">has_left            bool
+has_right           bool
+has_bimanual        bool
+n_valid_frames_l    int32
+n_valid_frames_r    int32
+frac_valid          double
+mean_hand_head_dist_l double
+mean_hand_head_dist_r double
+hand_format         string
+world_scale         double</pre>
+      <h4 style="font-size:11px;font-family:var(--mono);letter-spacing:.12em;color:var(--accent);text-transform:uppercase;margin-top:14px">Language</h4>
+      <pre style="font-size:11.5px">n_segments        int32
+narrative_models  string  <span class="c">JSON counts</span>
+narrative_version string
+task_name         string</pre>
+    </div>
+    <div>
+      <h4 style="font-size:11px;font-family:var(--mono);letter-spacing:.12em;color:var(--accent);text-transform:uppercase">Splits, QA, provenance</h4>
+      <pre style="font-size:11.5px">split               string
+split_group         string
+gravity_method      string
+gravity_spread_deg  double
+gravity_flagged     bool
+ego_pose_flagged    bool
+head_only           bool
+embodiment          string
+stream_names        list&lt;string&gt;
+license             string
+vipe_version        string
+hamer_version       string
+dynhamr_version     string
+git_sha             string
+schema_version      string
+extracted_at        string</pre>
+    </div>
+  </div>
+
+  <div class="grid g3">
+    <div class="note bad"><b>There is no <code>valid_l</code> / <code>valid_r</code> in the
+    manifest.</b> Those are per-frame columns inside the annotation parquet. The manifest carries
+    the aggregates <code>n_valid_frames_l/r</code> and <code>frac_valid</code> — three different
+    "validity" numbers that diverge for xp10m (0.658 frame-weighted, 0.645 clip-mean,
+    0.735 clip-median).</div>
+    <div class="note bad"><b><code>mean_hand_head_dist_*</code> is NaN, not null</b>, when a hand
+    has no valid frames — 716 egoverse and 169 xp10m rows.
+    <code>pandas.isna()</code> catches it; SQL <code>IS NULL</code> does not.</div>
+    <div class="note bad"><b><code>ego_pose_flagged</code> collapses three states into two.</b>
+    The manifest coerces with <code>bool(...)</code>, so "assessed and clean" becomes
+    indistinguishable from "never assessed". In v06 the only flag that ever fires is
+    <code>downlooking_locomotion</code> — 4,000 egoverse + 651 xp10m.</div>
+  </div>
+</div>
+</section>
+
+<section class="slide" data-act="On disk">
+<div class="wrap">
+  <p class="eyebrow">narratives/…/&lt;clip&gt;.parquet · 3,977,393 segments</p>
+  <h2>Language sidecar</h2>
+
+  <div class="grid g2">
+    <div>
+      <h3>Schema — identical across all three</h3>
+      <div class="tw"><table>
+        <thead><tr><th>Column</th><th>Type</th><th>Meaning</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">segment_id</td><td class="mono">int32</td><td>index within the clip</td></tr>
+          <tr><td class="mono">clip_id</td><td class="mono">string</td><td>join key</td></tr>
+          <tr><td class="mono">start_f, end_f</td><td class="mono">int32</td>
+            <td><b class="k">end-exclusive</b> frame range, same axis as the geometry
+            <code>frame</code> column</td></tr>
+          <tr><td class="mono">start_s, end_s</td><td class="mono">double</td><td>seconds</td></tr>
+          <tr><td class="mono">lh_text, rh_text</td><td class="mono">string</td><td>per-hand narration</td></tr>
+          <tr><td class="mono">ego_text</td><td class="mono">string</td><td>high-level ego action</td></tr>
+          <tr><td class="mono">text</td><td class="mono">string</td><td>the combined line actually used</td></tr>
+          <tr><td class="mono">rephrasings</td><td class="mono">list&lt;string&gt;</td>
+            <td>reserved; empty in v0</td></tr>
+          <tr><td class="mono">gen_model</td><td class="mono">string</td><td>provenance tag</td></tr>
+        </tbody></table></div>
+
+      <h3>Seconds → frames</h3>
+      <pre class="f">base_off = off if source == "egodex" else 0
+start_f  = max(base_off + round(s·fps), lo)
+end_f    = min(base_off + round(e·fps), hi)
+lo, hi   = off, off + n</pre>
+      <div class="note bad"><b>The <code>base_off</code> branch is missing from
+      <code>SCHEMA.md</code></b>, which documents only <code>round(seconds × fps)</code>.
+      A reader following it mis-aligns every egodex segment whose
+      <code>video_frame_offset &gt; 0</code> — mean offset is <b class="k">7,919 frames</b>
+      (264 s).</div>
+    </div>
+    <div>
+      <h3>Every <code>gen_model</code> token</h3>
+      <div class="tw"><table>
+        <thead><tr><th>Token</th><th>Source</th><th class="num">Clips</th><th>Provenance</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">qwen36_narrative_v1</td><td><span class="chip a">egodex</span></td>
+            <td class="num">314,812</td><td>on-prem Qwen3.6-27B, human-QC'd</td></tr>
+          <tr><td class="mono">egoverse_annotation_v1</td><td><span class="chip b">egoverse</span></td>
+            <td class="num">42,744</td><td>native recording annotation</td></tr>
+          <tr><td class="mono">qwen3vl_hands_v1</td><td><span class="chip b">egoverse</span></td>
+            <td class="num">—</td><td>per-hand VLM enrichment pass</td></tr>
+          <tr><td class="mono">xp10m_subtask_v1</td><td><span class="chip c">xp10m</span></td>
+            <td class="num">12,654</td><td>caption hierarchy, sub-task level</td></tr>
+          <tr><td class="mono">xp10m_action_v1</td><td><span class="chip c">xp10m</span></td>
+            <td class="num">12,652</td><td>caption hierarchy, action level</td></tr>
+          <tr><td class="mono">joystick_v1</td><td>all</td><td class="num">380,401</td>
+            <td><b class="k">synthesised</b> from head motion</td></tr>
+        </tbody></table></div>
+
+      <h3>Coverage is not uniform</h3>
+      <p>Joystick tiles 100 % of every clip — every clip has ≥1 segment, so
+      <code>n_segments &gt; 0</code> does <b class="k">not</b> mean "has language". Narration
+      coverage measured over 150 clips per source:</p>
+      <div class="tw"><table>
+        <thead><tr><th>Source</th><th class="num">mean</th><th class="num">clips at zero</th></tr></thead>
+        <tbody>
+          <tr><td><span class="chip a">egodex</span></td><td class="num">0.971</td><td class="num">1.3 %</td></tr>
+          <tr><td><span class="chip b">egoverse</span></td><td class="num"><b class="k">0.835</b></td>
+            <td class="num"><b class="k">16.0 %</b></td></tr>
+          <tr><td><span class="chip c">xp10m</span></td><td class="num">0.992</td><td class="num">0 %</td></tr>
+        </tbody></table></div>
+      <p><small>6,531 kept training clips are joystick-only → 55,382 windows (1.24 %) get
+      <code>text = "no narration"</code>.</small></p>
+
+      <div class="note bad"><b>Narrative spans can overlap and can be one frame long;</b>
+      joystick spans always partition the clip exactly. Do not assume disjointness.</div>
+    </div>
+  </div>
+</div>
+</section>
+
+<section class="slide" data-act="On disk">
+<div class="wrap">
+  <p class="eyebrow">streams/ · head_full/ · and the decode rule</p>
+  <h2>Extra modalities, and getting back to pixels</h2>
+
+  <div class="grid g2">
+    <div>
+      <h3>The stream registry contract</h3>
+      <p>Self-describing and <b class="k">enforced</b> — <code>write_stream</code> refuses any
+      entry missing a required field, and refuses <code>sensor:</code>/<code>body:</code>-frame
+      streams without an <code>extrinsic_ref</code> into clip-meta <code>calibration</code>.
+      Un-locatable sensors cannot be recorded.</p>
+      <pre style="font-size:11.5px">{"name":"head_body_pose", "tier":"vector",
+ "format":"pose_w2b_quat_wxyz_trans_v1",
+ "units":"m", "frame_of_reference":"world",
+ "sync":"frame", "rate_hz":20.0,
+ "provenance":{"device":"HOMIE v2 SLAM", …},
+ "T_c0_b":[16 floats row-major],
+ "value_dim":7, "n_samples":&lt;per clip&gt;}</pre>
+      <div class="kv">
+        <dt>tier</dt><dd><code>vector</code> (sidecar parquet) | <code>blob</code>
+          (native container + pointer)</dd>
+        <dt>sync</dt><dd><code>frame</code> | <code>t_ns</code></dd>
+        <dt>schema</dt><dd><code>frame</code> int32, <code>value</code>
+          fixed_size_list&lt;float&gt;[7]</dd>
+      </div>
+      <p><small>Only stream in the entire corpus: <code>head_body_pose</code>, xp10m, all
+      12,696 clips.</small></p>
+
+      <div class="note bad"><b><code>frame_of_reference: "world"</code> is ambiguous here</b> —
+      it means the <i>source</i> gravity-Z-up SLAM world, not the clip's frame-0-camera world.
+      The disambiguation exists only as a code comment. The stream is also read
+      <b class="k">positionally</b>, valid only because <code>n_samples == n_frames</code> and
+      the offset is zero for xp10m.</div>
+    </div>
+    <div>
+      <h3>head_full — a different gauge</h3>
+      <p>The full-length ViPE head track, stored when the annotation window is shorter than the
+      source. Its <code>cam_R</code> is exact but its translation is
+      <b class="k">up to scale</b> (<code>vipe_raw_up_to_scale</code>) — this is the one place
+      <code>× world_scale_hint</code> genuinely applies. Not present in any shipped release.</p>
+
+      <h3>Corpus row → pixel</h3>
+      <pre class="f">video      = clip_meta["source_video"]   <span class="c">absolute path</span>
+decode_idx = <span class="hl">frame[row]</span>                  <span class="c">verbatim, no offset math</span></pre>
+      <p>One rule, all three sources, v06. That is the whole formula.</p>
+
+      <div class="note bad"><b>The shipped <code>egodex_v06/DATASET_CARD.md</code> tells you to
+      do something else — and it is wrong.</b> Its caveat says to compute
+      <code>round(from_timestamp·fps) + (frame − dataset_from_index)</code>. That is the retired
+      <b class="k">v05</b> recipe; applying it to v06 double-shifts every egodex clip by
+      −100k…−660k frames. Measured proof: 6 random clips have <code>frame</code> ranges well
+      inside their own mp4's packet count, and gate check B
+      (<code>max(frame) &lt; nb_read_packets</code>) passed on 200 sampled clips. The reliable
+      in-data signal is <code>clip_meta["migration"]["transform"] ==
+      "frame_axis_global_to_video_local"</code>. Source of the stale text:
+      <code>migrations/write_release_docs.py:31-34</code> — regenerating the docs re-emits it.</div>
+
+      <div class="note bad"><b>Never decode with <code>select=eq(n,F)</code> at scale.</b>
+      Measured on a real egodex AV1 file: frame 15,000 takes <b class="k">3.93 s</b> without
+      <code>-ss</code> versus <b class="k">0.05 s</b> with it — an 80× penalty. The loader of
+      record does the slow one, and egodex's mean anchor sits at frame 7,919.</div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ═══════════ ACT VII — LAYER 2 ═══════════ -->
+
+<section class="slide" data-act="Layer-2">
+<div class="wrap">
+  <p class="eyebrow">labels/pretrain_loader.py — nothing here touches disk state</p>
+  <h2>Sampling and splits</h2>
+  <p class="sub">Everything from here on is computed at load time and stored nowhere. Change a
+  constant, get a different training view, same release.</p>
+
+  <div class="grid g2">
+    <div>
+      <h3>Decimation to a common rate</h3>
+      <pre class="f">stride = fps / action_hz              <span class="c">action_hz = 10.0</span>
+assert |stride − round(stride)| ≤ 1e-6
+stride = int(round(stride))           <span class="c">3 @30fps · 2 @20fps</span>
+
+usable    ⇔ n_frames &gt; stride · n_steps
+n_windows = n_frames − stride · n_steps
+steps     = t0 + stride · [1 … 16]
+horizon   = 16 / 10 = 1.6 s</pre>
+      <p><b class="k">The anchor is excluded from the targets.</b> There is no
+      <code>d_pos[anchor] = 0</code> row — a model expecting 17 steps including a zero anchor is
+      off by one.</p>
+
+      <h3>Clip filter, in order</h3>
+      <div class="tw"><table>
+        <thead><tr><th>Dropped for</th><th class="num">egodex</th><th class="num">egoverse</th>
+          <th class="num">xp10m</th></tr></thead>
+        <tbody>
+          <tr><td>official test</td><td class="num">3,243</td><td class="num">0</td><td class="num">0</td></tr>
+          <tr><td>flagged</td><td class="num">0</td><td class="num">4,000</td><td class="num">651</td></tr>
+          <tr><td>world_scale ≠ 1</td><td class="num">0</td><td class="num">0</td><td class="num">0</td></tr>
+          <tr><td>too short</td><td class="num">11,051</td><td class="num">0</td><td class="num">1</td></tr>
+          <tr><td><b class="k">kept</b></td><td class="num">303,761</td><td class="num">45,650</td>
+            <td class="num">12,044</td></tr>
+        </tbody></table></div>
+      <p><small>380,401 → <b class="k">361,455</b> usable clips.</small></p>
+    </div>
+    <div>
+      <h3>Group-disjoint train/val</h3>
+      <pre class="f">g = (source, split_group or orig_id)
+
+is_val(g) = (count(g) &gt; 1)
+          ∧ (crc32("source/group") mod 10000 &lt; 200)
+
+<span class="c"># val_fraction 0.02 → threshold 200</span>
+<span class="c"># count(g) == 1 ⇒ ALWAYS train</span></pre>
+      <p>Deterministic, recomputed at load time, stored nowhere on disk. Splitting by
+      <i>group</i> rather than clip is what stops near-duplicate clips from the same session
+      appearing on both sides.</p>
+
+      <div class="tw"><table>
+        <thead><tr><th>Partition</th><th class="num">clips</th><th class="num">windows</th></tr></thead>
+        <tbody>
+          <tr><td>train</td><td class="num">352,780</td><td class="num"><b class="k">4,477,300</b></td></tr>
+          <tr><td>val</td><td class="num">8,675</td><td class="num">90,468</td></tr>
+        </tbody></table></div>
+
+      <div class="note bad"><b>The <i>official</i> split is not group-disjoint.</b> 106 of
+      egodex's 134 <code>split_group</code>s appear in both official train and test — the only
+      warning in any of the three gate reports, and treated as informational. Group-disjointness
+      is a property of the <b class="k">loader-derived</b> partition only.</div>
+
+      <div class="note bad"><b>Nothing consumes <code>part="val"</code>.</b> 8,675 clips /
+      90,468 windows exist by contract; the training loop only ever constructs
+      <code>part="train"</code> and has no eval loop. The leakage story is real but currently
+      unexercised.</div>
+    </div>
+  </div>
+</div>
+</section>
+
+<section class="slide" data-act="Layer-2">
+<div class="wrap">
+  <p class="eyebrow">ACTION_SPEC.md · decisions of record</p>
+  <h2>The 153-dim action vector</h2>
+  <p class="sub">Chunk = 16 steps at 10 Hz = 1.6 s, re-anchored per chunk. Assembled in
+  <code>vla_core</code>, never in <code>data_corpus</code> — the corpus deliberately never names
+  a 6d rotation or a 153-dim layout.</p>
+
+  <div class="tw"><table>
+    <thead><tr><th>Slice</th><th>Block</th><th class="num">Dims</th><th>Frame</th>
+      <th>Anchoring</th><th>Masked by</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">[0:3]</td><td>head Δpos</td><td class="num">3</td>
+        <td><span class="ax-x">fwd</span> / <span class="ax-y">right</span> /
+          <span class="ax-z">up</span> heading frame</td>
+        <td><b class="k">chunk-anchored</b></td><td>always on</td></tr>
+      <tr><td class="mono">[3:9]</td><td>head Δrot 6d</td><td class="num">6</td>
+        <td>anchor <b class="k">camera</b> frame</td><td>chunk-anchored</td><td>always on</td></tr>
+      <tr><td class="mono">[9:12]</td><td>L pos_cam</td><td class="num">3</td>
+        <td>camera @ same step</td><td>per-step</td><td class="mono">valid_l</td></tr>
+      <tr><td class="mono">[12:18]</td><td>L rot 6d</td><td class="num">6</td>
+        <td>camera @ same step</td><td>per-step</td><td class="mono">valid_l</td></tr>
+      <tr><td class="mono">[18:81]</td><td>L kp21</td><td class="num">63</td>
+        <td>wrist-relative, camera axes</td><td>per-step</td><td class="mono">valid_l</td></tr>
+      <tr><td class="mono">[81:84]</td><td>R pos_cam</td><td class="num">3</td>
+        <td>camera @ same step</td><td>per-step</td><td class="mono">valid_r</td></tr>
+      <tr><td class="mono">[84:90]</td><td>R rot 6d</td><td class="num">6</td>
+        <td>camera @ same step</td><td>per-step</td><td class="mono">valid_r</td></tr>
+      <tr><td class="mono">[90:153]</td><td>R kp21</td><td class="num">63</td>
+        <td>wrist-relative, camera axes</td><td>per-step</td><td class="mono">valid_r</td></tr>
+    </tbody></table></div>
+
+  <div class="grid g3">
+    <div class="card"><h4>Why chunk-anchored, not step-to-step</h4>
+      <p>Per-step head motion at 10 Hz is ≲1 cm against mm-scale SLAM jitter — SNR ≈ 1, and
+      errors compound over a rollout. Integrating to the anchor over 1.6 s averages the jitter
+      away. This is the EgoScale ΔW = W₀⁻¹Wₜ convention.</p></div>
+    <div class="card"><h4>Why 6d rotation</h4>
+      <p>Continuous, no gimbal or double-cover discontinuity to fight during flow matching. Two
+      columns of the rotation matrix; orthonormalise at inference.</p></div>
+    <div class="card"><h4>Why kp21, not MANO</h4>
+      <p>Two of three sources have no MANO at all, and fitting is far more expensive than a
+      forward pass. MANO stays available natively for future mesh supervision.</p></div>
+  </div>
+
+  <div class="note bad"><b><code>d_pos</code> and <code>d_rot</code> live in different frames
+  inside the same 9-dim head block.</b> <code>d_pos</code> is in the gravity-corrected FRU
+  heading frame; <code>d_rot</code> is in the anchor camera frame (OpenCV, +Y down). They share
+  no basis. Confirmed by the xp10m heading override: swapping heading sources moves
+  <code>d_pos</code> by up to 5.2 mm and leaves <code>d_rot</code> bit-identical.</div>
+</div>
+</section>
+
+<section class="slide" data-act="Layer-2">
+<div class="wrap">
+  <p class="eyebrow">action_chunks.py:34-77</p>
+  <h2>Head target math</h2>
+
+  <div class="grid g2">
+    <div>
+      <h3>1 · Build the anchor heading basis</h3>
+      <pre class="f">û   = up / (‖up‖ + 1e-12)        <span class="c">clip gravity_up</span>
+g   = H[:, 2]                     <span class="c">forward axis in world</span>
+h   = g − (g·û) û                 <span class="c">horizontal projection</span>
+n   = ‖h‖
+
+if n &lt; 0.15:                      <span class="c">gaze within 8.6° of vertical</span>
+    h = f − (f·û) û               <span class="c">f = fallback_fwd</span>
+    n = ‖h‖                       <span class="c">NO second check</span>
+
+fwd   = h / (n + 1e-12)
+right = unit(fwd × û)
+
+B0 = [ fwd  ]                     <span class="c">ROWS, not columns</span>
+     [ right]
+     [  û   ]</pre>
+      <div class="note bad"><b>B0 is left-handed — <code>det(B0) = −1</code>.</b> It is
+      orthogonal, so norms and dot products are preserved, but you must not treat it as a
+      rotation, compose it with <code>d_rot</code>, or expect right-handed cross-product signs
+      in that frame. The relation is <code>right × fwd = up</code>, not
+      <code>fwd × right = up</code>.</div>
+
+      <h3>2 · The targets</h3>
+      <pre class="f">t_k      = t_0 + stride·(k+1),  k = 0…15
+p(t)     = −cam_R(t)ᵀ @ cam_t(t)
+
+d_pos[k] = <span class="hl">B0 @ (p(t_k) − p(t_0))</span>       <span class="c">metres, FRU</span>
+d_rot[k] = <span class="hl">R_c2w(t_0)ᵀ @ R_c2w(t_k)</span>     <span class="c">anchor camera</span></pre>
+      <p><small>Gauge-invariant: apply any rigid transform to all poses (and rotate
+      <code>up</code> with it) and both outputs are unchanged. Golden-tested.</small></p>
+    </div>
+    <div>
+      <h3>3 · xp10m heading override</h3>
+      <p>The record camera points 61° down, amplifying yaw jitter ×2.1, so the anchor heading
+      comes from the body-pose stream instead:</p>
+      <pre class="f">R_w2b(t0)   = quat_to_R(value[t0, 0:4])
+R_c2w_src   = (R_b_c0 @ R_w2b(t0))ᵀ
+R_clip←src  = cam_R(t0)ᵀ @ R_w2c_src(t0)
+H_body      = R_clip←src @ R_w2b(t0)ᵀ</pre>
+      <p><code>H_body</code> is fed to the basis builder in place of the camera matrix.
+      Positions still come from the record camera — head <i>is</i> the camera.</p>
+      <p><small>Effect: rotates the FRU decomposition of <code>d_pos</code> only.
+      <code>‖d_pos‖</code> is unchanged (B0 orthogonal) and <code>d_rot</code> is untouched.
+      A consumer who "fixes" tilt by also rotating <code>d_rot</code> double-applies.</small></p>
+
+      <h3>Measured growth across the chunk</h3>
+      <div class="tw"><table>
+        <thead><tr><th>q99 of Δpos</th><th class="num"><span class="ax-x">fwd</span></th>
+          <th class="num"><span class="ax-y">right</span></th>
+          <th class="num"><span class="ax-z">up</span></th></tr></thead>
+        <tbody>
+          <tr><td>step 1</td><td class="num">0.0400</td><td class="num">0.0222</td><td class="num">0.0111</td></tr>
+          <tr><td>step 16</td><td class="num">0.4745</td><td class="num">0.2362</td><td class="num">0.0923</td></tr>
+          <tr><td><b class="k">ratio</b></td><td class="num"><b class="k">11.9×</b></td>
+            <td class="num">10.6×</td><td class="num">8.4×</td></tr>
+        </tbody></table></div>
+      <p><small>Metres. Slightly sublinear against an ideal 16× — 99th-percentile motion
+      decorrelates over 1.6 s. This ramp is exactly why normalisation must be
+      <b class="k">per step</b>, not pooled over the horizon.</small></p>
+    </div>
+  </div>
+</div>
+</section>
+
+<section class="slide" data-act="Layer-2">
+<div class="wrap">
+  <p class="eyebrow">action_chunks.py:90-91 · hand_views.py:43-48</p>
+  <h2>Hand target math</h2>
+
+  <div class="grid g2">
+    <div>
+      <h3>Per-step camera-relative</h3>
+      <pre class="f">pos_cam[k] = cam_R(t_k) @ trans(t_k) + cam_t(t_k)
+rot_cam[k] = cam_R(t_k) @ wrist_rot(t_k)</pre>
+      <p>Relative to the <b class="k">same-timestep</b> camera, not the anchor. So the head chunk
+      and the hand-in-head targets compose back to world — and both are gauge-free, which is what
+      makes it irrelevant that ARKit, Aria SLAM and HOMIE SLAM each anchored their world
+      differently.</p>
+
+      <h3>Why representation A</h3>
+      <p>Every rigid re-anchoring term cancels. Proven by construction, and it is the whole reason
+      three sources with three different world definitions can share one action space.</p>
+
+      <h3>Measured camera-frame hand position</h3>
+      <div class="tw"><table>
+        <thead><tr><th>Source</th><th class="num">X</th><th class="num">Y</th><th class="num">Z</th></tr></thead>
+        <tbody>
+          <tr><td><span class="chip a">egodex</span></td><td class="num">0.061</td>
+            <td class="num">0.126</td><td class="num">0.256</td></tr>
+          <tr><td><span class="chip b">egoverse</span></td><td class="num">0.060</td>
+            <td class="num">0.080</td><td class="num">0.417</td></tr>
+          <tr><td><span class="chip c">xp10m</span></td><td class="num">0.058</td>
+            <td class="num">0.099</td><td class="num">0.320</td></tr>
+        </tbody></table></div>
+      <p><small>Metres. All <span class="ax-y">+Y</span> (below the optical axis) and
+      <span class="ax-z">+Z</span> (in front). Sign structure is identical across sources — a
+      convention mismatch would scream here.</small></p>
+    </div>
+    <div>
+      <h3>kp21 canonicalisation</h3>
+      <p><b class="k">Pass-through</b> for the two kp21 formats — already wrist-relative in
+      camera axes:</p>
+      <pre>kp21[t] = fingers[t].reshape(21, 3)</pre>
+
+      <p><b class="k">ARKit</b> needs a frame change and a joint remap:</p>
+      <pre class="f">J[t,n]   = fingers[t].reshape(24,3,4)[n, :3, 3]
+R_c←h(t) = cam_R(t) @ wrist_rot(t)
+Jc[t,n]  = R_c←h(t) @ J[t,n]
+
+kp21[t,0]   = 0
+kp21[t,1+m] = Jc[t, ARKIT24_TO_KP21[m]]</pre>
+      <pre class="f">ARKIT24_TO_KP21 = [
+  <span class="hl">22, 20, 21, 23</span>,   <span class="c">thumb  CMC MP IP tip</span>
+  <span class="hl"> 2,  0,  1,  4</span>,   <span class="c">index  MCP PIP DIP tip</span>
+  <span class="hl">12, 10, 11, 14</span>,   <span class="c">middle</span>
+  <span class="hl">17, 15, 16, 19</span>,   <span class="c">ring</span>
+  <span class="hl"> 7,  5,  6,  9</span>]   <span class="c">pinky</span></pre>
+      <p><small>The scrambling is a direct consequence of ARKit's alphabetical column order:
+      within each digit, <code>IntermediateBase</code>(PIP)=0, <code>IntermediateTip</code>(DIP)=1,
+      <code>Knuckle</code>(MCP)=2, <code>Metacarpal</code>=3 (dropped),
+      <code>Tip</code>=4. So MCP-first ordering picks index 2, then 0, 1, 4.</small></p>
+
+      <div class="note bad"><b>MANO → kp21 is unimplemented.</b>
+      <code>hand_views.py:52</code> raises <code>NotImplementedError("MANO-&gt;kp21: offline
+      forward pass; add when EPIC joins")</code>. Harmless for the three shipped sources;
+      a hard blocker for EPIC and ego4d.</div>
+    </div>
+  </div>
+</div>
+</section>
+
+<section class="slide" data-act="Layer-2">
+<div class="wrap">
+  <p class="eyebrow">relative.py:99-118 · joystick.py:56-77</p>
+  <h2>Head twist and joystick commands</h2>
+  <p class="sub">The navigation channel: reduce head motion to six interpretable rates, then to a
+  closed vocabulary of locomotion commands that tile every clip.</p>
+
+  <div class="grid g2">
+    <div>
+      <h3>Six twist channels — mixed units</h3>
+      <pre class="f">Δp(t) = p(t) − p(t−1)
+
+ch0 FWD    [m/s]   = (Δp · fwd(t)) · fps
+ch1 STRAFE [m/s]   = (Δp · right(t)) · fps      <span class="c">+ = RIGHT</span>
+ch2 UP     [m/s]   = (Δp · û) · fps
+ch3 YAW  [deg/s]   = <span class="hl">−</span>deg(atan2((fwd(t−1) × fwd(t))·û,
+                            fwd(t−1)·fwd(t))) · fps
+ch4 PITCH[deg/s]   = (elev(t) − elev(t−1)) · fps
+                     elev = deg(arcsin(clip(opt·û, −1, 1)))
+ch5 ROLL [deg/s]   = (φ(t) − φ(t−1)) · fps</pre>
+
+      <div class="note bad"><b>That leading minus on YAW is deliberate and load-bearing.</b>
+      <code>atan2(cross·up, dot)</code> is naturally positive for a CCW/left turn in this
+      right-handed world; the negation makes <b class="k">+YAW = turn RIGHT</b>. It is the
+      2026-07-06 sign fix, regression-tested, and all three releases were generated with it.
+      Re-deriving yaw without it inverts every <code>rotate left</code>/<code>rotate right</code>
+      label in the corpus.</div>
+
+      <div class="note bad"><b>Row 0 is structurally zero on all six channels</b> — a padding
+      convention, not a measurement. Exclude it from every statistic. And <b class="k">ROLL is
+      never unwrapped</b>: an <code>atan2</code> output in (−180°, 180°] is differenced, so a roll
+      crossing the boundary produces a ±360·fps spike. Latent — joystick integrates only
+      channels 0-4.</div>
+    </div>
+    <div>
+      <h3>Windowed net displacement</h3>
+      <pre class="f">w      = max(1, round(1.2 s · fps))
+net(t) = cum[clip(t+w/2)] − cum[clip(t−w/2)]
+
+cum_fwd/str/vert = cumsum(tw[:,0..2] / fps · scale)   <span class="c">m</span>
+cum_yaw/pitch    = cumsum(tw[:,3..4] / fps)           <span class="c">deg</span></pre>
+
+      <h3>Absolute gates → closed vocabulary</h3>
+      <div class="tw"><table>
+        <thead><tr><th>Channel</th><th class="num">Gate</th><th>Labels</th></tr></thead>
+        <tbody>
+          <tr><td>forward</td><td class="num">±0.15 m</td><td class="mono">FORWARD / BACKWARD</td></tr>
+          <tr><td>strafe</td><td class="num">±0.20 m</td><td class="mono">LEFT / RIGHT</td></tr>
+          <tr><td>vertical</td><td class="num">±0.15 m</td><td class="mono">STAND / CROUCH</td></tr>
+          <tr><td>turn</td><td class="num">±13.0°</td><td class="mono">ROT_LEFT / ROT_RIGHT</td></tr>
+          <tr><td>look</td><td class="num">±12.0°</td><td class="mono">LOOK_UP / LOOK_DOWN</td></tr>
+        </tbody></table></div>
+      <p>Window 1.2 s, minimum dwell 0.9 s, then run-length encoded into spans that partition the
+      clip exactly. Strafe is suppressed while turning.</p>
+
+      <div class="note bad"><b>Two threshold tables exist; only one is the spec.</b> The
+      production gates are the absolute ones above. <code>qa/validate_layer1.py</code> carries a
+      <i>different</i> Schmitt-trigger table (0.20/0.10 m/s, 12/6 deg/s, dwell 0.25 s) applied to
+      instantaneous rates — it exists only to prove derivability. Never quote it as the corpus
+      joystick spec. The <code>joystick.py</code> module docstring is also stale: it advertises
+      adaptive gates, and there is no adaptive code path.</div>
+
+      <div class="note bad"><b>Boundary bias.</b> The window truncates at clip edges, so net
+      motion is systematically under-estimated in the first and last ~0.6 s — those spans skew
+      toward <code>STOP</code>/<code>STRAIGHT</code>/<code>LEVEL</code>.</div>
+    </div>
+  </div>
+</div>
+</section>
+
+<section class="slide" data-act="Layer-2">
+<div class="wrap">
+  <p class="eyebrow">vla_core/data/norm.py · configs/action_norm_human_ego.json</p>
+  <h2>Action normalisation</h2>
+  <p class="sub">Pooled per-step per-dim q01/q99 → [−1, 1], <b class="k">one</b> stat set for all
+  three sources. Computed over the training mixture at dataloader time; releases store raw metric
+  values and are never touched.</p>
+
+  <div class="grid g2">
+    <div>
+      <h3>Derivation</h3>
+      <pre class="f">center = (q99 + q01) / 2
+half   = (q99 − q01) / 2
+
+<span class="c"># translations: PER-DIM scale</span>
+PER_DIM = [(0,3), (9,12), (81,84)]
+scale[:, a:b] = half[:, a:b]
+
+<span class="c"># rot6d + kp21: ONE scalar per block per step</span>
+BLOCKS = [(3,9),(12,18),(18,81),(84,90),(90,153)]
+scale[:, a:b] = half[:, a:b].max(axis=1)
+
+scale = where(scale &lt; 1e-6, 1.0, scale)
+dead  = (q99 − q01) &lt; 1e-6</pre>
+      <pre class="f">z   = clip((act − center) / scale, −1, 1)
+msk = where(dead, 0, msk)
+out = <span class="hl">where(msk &gt; 0, z, 0)</span>     <span class="c">SELECT, not multiply</span></pre>
+      <p><small>Select, never multiply: invalid steps carry filler up to ~400 m and can be
+      non-finite, and <code>NaN × 0 = NaN</code>.</small></p>
+
+      <h3>Why granularity differs</h3>
+      <p>The flow loss is unweighted MSE in normalised space, so per-dim scale <i>is</i> a
+      per-dim loss weight of <code>1/scale²</code>. Per-dim on rot6d would give the
+      near-constant diagonal terms (≈1 − θ²/2, noise-dominated) <b class="k">27×</b> the weight
+      of the informative off-diagonals; per-dim on kp21 would give proximal joints
+      <b class="k">26×</b> the penalty of fingertips — the inverse of what manipulation needs,
+      and it would whiten rotations and normalise hand size away.</p>
+    </div>
+    <div>
+      <h3>Why per-step, not pooled over the horizon</h3>
+      <p>Head blocks grow ~12× and ~8.8× across the 16 steps while the six per-step hand blocks
+      are flat to within 3 %:</p>
+      <div class="tw"><table>
+        <thead><tr><th>Block scale</th><th class="num">step 1</th><th class="num">step 16</th>
+          <th class="num">ratio</th></tr></thead>
+        <tbody>
+          <tr><td>head_rot6d</td><td class="num">0.0565</td><td class="num">0.4964</td>
+            <td class="num"><b class="k">8.78×</b></td></tr>
+          <tr><td>l_rot6d</td><td class="num">0.9655</td><td class="num">0.9663</td><td class="num">1.00×</td></tr>
+          <tr><td>l_kp21</td><td class="num">0.1299</td><td class="num">0.1296</td><td class="num">1.00×</td></tr>
+          <tr><td>r_rot6d</td><td class="num">0.9928</td><td class="num">0.9925</td><td class="num">1.00×</td></tr>
+          <tr><td>r_kp21</td><td class="num">0.1142</td><td class="num">0.1149</td><td class="num">1.01×</td></tr>
+        </tbody></table></div>
+      <p><small>A horizon-pooled bound would clip most of step-16 head motion at ±1 while leaving
+      step 1 at ±0.33.</small></p>
+
+      <h3>The artefact</h3>
+      <div class="kv">
+        <dt>draw</dt><dd>100,000 windows through the temperature sampler
+          (xp10m 35,222 · egodex 29,988 · egoverse 34,790)</dd>
+        <dt>stats</dt><dd>q01, q99, mean, std, min, max — each (16, 153)</dd>
+        <dt>pinned by</dt><dd>three <code>manifest_sha256</code> + corpus git sha, matching the
+          live manifests byte-for-byte</dd>
+        <dt>copies</dt><dd>git-tracked config → run dir → inside every checkpoint under its
+          <code>key</code></dd>
+      </div>
+
+      <div class="note ok"><b>96 of 2,448 cells are dead (3.92 %) — all structural.</b>
+      Exactly dims 18/19/20 and 90/91/92 × 16 steps: the two kp21 wrist origins, zero by
+      definition of the wrist-relative format. <b class="k">Zero cells were lost to insufficient
+      data.</b> They are masked out of the loss and zeroed on inversion, because an untrained
+      dim would otherwise invert to a ~0.10 m spurious wrist offset.</div>
+    </div>
+  </div>
+</div>
+</section>
+
+<section class="slide" data-act="Layer-2">
+<div class="wrap">
+  <p class="eyebrow">What actually reaches the model</p>
+  <h2>Sample assembly</h2>
+
+  <div class="grid g2">
+    <div>
+      <h3>One training sample</h3>
+      <pre class="f">{
+  "image":       HxWx3 uint8 RGB,      <span class="c">anchor frame</span>
+  "text":        "&lt;gen:MODEL&gt; Task context: …
+                  Locomotion: …",
+  "actions":     (16, 153) float32,
+  "action_mask": (16, 153) float32,
+  "source":      str,
+  "clip_id":     str,
+}</pre>
+
+      <h3>Two different matching rules</h3>
+      <div class="kv">
+        <dt>joystick</dt><dd><b class="k">point query on the anchor frame</b> —
+          <code>start_f ≤ fr0 &lt; end_f</code></dd>
+        <dt>narration</dt><dd><b class="k">interval overlap</b> with the whole 1.6 s window —
+          <code>start_f &lt; fr1 and end_f &gt; fr0</code></dd>
+      </div>
+      <p><small>So a joystick command may not describe the motion over the rest of the
+      chunk.</small></p>
+
+      <div class="note bad"><b>Text truncates to two segments and can duplicate.</b>
+      Assembly takes <code>narratives[:2]</code>. Measured on 150 egoverse sidecars,
+      <b class="k">1,042 of 2,084</b> non-joystick rows are exact
+      <code>(start_f, end_f, text)</code> duplicates — <code>qwen3vl_hands_v1</code> copies
+      <code>text</code> verbatim from <code>egoverse_annotation_v1</code>, so a window can emit
+      the same sentence twice. xp10m carries two caption families, so <code>[:2]</code> drops
+      content there too.</div>
+    </div>
+    <div>
+      <h3>Signals present but unconsumed</h3>
+      <div class="tw"><table>
+        <thead><tr><th>Field</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">lh_text / rh_text / ego_text</td>
+            <td><span class="chip bad">zero consumers</span></td></tr>
+          <tr><td class="mono">rephrasings</td><td><span class="chip bad">zero consumers</span></td></tr>
+          <tr><td class="mono">betas</td><td><span class="chip bad">zero consumers</span></td></tr>
+          <tr><td class="mono">intrins</td><td><span class="chip bad">returned, then dropped</span></td></tr>
+          <tr><td class="mono">proprio</td><td><span class="chip bad">encoder exists, unfed</span></td></tr>
+          <tr><td class="mono">task_name</td><td><span class="chip bad">never reaches the model</span></td></tr>
+        </tbody></table></div>
+      <p><small>The entire per-hand narration pass — a VLM migration plus a write-back into the
+      source zarr, 362,106 rows — never reaches training. The sampler emits only
+      <code>{gen_model, text}</code>.</small></p>
+
+      <div class="note bad"><b>Images enter at three resolutions with no camera model.</b>
+      1920×1080, 640×360, 640×480 and 512×512 go straight into the processor with no resize and
+      no aspect normalisation — a 6.3× pixel-count spread and three aspect ratios. Image-token
+      count and effective FOV are therefore source-dependent, and the model gets
+      <b class="k">no intrinsics at all</b> even though the hand targets are metric camera-frame
+      positions.</div>
+
+      <div class="note bad"><b>118 clips with <code>frac_valid == 0.0</code> pass the loader
+      filter</b> — the filter checks split, flags, world_scale and length, never validity.
+      That is <b class="k">10,791 training windows</b> whose entire 144-dim hand block is masked
+      to zero at all 16 steps: head-only supervision, hand loss contributing nothing.</div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ═══════════ ACT VIII — QA & REALITY ═══════════ -->
+
+<section class="slide" data-act="QA &amp; reality">
+<div class="wrap">
+  <p class="eyebrow">qa/release_gate.py — any single failure fails the release</p>
+  <h2>The release gate</h2>
+  <p class="sub">Seven checks, seeded sampling so runs are reproducible. Verdict is
+  <code>PASS</code> only when every one of the seven buckets is empty.</p>
+
+  <div class="tw"><table>
+    <thead><tr><th>ID</th><th>Check</th><th>Scope</th><th>Pass condition</th><th>Catches</th></tr></thead>
+    <tbody>
+      <tr><td><b class="k">A</b></td><td>media</td><td>sample</td>
+        <td>ffprobe succeeds · declared <code>(w,h)</code> == actual · a
+          <b class="k">random real frame decodes</b> to &gt;1000 bytes</td>
+        <td>zero-byte video, dim mismatch, packets that are not decodable pixels</td></tr>
+      <tr><td><b class="k">B</b></td><td>frames</td><td>sample</td>
+        <td><code>max(frame) &lt; nb_read_packets</code></td>
+        <td>annotation indexing past the end of the video</td></tr>
+      <tr><td><b class="k">C</b></td><td>validate</td><td>sample</td>
+        <td><code>check_clip</code> raises nothing AND <code>split ∈ {train,test}</code></td>
+        <td>every Layer-1 reconstruction assertion</td></tr>
+      <tr><td><b class="k">D</b></td><td>split</td><td><b class="k">full manifest</b></td>
+        <td>zero rows with an invalid split</td>
+        <td>unsplit rows. Train/test group overlap is a <b class="k">warning only</b></td></tr>
+      <tr><td><b class="k">E</b></td><td>streams</td><td><b class="k">full scan</b></td>
+        <td><code>check_streams</code> raises nothing for every clip with a registry</td>
+        <td>incomplete required meta, dim mismatch, missing blobs</td></tr>
+      <tr><td><b class="k">F</b></td><td>manifest</td><td>sample + full mtime scan</td>
+        <td>narrative model counts match the sidecar AND no parquet is newer than
+          <code>manifest.parquet</code></td>
+        <td>stale manifest, stale counts</td></tr>
+      <tr><td><b class="k">G</b></td><td>hashes</td><td>sample</td>
+        <td>sha256 matches the <b class="k">previous</b> gate report</td>
+        <td>silent post-certification mutation</td></tr>
+    </tbody></table></div>
+
+  <div class="grid g3">
+    <div class="card"><h4>The check that mattered</h4>
+      <p>Gate E's own docstring: <i>"this is the check whose absence let 12,696 invalid
+      registries through"</i> — exactly the xp10m clip count. Full scan, not sampled, for
+      precisely that reason.</p></div>
+    <div class="card"><h4>Real verdicts</h4>
+      <p>All three <b class="k">PASS</b>, zero failures. One warning: 106 egodex
+      <code>split_group</code>s appear in both official train and test.</p></div>
+    <div class="card"><h4>Not one uniform run</h4>
+      <p>egodex/egoverse sampled 200 clips from a <b class="k">dirty</b> working tree; xp10m is a
+      later 25-clip re-run with <code>gate_git_sha: "unknown"</code>, gated 2 h 13 m after.
+      Never say "200 clips per release".</p></div>
+  </div>
+
+  <div class="note bad"><b>The gate never verifies the manifest's own <code>sha256</code>
+  column</b> — check G compares its fresh sample against the previous <i>gate report</i>, not
+  against the manifest. Hand-verified 20 xp10m rows: 20/20 correct, so the column is trustworthy
+  but uncertified. And despite the stated immutability policy, two migration scripts rewrite v06
+  parquets <b class="k">in place</b> — pin releases by content hash, not by name.</div>
+</div>
+</section>
+
+<section class="slide" data-act="QA &amp; reality">
+<div class="wrap">
+  <p class="eyebrow">Contract surface vs shipped surface</p>
+  <h2>What exists only on paper</h2>
+  <p class="sub">The schema describes considerably more than any release contains. Coding against
+  the contract without checking the data means coding against dead branches.</p>
+
+  <div class="grid g2">
+    <div>
+      <h3>Defined but present in <b class="k">zero</b> shipped clips</h3>
+      <div class="tw"><table>
+        <thead><tr><th>Feature</th><th>Why it exists</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">head_full/</td><td>full-N ViPE track, pipeline sources only</td></tr>
+          <tr><td class="mono">raw/</td><td>build-time bundle, pre-certification</td></tr>
+          <tr><td class="mono">videos/</td><td>never copied; media stays in the source tree</td></tr>
+          <tr><td class="mono">mano_axis_angle_15x3</td><td>EPIC / ego4d finger format</td></tr>
+          <tr><td class="mono">hand_format = "none"</td><td>hand-absent clips</td></tr>
+          <tr><td class="mono">head_only = True</td><td>VLN locomotion records</td></tr>
+          <tr><td class="mono">joystick_v1_rotonly</td><td>up-to-scale head tracks</td></tr>
+          <tr><td class="mono">calibration != null</td><td>multi-sensor rigs</td></tr>
+          <tr><td class="mono">world_scale != 1.0</td><td>non-metric gauge</td></tr>
+          <tr><td class="mono">gravity_flagged = True</td><td>failed gravity gate</td></tr>
+          <tr><td class="mono">chunk-001+</td><td>sharded layout — always chunk-000</td></tr>
+          <tr><td class="mono">shot != 0</td><td>multi-shot clips</td></tr>
+        </tbody></table></div>
+      <p><small>Also structurally unreachable in v06: the <code>scale_invalid</code> and
+      <code>gravity_untrusted</code> ego-pose flags. Only
+      <code>downlooking_locomotion</code> ever fires.</small></p>
+    </div>
+    <div>
+      <h3>Documentation that does not match the code</h3>
+      <div class="tw"><table>
+        <thead><tr><th>Documented</th><th>Reality</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">corpus.pretrain_loader</td>
+            <td class="mono">corpus.labels.pretrain_loader</td></tr>
+          <tr><td class="mono">python -m corpus.release_gate</td>
+            <td class="mono">corpus.qa.release_gate</td></tr>
+          <tr><td class="mono">corpus.write_release_docs</td>
+            <td class="mono">corpus.migrations.write_release_docs</td></tr>
+          <tr><td class="mono">corpus.fit_egoverse_extrinsic</td>
+            <td class="mono">corpus.tools.fit_egoverse_extrinsic</td></tr>
+          <tr><td>SCHEMA.md header <b class="k">v0.5.0</b></td>
+            <td><code>SCHEMA_VERSION = "0.6.0"</code></td></tr>
+          <tr><td>math report release table</td><td>still lists v05 / v01</td></tr>
+        </tbody></table></div>
+      <p><small>The quick-start line in <code>README.md</code> does not import. The per-release
+      rendered <code>SCHEMA.md</code> is the correct one — it is generated from
+      <code>schema.py</code>.</small></p>
+
+      <div class="note bad"><b>xp10m has no build command at all.</b>
+      <code>build_layer1.py</code>'s <code>choices</code> list omits it and there is no
+      <code>--xp10m-root</code> flag, even though <code>build_native</code> fully implements it.
+      One of the three certified releases cannot be rebuilt from the CLI — only by calling
+      <code>build_native("xp10m", …)</code> from Python.</div>
+
+      <div class="note"><b>Which artefacts to trust.</b>
+      <code>_pretrain_qa/action_stats.json</code> predates the certified manifests by ~7 h and
+      six of its render jpgs are v05-era — <b class="k">indicative only</b>.
+      <code>action_norm_human_ego.json</code> post-dates them and its three recorded hashes match
+      the live manifests byte-for-byte — <b class="k">safe to cite as certified</b>.</div>
+    </div>
+  </div>
+</div>
+</section>
+
+<section class="slide" data-act="QA &amp; reality">
+<div class="wrap">
+  <p class="eyebrow">Read this before writing a loader</p>
+  <h2>Consumer traps</h2>
+
+  <div class="grid g2">
+    <div>
+      <h3>Frames &amp; media</h3>
+      <ul class="tight">
+        <li><b class="k">decode index == <code>frame</code></b>, verbatim, all three sources. The
+          shipped egodex DATASET_CARD's remap formula is the retired v05 recipe and double-shifts
+          by −100k…−660k frames.</li>
+        <li>Three codecs, one loader: AV1 / HEVC / H.264. cv2 without dav1d silently fails or
+          returns garbage on AV1 — use ffmpeg or PyAV.</li>
+        <li>One mp4 is shared by ~66 egodex clips. Dedup by path before probing.</li>
+        <li>xp10m's container claims 25 fps; the sensor is <b class="k">20 Hz</b>. Take fps from
+          clip meta — ffprobing gives a 25 % timing error on 12,696 clips and silently changes
+          both the action stride and the velocity gate.</li>
+        <li><code>timestamp</code> is absolute video time, not clip time.</li>
+      </ul>
+
+      <h3>Validity</h3>
+      <ul class="tight">
+        <li><code>valid == 0</code> never means NaN. Always mask, never NaN-test.</li>
+        <li>Invalid rows carry filler up to <b class="k">402 m</b>.</li>
+        <li><code>has_left == True</code> says nothing about usable frames — 716 egoverse and
+          169 xp10m clips have zero valid left frames anyway.</li>
+        <li><code>valid_*</code> are per-frame columns, not manifest columns, and they are
+          scalars, not length-1 lists.</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Frames of reference</h3>
+      <ul class="tight">
+        <li>Camera <span class="ax-y">+Y is down</span>.</li>
+        <li>Mixed frames inside one row: <code>trans</code>/<code>wrist_rot</code> are world,
+          <code>fingers</code> are wrist-frame (egodex) or camera-axis (the others),
+          <code>cam_R</code>/<code>cam_t</code> are world→camera while <code>wrist_rot</code>
+          is hand→world.</li>
+        <li>World coordinates are a per-clip gauge — never comparable across clips.</li>
+        <li><code>d_pos</code> and <code>d_rot</code> are in different frames; B0 is
+          left-handed.</li>
+        <li><b class="k">+YAW = turn RIGHT</b> by deliberate negation.</li>
+      </ul>
+
+      <h3>Language</h3>
+      <ul class="tight">
+        <li><code>n_segments &gt; 0</code> ≠ "has language" — joystick tiles every clip.</li>
+        <li>Narrative spans can overlap; joystick spans partition exactly.</li>
+        <li><code>gen_model</code> encodes neither prompt version nor sampling rate. The vendored
+          prompt file is byte-identical to the <i>old</i> whole-second v1 prompt while the launch
+          script names the decimal v2 — and the parser's regex silently drops every
+          <code>MM:SS.d</code> line. Which prompt produced
+          <code>qwen36_narrative_v1</code> is <b class="k">unrecoverable</b> from the artefacts.
+          Say "unknown"; do not assert.</li>
+      </ul>
+
+      <div class="note bad"><b>Licence.</b> xp10m is NON-COMMERCIAL and is 37.0 % of the training
+      index / 36.3 % of corpus hours, with terms that explicitly extend to trained weights. Any
+      commercial run must drop it — and dropping it removes 37 % of windows and silently
+      mis-scales the dominant forward axis by <b class="k">2.12×</b> unless the normalisation
+      stats are regenerated. The loader hard-asserts the release set for exactly this reason.</div>
+    </div>
+  </div>
+</div>
+</section>
+
+<section class="slide" data-act="QA &amp; reality">
+<div class="wrap">
+  <p class="eyebrow">Honest status</p>
+  <h2>Open gaps</h2>
+  <p class="sub">Ranked by what would bite first. Everything here was verified against the code,
+  not inferred.</p>
+
+  <div class="grid g2">
+    <div>
+      <h3>Blocking for new work</h3>
+      <div class="tw"><table>
+        <thead><tr><th>Gap</th><th>Effect</th></tr></thead>
+        <tbody>
+          <tr><td>MANO → kp21 unimplemented</td>
+            <td>EPIC and ego4d cannot enter a mixed training view</td></tr>
+          <tr><td>xp10m left-hand de-mirror</td>
+            <td>3.15 cm residual vs 0.49 cm right; corrupts action dims 12:18 for every xp10m
+              left hand</td></tr>
+          <tr><td>Decode is a linear scan</td>
+            <td>~2 s per sample at egodex's mean anchor; the training bottleneck</td></tr>
+          <tr><td>Pipeline scripts broken by the repo split</td>
+            <td><code>corpus_batch.sh</code> path resolution is one level off</td></tr>
+          <tr><td>184 egoverse clips fail the intrinsics guard</td>
+            <td>would <code>AssertionError</code> if rewritten with today's writer</td></tr>
+        </tbody></table></div>
+
+      <h3>Wired but unfed</h3>
+      <ul class="tight">
+        <li>Proprio encoder exists (23→1024) and is passed <code>None</code>. The obvious signal —
+          wrist pose at the anchor — is never assembled.</li>
+        <li><code>part="val"</code> exists; there is no eval loop.</li>
+        <li>Per-hand narration, rephrasings, betas, intrinsics: all produced, none consumed.</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Documentation debt</h3>
+      <ul class="tight">
+        <li><code>egodex_v06/DATASET_CARD.md</code> ships a wrong decode recipe, re-emitted by
+          the doc generator.</li>
+        <li>Every documented module path is stale after the subpackage reorganisation.</li>
+        <li>In-repo <code>SCHEMA.md</code> stamped 0.5.0; omits
+          <code>xp10m_kp21x3_wrist_relative_cam</code> and the <code>base_off</code> branch.</li>
+        <li><code>world_scale</code> documented both ways; correct rule is per-path.</li>
+        <li><code>joystick.py</code> docstring advertises adaptive gates that do not exist.</li>
+      </ul>
+
+      <h3>Accounting that does close</h3>
+      <pre style="font-size:11.5px">egodex   314,839 − 27  = 314,812 + 3,243 test
+                       = 318,055
+egoverse  49,665 − 15  =  49,650
+xp10m     13,817 − 1,116 no-slam − 5 short
+                       =  12,696
+                         ─────────
+total                    380,401 clips
+                     256,262,484 frames
+                        2,699.48 hours
+loader keeps             361,455 clips
+                → 352,780 train + 8,675 val
+                → 4,477,300 train windows</pre>
+      <p><small>Verified end to end. Safe to quote.</small></p>
+    </div>
+  </div>
+</div>
+</section>
+
+<section class="slide" data-act="QA &amp; reality">
+<div class="wrap">
+  <p class="eyebrow">Reference</p>
+  <h2>Where things live</h2>
+
+  <div class="grid g2">
+    <div>
+      <h3>Repos</h3>
+      <div class="kv">
+        <dt>data_processing</dt><dd>GPU pipeline: ViPE, gravity, WiLoR + Dyn-HaMR, narrative
+          generation. Ends at per-clip artefacts.</dd>
+        <dt>data_corpus</dt><dd>Schema, adapters, label math, QA and the release gate.
+          Torch-free — numpy + pyarrow only.</dd>
+        <dt>vla_core</dt><dd>Qwen3.5-0.8B + flow-matching ActionHead. Owns the 153-dim layout,
+          6d rotation and normalisation.</dd>
+      </div>
+
+      <h3>Key entry points</h3>
+      <pre style="font-size:11.5px">python -m corpus.build_layer1 &lt;source&gt; …
+python -m corpus.manifest &lt;annots&gt; --out …
+python -m corpus.qa.release_gate &lt;release&gt; [n]
+python -m corpus.qa.validate_layer1 --release …
+python -m corpus.qa.pretrain_qa stats|render
+python -m corpus.narrate.run_narrate …
+python -m data.compute_action_stats …     <span class="c">vla_core</span>
+python -m train.pretrain --releases-json …</pre>
+      <p><small>No console scripts — everything is a module <code>__main__</code>.
+      Set <code>PYTHONPATH=&lt;data_corpus&gt;/src</code>.</small></p>
+    </div>
+    <div>
+      <h3>Authoritative documents</h3>
+      <div class="kv">
+        <dt>schema.py</dt><dd>the actual contract — versions, all four Arrow schemas,
+          conventions</dd>
+        <dt>&lt;release&gt;/SCHEMA.md</dt><dd>rendered from schema.py; trust this over the
+          in-repo copy</dd>
+        <dt>ACTION_SPEC.md</dt><dd>the label contract vla_core trains against</dd>
+        <dt>UNIFIED_CORPUS_MATH_REPORT.md</dt><dd>derivations, mirrors the code</dd>
+        <dt>gate_report.json</dt><dd>per-release certification + manifest hash</dd>
+      </div>
+
+      <h3>Storage</h3>
+      <div class="kv">
+        <dt>/mnt/SSD4/dataset/releases/</dt><dd>the three certified v06 releases, 368 GB</dd>
+        <dt>/mnt/SSD4/dataset/</dt><dd>source datasets, ~2.7 TB for egodex alone</dd>
+        <dt>/mnt/SSD2/dataset/vinrobotics/</dt><dd>ego4d + EPIC staging, narratives, upload
+          logs</dd>
+      </div>
+
+      <div class="note ok" style="margin-top:20px"><b>The one check that proves everything.</b>
+      Load a clip parquet, take a row, reconstruct the 3D hand per its
+      <code>hand_format</code>, project with the clip's <code>intrins</code>, and overlay on
+      video frame <code>frame[row]</code>. If the dots sit on the hand, every convention in this
+      deck was read correctly. That single round-trip exercises the entire contract — it is
+      exactly what <code>load_example.py</code> in the sample bundle does in ~100 lines.</div>
+    </div>
+  </div>
+</div>
+</section>
+
+</div><!--/deck-->
+
+<nav class="rail" id="rail"><b>SECTIONS</b></nav>
+<div class="bar"><i id="pbar"></i></div>
+<div class="foot">
+  <span class="act" id="fact">Orientation</span>
+  <span class="sp"></span>
+  <span id="fnum">01 / 41</span>
+  <button class="btn" id="bidx">index · i</button>
+  <button class="btn" id="btheme">theme</button>
+</div>
+<div class="idx" id="idx"><div class="wrap"><h2>Contents</h2><div class="idxg" id="idxg"></div></div></div>
+
+<script>
+(function(){
+  var deck=document.getElementById('deck');
+  var slides=[].slice.call(deck.querySelectorAll('.slide'));
+  var rail=document.getElementById('rail'), idx=document.getElementById('idx');
+  var cur=0, seen={};
+
+  slides.forEach(function(s,i){
+    var b=document.createElement('button');
+    b.className='rdot'; b.type='button';
+    b.title=(i+1)+'. '+(s.dataset.act||'');
+    b.setAttribute('aria-label','Go to slide '+(i+1));
+    b.onclick=function(){go(i);};
+    rail.appendChild(b);
+  });
+  var dots=[].slice.call(rail.querySelectorAll('.rdot'));
+
+  // index
+  var acts=[], byAct={};
+  slides.forEach(function(s,i){
+    var a=s.dataset.act||'—';
+    if(!byAct[a]){byAct[a]=[];acts.push(a);}
+    var h=s.querySelector('h1,h2');
+    var tt=h?(h.dataset.title||h.textContent):'';
+    byAct[a].push({i:i,t:tt.replace(/\s+/g,' ').trim()||'Slide '+(i+1)});
+  });
+  var ig=document.getElementById('idxg');
+  acts.forEach(function(a){
+    var d=document.createElement('div'); d.className='idxa';
+    var h=document.createElement('h5'); h.textContent=a; d.appendChild(h);
+    byAct[a].forEach(function(o){
+      var b=document.createElement('button'); b.type='button';
+      b.innerHTML='<b>'+String(o.i+1).padStart(2,'0')+'</b>'+o.t;
+      b.onclick=function(){idx.classList.remove('on');go(o.i);};
+      d.appendChild(b);
+    });
+    ig.appendChild(d);
+  });
+
+  function go(n){
+    if(n<0||n>=slides.length) return;
+    slides[cur].classList.remove('on');
+    cur=n; seen[n]=1;
+    slides[cur].classList.add('on');
+    slides[cur].scrollTop=0;
+    dots.forEach(function(d,i){
+      d.className='rdot'+(i===cur?' act':(seen[i]?' seen':''));
+    });
+    document.getElementById('fnum').textContent=
+      String(cur+1).padStart(2,'0')+' / '+String(slides.length).padStart(2,'0');
+    document.getElementById('fact').textContent=slides[cur].dataset.act||'';
+    document.getElementById('pbar').style.width=((cur+1)/slides.length*100)+'%';
+  }
+
+  document.addEventListener('keydown',function(e){
+    if(e.metaKey||e.ctrlKey||e.altKey) return;
+    var k=e.key;
+    if(k==='ArrowRight'||k==='PageDown'||k===' '){e.preventDefault();go(cur+1);}
+    else if(k==='ArrowLeft'||k==='PageUp'){e.preventDefault();go(cur-1);}
+    else if(k==='Home'){e.preventDefault();go(0);}
+    else if(k==='End'){e.preventDefault();go(slides.length-1);}
+    else if(k==='i'||k==='I'){idx.classList.toggle('on');}
+    else if(k==='Escape'){idx.classList.remove('on');}
+  });
+  document.getElementById('bidx').onclick=function(){idx.classList.toggle('on');};
+  document.getElementById('btheme').onclick=function(){
+    var r=document.documentElement;
+    var d=r.getAttribute('data-theme');
+    if(!d) d=matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light';
+    r.setAttribute('data-theme', d==='dark'?'light':'dark');
+  };
+  go(0);
+})();
+</script>

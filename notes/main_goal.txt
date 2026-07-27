@@ -1,0 +1,4 @@
+có 2 phần chính mình cần xử lý
+ 
+là smooth inferencing và long horizon manipulation capability
+ 

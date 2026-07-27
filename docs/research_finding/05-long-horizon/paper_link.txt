@@ -1,0 +1,102 @@
+LONG-HORIZON MANIPULATION IN VLA
+Recommended papers, links, citation estimates, and venues
+Citation estimates recorded: 27 July 2026
+
+Note:
+- Citation counts vary between Google Scholar and Semantic Scholar.
+- arXiv is a preprint repository, not a peer-reviewed journal or conference.
+- None of the papers below is currently a journal article.
+
+1. π0.5: A Vision-Language-Action Model with Open-World Generalization
+Link: https://arxiv.org/abs/2504.16054
+Estimated citations: 913–1,391
+Venue: CoRL 2025 (Oral)
+Status: Peer-reviewed conference paper
+
+2. Hi Robot: Open-Ended Instruction Following with Hierarchical Vision-Language-Action Models
+Link: https://arxiv.org/abs/2502.19417
+Estimated citations: 200–208
+Venue: ICML 2025
+Status: Peer-reviewed conference paper
+
+3. Predictive Inverse Dynamics Models Are Scalable Learners for Robotic Manipulation (Seer)
+Link: https://arxiv.org/abs/2412.15109
+Estimated citations: About 156
+Venue: ICLR 2025
+Status: Peer-reviewed conference paper
+
+4. MemoryVLA: Perceptual-Cognitive Memory in Vision-Language-Action Models
+Link: https://arxiv.org/abs/2508.19236
+Estimated citations: 140–146
+Venue: ICLR 2026
+Status: Peer-reviewed conference paper
+
+5. Long-VLA: Unleashing Long-Horizon Capability of Vision-Language-Action Models
+Link: https://arxiv.org/abs/2508.19958
+Estimated citations: 26–59
+Venue: CoRL 2025
+Status: Peer-reviewed conference paper
+
+6. Reflective Planning: Vision-Language Models for Multi-Stage Long-Horizon Robotic Manipulation
+Link: https://arxiv.org/abs/2502.16707
+Estimated citations: 32–43
+Venue: CoRL 2025
+Status: Peer-reviewed conference paper
+
+7. RaC: Robot Learning for Long-Horizon Tasks by Scaling Recovery and Correction
+Link: https://arxiv.org/abs/2509.07953
+Estimated citations: About 33
+Venue: CoRL 2025 workshop and arXiv
+Status: Workshop paper; not in the CoRL main proceedings
+
+8. LoHoVLA: A Unified Vision-Language-Action Model for Long-Horizon Embodied Tasks
+Link: https://arxiv.org/abs/2506.00411
+Estimated citations: 23–32
+Venue: arXiv
+Status: Preprint
+
+9. PALM: Progress-Aware Policy Learning via Affordance Reasoning
+Link: https://arxiv.org/abs/2601.07060
+Estimated citations: About 3
+Venue: CVPR 2026
+Status: Peer-reviewed conference paper
+
+10. LoHo-Manip: Long-Horizon Manipulation via Trace-Conditioned VLA Planning
+Link: https://arxiv.org/abs/2604.21924
+Estimated citations: 1–2
+Venue: arXiv
+Status: Preprint
+
+11. Anticipation-VLA
+Link: https://arxiv.org/abs/2605.01772
+Estimated citations: 0–2
+Venue: arXiv
+Status: Preprint
+
+12. MemoryVLA++: Temporal Modeling via Memory and Imagination
+Link: https://arxiv.org/abs/2606.09827
+Estimated citations: About 0
+Venue: arXiv
+Status: Preprint / extended version
+
+RELATED BENCHMARK PAPERS
+
+13. CALVIN: A Benchmark for Language-Conditioned Policy Learning for Long-Horizon Robot Manipulation Tasks
+Link: https://arxiv.org/abs/2112.03227
+
+14. LIBERO: Benchmarking Knowledge Transfer for Lifelong Robot Learning
+Link: https://arxiv.org/abs/2306.03310
+
+15. LongBench
+Link: https://arxiv.org/abs/2604.16788
+
+SUGGESTED READING ORDER
+
+1. π0.5
+2. Hi Robot
+3. Seer
+4. Long-VLA
+5. MemoryVLA
+6. Reflective Planning
+7. RaC
+8. PALM

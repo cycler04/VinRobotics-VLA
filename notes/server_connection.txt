@@ -1,0 +1,3 @@
+Connect Command: ssh tho2@100.89.98.89
+Personal Workspace: Dung_Workspace (All code push up will be in here) 
+
