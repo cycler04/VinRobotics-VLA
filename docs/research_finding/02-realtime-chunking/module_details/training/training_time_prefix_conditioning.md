@@ -32,7 +32,7 @@ $$
 Training được thực hiện trong hai file:
 
 - [`train_flow.py`](../../../../../third_party/01_real-time-chunking-kinetix/src/train_flow.py): tạo action chunk và cập nhật optimizer;
-- [`model.py`](../../../../../third_party/01_real-time-chunking-kinetix/src/model.py): tạo noisy input, velocity target và tính loss.
+- [`model.py`](../../../../../third_party/01-real-time-chunking-kinetix/src/model.py): tạo noisy input, velocity target và tính loss.
 
 ## Ký hiệu
 
@@ -59,7 +59,7 @@ Nếu episode kết thúc bên trong chunk, action tại vị trí terminal và 
 
 Phần này chỉ chuẩn bị ground-truth action chunk và không thay đổi giữa normal training và prefix-conditioned training.
 
-Xem [`train_flow.py`, dòng 166–181](../../../../../third_party/01_real-time-chunking-kinetix/src/train_flow.py#L166).
+Xem [`train_flow.py`, dòng 166–181](../../../../../third_party/01-real-time-chunking-kinetix/src/train_flow.py#L166).
 
 ## Flow matching bình thường
 
@@ -111,12 +111,12 @@ $$
 \operatorname{mean}
 \left[
 \left(
-v_\theta(o,x_\tau,\tau)-u
+ v_\theta(o,x_\tau,\tau)-\nu
 \right)^2
 \right].
 $$
 
-Xem [`model.py`, dòng 267–278](../../../../../third_party/01_real-time-chunking-kinetix/src/model.py#L267).
+Xem [`model.py`, dòng 267–278](../../../../../third_party/01-real-time-chunking-kinetix/src/model.py#L267).
 
 ## Prefix conditioning khác ở đâu?
 
@@ -178,14 +178,14 @@ Nói đơn giản:
 
 Model nhờ đó học cách sinh phần action tiếp theo dựa trên một prefix đã được xác định.
 
-Xem [`model.py`, dòng 280–286](../../../../../third_party/01_real-time-chunking-kinetix/src/model.py#L280).
+Xem [`model.py`, dòng 280–286](../../../../../third_party/01-real-time-chunking-kinetix/src/model.py#L280).
 
 ### 2. Loss chỉ tính trên postfix
 
 Target velocity vẫn giữ nguyên:
 
 $$
-u=A-\epsilon.
+\nu=A-\epsilon.
 $$
 
 Không có target mới dành riêng cho prefix conditioning.
@@ -200,7 +200,7 @@ $$
 \sum_{b,i,j}
 (1-m_{b,i})
 \left(
-v_{\theta,b,i,j}-u_{b,i,j}
+ v_{\theta,b,i,j}-\nu_{b,i,j}
 \right)^2
 }{
 \displaystyle
@@ -220,7 +220,7 @@ không tính loss          có tính loss
 
 Prefix đóng vai trò **conditioning context**, không phải phần model cần tái tạo.
 
-Xem [`model.py`, dòng 287–289](../../../../../third_party/01_real-time-chunking-kinetix/src/model.py#L287).
+Xem [`model.py`, dòng 287–289](../../../../../third_party/01-real-time-chunking-kinetix/src/model.py#L287).
 
 ## Phần nào không thay đổi?
 
@@ -284,15 +284,15 @@ Model chỉ cần forward pass để sinh postfix phù hợp với prefix đã c
 
 ## So sánh với VJP-based RTC
 
-| Thành phần         | Prefix-conditioned training  | VJP-based RTC                   |
-| -------------------- | ---------------------------- | ------------------------------- |
-| Cần fine-tune model | Có                          | Không bắt buộc               |
-| Prefix               | Đưa trực tiếp vào input | Dùng để tính guidance error |
-| Loss mask            | Chỉ tính trên postfix     | Không áp dụng ở inference   |
-| Jacobian/VJP         | Không                       | Có                             |
-| Guidance scale       | Không                       | Có                             |
-| Inference            | Forward pass thông thường | Forward + backward VJP          |
-| Kiểu overlap        | Hard prefix                  | Có thể dùng soft weights     |
+| Thành phần          | Prefix-conditioned training | VJP-based RTC                 |
+| ------------------- | --------------------------- | ----------------------------- |
+| Cần fine-tune model | Có                          | Không bắt buộc                |
+| Prefix              | Đưa trực tiếp vào input      | Dùng để tính guidance error   |
+| Loss mask           | Chỉ tính trên postfix       | Không áp dụng ở inference     |
+| Jacobian/VJP        | Không                       | Có                            |
+| Guidance scale      | Không                       | Có                            |
+| Inference           | Forward pass thông thường    | Forward + backward VJP        |
+| Kiểu overlap        | Hard prefix                  | Có thể dùng soft weights       |
 
 Hai phương pháp giải quyết cùng một vấn đề: giữ phần action đã committed từ chunk trước và replanning phần còn lại.
 
@@ -326,6 +326,6 @@ Do đó, cách hiểu đơn giản nhất là:
 
 ## Nguồn
 
-- [`src/model.py`](../../../../../third_party/01_real-time-chunking-kinetix/src/model.py), dòng 140–171 và 267–289.
-- [`src/train_flow.py`](../../../../../third_party/01_real-time-chunking-kinetix/src/train_flow.py), dòng 90–113 và 166–198.
+- [`src/model.py`](../../../../../third_party/01-real-time-chunking-kinetix/src/model.py), dòng 140–171 và 267–289.
+- [`src/train_flow.py`](../../../../../third_party/01-real-time-chunking-kinetix/src/train_flow.py), dòng 90–113 và 166–198.
 - *Training-Time Action Conditioning for Efficient Real-Time Chunking*, Algorithm 1.
