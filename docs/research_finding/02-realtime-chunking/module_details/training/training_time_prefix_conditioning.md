@@ -15,13 +15,12 @@ Có thể tóm tắt:
 
 $$
 \boxed{
+\begin{aligned}
 \text{Prefix-conditioned training}
-=
-\text{normal flow matching}
-+
-\text{clean prefix input}
-+
-\text{postfix-only loss mask}
+&= \text{normal flow matching} \\
+&\quad + \text{clean prefix input} \\
+&\quad + \text{postfix-only loss mask}
+\end{aligned}
 }
 $$
 
@@ -32,7 +31,7 @@ $$
 Training được thực hiện trong hai file:
 
 - [`train_flow.py`](../../../../../third_party/01_real-time-chunking-kinetix/src/train_flow.py): tạo action chunk và cập nhật optimizer;
-- [`model.py`](../../../../../third_party/01-real-time-chunking-kinetix/src/model.py): tạo noisy input, velocity target và tính loss.
+- [`model.py`](../../../../../third_party/01_real-time-chunking-kinetix/src/model.py): tạo noisy input, velocity target và tính loss.
 
 ## Ký hiệu
 
@@ -59,7 +58,7 @@ Nếu episode kết thúc bên trong chunk, action tại vị trí terminal và 
 
 Phần này chỉ chuẩn bị ground-truth action chunk và không thay đổi giữa normal training và prefix-conditioned training.
 
-Xem [`train_flow.py`, dòng 166–181](../../../../../third_party/01-real-time-chunking-kinetix/src/train_flow.py#L166).
+Xem [`train_flow.py`, dòng 166–181](../../../../../third_party/01_real-time-chunking-kinetix/src/train_flow.py#L166).
 
 ## Flow matching bình thường
 
@@ -87,7 +86,7 @@ $$
 Target velocity là:
 
 $$
-u=A-\epsilon.
+\nu=A-\epsilon.
 $$
 
 Policy dự đoán:
