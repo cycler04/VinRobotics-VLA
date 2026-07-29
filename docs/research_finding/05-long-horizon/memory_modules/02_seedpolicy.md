@@ -7,8 +7,7 @@
 
 ## 1. Nguồn
 
-- Tiêu đề: *SeedPolicy: Horizon Scaling via Self-Evolving Diffusion Policy for
-  Robot Manipulation*
+- Tiêu đề: *SeedPolicy: Horizon Scaling via Self-Evolving Diffusion Policy for Robot Manipulation*
 - Tác giả: Youqiang Gui (Sichuan University), Yuxuan Zhou (independent), Shen
   Cheng, Haoqiang Fan (Dexmal Inc.), Xinyang Yuan, Peng Cheng (Sichuan
   University), Shuaicheng Liu (UESTC)
@@ -20,10 +19,7 @@
 
 ## 2. Câu hỏi nghiên cứu
 
-Xuất phát từ một quan sát rất cụ thể và ít được để ý: **Diffusion Policy tụt hiệu
-năng khi tăng observation horizon xếp chồng.** Chính tác giả DP có ghi nhận hiện
-tượng phản trực giác này trong phụ lục, nhưng **không giải thích cũng không giải
-quyết**.
+Xuất phát từ một quan sát rất cụ thể và ít được để ý: **Diffusion Policy tụt hiệu năng khi tăng observation horizon xếp chồng.** \Chính tác giả DP có ghi nhận hiện tượng phản trực giác này trong phụ lục, nhưng **không giải thích cũng không giải quyết**.
 
 SeedPolicy chẩn đoán và sửa. Chuỗi lập luận rất sạch, đáng ghi lại nguyên vẹn:
 
@@ -57,6 +53,7 @@ ngữ cảnh lịch sử → cần cổng lọc.
 $$
 O_t = \text{Encoder}(I_t, P_t) \quad (1) \qquad\qquad S_t = \text{Update}(S_{t-1}, O_t) \quad (2)
 $$
+
 $$
 EObs_t = \text{Retrieve}(O_t, S_{t-1}) \quad (3) \qquad A_t = \text{Diffusion}(EObs_t) \quad (4)
 $$
@@ -73,6 +70,7 @@ chồng frame.
 $$
 S'_{t-1} = S_{t-1} + \text{MSA}(S_{t-1}), \qquad O'_t = O_t + \text{MSA}(O_t)
 $$
+
 $$
 (\text{Inter} \cdot S_t,\ A) = \text{CA}(S'_{t-1},\ O'_t,\ O'_t)
 $$
@@ -97,6 +95,7 @@ $$
 R = \frac{1}{L \cdot H \cdot N_o} \sum_{l=1}^{L} \sum_{h=1}^{H} \sum_{j=1}^{N_o} A^{(l,h)}_{:,j},
 \qquad G_t = \sigma(R)
 $$
+
 $$
 S_t = G_t \odot (\text{Inter} \cdot S_t) + (1 - G_t) \odot S_{t-1}
 $$
@@ -120,14 +119,14 @@ $T_{obs} = 3$ bước quan sát, RGB $320 \times 240$ + joint pose 14-DoF. Trạ
 
 ### 5.1 RoboTwin 2.0 — 50 task, 50 demo/task, 600 epoch, 100 rollout/task, 3 lần chạy
 
-| Method | Easy | Hard | Tham số |
-|---|---|---|---|
-| RDT (VLA) | 34.50 | **13.72** | 1.2 B |
-| ACT | 29.74 | 1.74 | 80 M |
-| DP-Transformer | 33.10 | 1.44 | 20.61 M |
-| DP-CNN | 28.04 | 0.64 | 96.80 M |
-| **SeedPolicy-Transformer** | 40.08 | 4.28 | 33.36 M |
-| **SeedPolicy-CNN** | **42.76** | 1.54 | 147.26 M |
+| Method                           | Easy            | Hard            | Tham số |
+| -------------------------------- | --------------- | --------------- | -------- |
+| RDT (VLA)                        | 34.50           | **13.72** | 1.2 B    |
+| ACT                              | 29.74           | 1.74            | 80 M     |
+| DP-Transformer                   | 33.10           | 1.44            | 20.61 M  |
+| DP-CNN                           | 28.04           | 0.64            | 96.80 M  |
+| **SeedPolicy-Transformer** | 40.08           | 4.28            | 33.36 M  |
+| **SeedPolicy-CNN**         | **42.76** | 1.54            | 147.26 M |
 
 - Easy: **+7.0 tuyệt đối / +21.1% tương đối** (Transformer); **+14.72 / +52.5%**
   (CNN).
@@ -140,11 +139,11 @@ $T_{obs} = 3$ bước quan sát, RGB $320 \times 240$ + joint pose 14-DoF. Trạ
 
 ### 5.2 Lợi ích tăng theo độ dài task
 
-| Nhóm độ dài | Gain Transformer | Gain CNN |
-|---|---|---|
-| Short | +2.9 | +13.6 |
-| Medium | +6.4 | +12.9 |
-| **Long** | **+16.0** | **+21.9** |
+| Nhóm độ dài | Gain Transformer | Gain CNN        |
+| --------------- | ---------------- | --------------- |
+| Short           | +2.9             | +13.6           |
+| Medium          | +6.4             | +12.9           |
+| **Long**  | **+16.0**  | **+21.9** |
 
 Đây là bằng chứng trung tâm: policy cửa sổ cố định mất ngữ cảnh lịch sử trong task
 kéo dài, còn trạng thái tiến hoá giữ được tiến độ.
@@ -167,18 +166,18 @@ tập.
 
 ### 5.4 Đối chứng trực tiếp với các cơ chế memory khác (10 task)
 
-| Task | DP + ARMT-style | DP + **MemoryVLA-style** | **SeedPolicy** |
-|---|---|---|---|
-| Move Playingcard Away | 56 | 64 | **68** |
-| Turn Switch | 50 | 52 | **54** |
-| Place Object Stand | 20 | 26 | **28** |
-| Dump Bin Bigbin | 47 | 50 | **52** |
-| Place Container Plate | 38 | 51 | **60** |
-| Place Empty Cup | 15 | 30 | **32** |
-| Put Object Cabinet | 15 | 29 | **41** |
-| Stack Blocks Two | 33 | 38 | **47** |
-| Stack Bowls Two | 56 | 60 | **73** |
-| Put Bottles Dustbin | 21 | 26 | **48** |
+| Task                  | DP + ARMT-style | DP +**MemoryVLA-style** | **SeedPolicy** |
+| --------------------- | --------------- | ----------------------------- | -------------------- |
+| Move Playingcard Away | 56              | 64                            | **68**         |
+| Turn Switch           | 50              | 52                            | **54**         |
+| Place Object Stand    | 20              | 26                            | **28**         |
+| Dump Bin Bigbin       | 47              | 50                            | **52**         |
+| Place Container Plate | 38              | 51                            | **60**         |
+| Place Empty Cup       | 15              | 30                            | **32**         |
+| Put Object Cabinet    | 15              | 29                            | **41**         |
+| Stack Blocks Two      | 33              | 38                            | **47**         |
+| Stack Bowls Two       | 56              | 60                            | **73**         |
+| Put Bottles Dustbin   | 21              | 26                            | **48**         |
 
 **Đây là bảng có giá trị nhất của paper trong corpus hiện tại**: ba cơ chế memory
 khác nhau, cùng backbone DP, cùng giao thức huấn luyện. Không báo cáo còn lưu nào
@@ -194,13 +193,13 @@ Dustbin 26 → 48).
 
 ### 5.5 Ablation thành phần
 
-| Cấu hình | Turn Switch (ngắn) | Place Empty Cup (vừa) | Stack Bowls Two (dài) |
-|---|---|---|---|
-| DP | 51 | 24 | 33 |
-| + Temporal Attention | 51 | 26 | 48 |
-| + State (đệ quy, không cổng) | 51 | 28 | **65** |
-| + **Gating CA** (SeedPolicy) | **54** | **32** | **73** |
-| + Gating FFN (MLP thường) | 53 | 21 | 70 |
+| Cấu hình                        | Turn Switch (ngắn) | Place Empty Cup (vừa) | Stack Bowls Two (dài) |
+| --------------------------------- | ------------------- | ---------------------- | ---------------------- |
+| DP                                | 51                  | 24                     | 33                     |
+| + Temporal Attention              | 51                  | 26                     | 48                     |
+| + State (đệ quy, không cổng)  | 51                  | 28                     | **65**           |
+| +**Gating CA** (SeedPolicy) | **54**        | **32**           | **73**           |
+| + Gating FFN (MLP thường)       | 53                  | 21                     | 70                     |
 
 Đọc theo cột "task dài": frame stacking 33 → temporal attention 48 → trạng thái đệ
 quy 65 → thêm cổng 73. Mỗi bước trong chuỗi chẩn đoán ở mục 2 đều được xác nhận
@@ -273,7 +272,7 @@ tin thưa theo thời gian" ở mục 2.
    một 4090. Xác nhận hoặc bác bỏ tuyên bố trung tâm với chi phí thấp nhất trong
    cả tập.
 2. **Quét $N_s$** — chưa ai quét. Nếu $N_s$ cũng phụ thuộc task theo cùng kiểu
-  thì đó là quy luật chung của memory bank, không phải đặc thù một kiến trúc.
+   thì đó là quy luật chung của memory bank, không phải đặc thù một kiến trúc.
 3. **Đo latency và bộ nhớ của SEGA** để hoàn thiện bảng chi phí ở mục 9 của
    [../01_tong_quan.md](../01_tong_quan.md). Ta tự đo được vì có code và phần cứng
    phù hợp.

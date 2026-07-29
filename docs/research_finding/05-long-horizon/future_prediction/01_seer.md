@@ -7,8 +7,7 @@
 
 ## 1. Nguồn
 
-- Tiêu đề: *Predictive Inverse Dynamics Models are Scalable Learners for Robotic
-  Manipulation*
+- Tiêu đề: *Predictive Inverse Dynamics Models are Scalable Learners for Robotic Manipulation*
 - Tác giả: Yang Tian, Sizhe Yang (đồng tác giả chính), Jia Zeng, Ping Wang,
   Dahua Lin, Hao Dong, Jiangmiao Pang (Shanghai AI Lab / PKU / CUHK)
 - arXiv: [2412.15109v1](https://arxiv.org/abs/2412.15109), 19 Dec 2024
@@ -20,10 +19,11 @@
 
 ## 2. Câu hỏi nghiên cứu
 
-Hai hướng scale policy đang tách rời: hướng "action" (behavior cloning trên dữ
-liệu robot lớn) và hướng "vision" (pretrain biểu diễn hoặc world model rồi ghép
-hai giai đoạn). Nếu **khép vòng vision-action ngay trong training và inference**
-thì có được policy scale tốt hơn cả hai không?
+Hai hướng scale policy đang tách rời: hướng "action" (behavior cloning trên dữ liệu robot lớn) và hướng "vision" (pretrain biểu diễn hoặc world model rồi ghép hai giai đoạn).
+
+Nếu **khép vòng vision-action ngay trong training và inference** thì có được policy scale tốt hơn cả hai không?
+
+![1785226689467](image/01_seer/1785226689467.png)
 
 ## 3. Đóng góp
 
@@ -38,18 +38,18 @@ thì có được policy scale tốt hơn cả hai không?
 
 ## 4. Method
 
+![1785226661268](image/01_seer/1785226661268.png)
+
 ### 4.1 Hai mục tiêu
 
-Conditional visual foresight — dự đoán ảnh RGB tại $t+n$ từ goal $g$ (ngôn ngữ
-hoặc robot state) và lịch sử $h_t$ (ảnh + state $m$ bước gần nhất):
+Conditional visual foresight — dự đoán ảnh RGB tại $t+n$ từ goal $g$ (ngôn ngữ hoặc robot state) và lịch sử $h_t$ (ảnh + state $m$ bước gần nhất):
 
 $$
 \hat{o}_{t+n} = f_{fore}(g, h_t), \qquad
 L_{fore} = \lVert f_{fore}(g,h_t) - o_{t+n} \rVert_2^2
 $$
 
-Inverse dynamics prediction — mở rộng IDM để dự đoán **chuỗi** action, với
-$o_{t+n}$ thật được thay bằng biểu diễn **latent dự đoán** $\hat{o}^l_{t+n}$:
+Inverse dynamics prediction — mở rộng IDM để dự đoán **chuỗi** action, với $o_{t+n}$ thật được thay bằng biểu diễn **latent dự đoán** $\hat{o}^l_{t+n}$:
 
 $$
 \hat{a}_{t:t+n-1} = f_{inv}(g, h_t, \hat{o}^l_{t+n})
@@ -63,28 +63,26 @@ $$
 
 Tổng: $L = \alpha L_{fore} + L_{inv}$, $\alpha = 0.5$.
 
-Chi tiết quyết định: fusion xảy ra **trong latent space**, không phải trên ảnh
-đã decode. Đó là điều cho phép gradient chảy end-to-end.
+Chi tiết quyết định: fusion xảy ra **trong latent space**, không phải trên ảnh đã decode. Đó là điều cho phép gradient chảy end-to-end.
 
 ### 4.2 Unidirectional attention mask
 
 - `[FRS]` attend tới language, ảnh và state trong lịch sử.
-- `[INV]` attend tới cùng các token đó **và thêm `[FRS]`**; `[FRS]` không attend
-  ngược lại `[INV]`.
+- `[INV]` attend tới cùng các token đó **và thêm `[FRS]`**; `[FRS]` không attend ngược lại `[INV]`.
 
 Hai lợi ích tác giả nêu: `[INV]` tích hợp sâu thông tin quá khứ **và** tương lai
 qua nhiều layer; và training end-to-end trở nên khả thi nhờ fusion latent.
 
 ### 4.3 Kiến trúc và quy mô
 
-| Thành phần | Lựa chọn |
-|---|---|
-| Text | CLIP text encoder → linear |
-| Image | ViT (MAE-style) → **perceiver resampler** để giảm số token |
-| State | MLP |
-| Backbone | GPT-2 style transformer + learnable positional embedding theo timestep |
-| Image decoder | ViT với mask token, mỗi output = một patch |
-| Action decoder | MLP |
+| Thành phần   | Lựa chọn                                                             |
+| -------------- | ---------------------------------------------------------------------- |
+| Text           | CLIP text encoder → linear                                            |
+| Image          | ViT (MAE-style) →**perceiver resampler** để giảm số token  |
+| State          | MLP                                                                    |
+| Backbone       | GPT-2 style transformer + learnable positional embedding theo timestep |
+| Image decoder  | ViT với mask token, mỗi output = một patch                          |
+| Action decoder | MLP                                                                    |
 
 Encoder pretrained bị **đóng băng**: 251M tham số không train. Seer: 65M trainable
 (tổng 316M). Seer-Large: 315M trainable.
@@ -103,30 +101,30 @@ play data (không nhãn) và DROID có tác dụng.
 
 ### 5.1 LIBERO-LONG (pretrain LIBERO-90 → finetune LIBERO-LONG, 10 task)
 
-| Method | Avg Success (%) |
-|---|---|
-| MTACT | 41.0 |
-| OpenVLA (7B) | 54.0 |
-| MVP | 68.2 |
-| MPI | 77.3 |
-| Seer (scratch) | 78.7 |
-| **Seer** | **87.7** |
+| Method         | Avg Success (%) |
+| -------------- | --------------- |
+| MTACT          | 41.0            |
+| OpenVLA (7B)   | 54.0            |
+| MVP            | 68.2            |
+| MPI            | 77.3            |
+| Seer (scratch) | 78.7            |
+| **Seer** | **87.7**  |
 
 Seer có 65M tham số trainable — 4% của OpenVLA — nhưng hơn 62% tương đối.
 
 ### 5.2 CALVIN ABC-D (train A/B/C, eval D)
 
-| Method | Avg Len ↑ |
-|---|---|
-| RoboFlamingo | 2.47 |
-| Susie (PIDM 2 giai đoạn) | 2.69 |
-| GR-1 (video generative pretrain) | 3.06 |
-| 3D Diffuser Actor | 3.27 |
-| CLOVER | 3.53 |
-| Seer (scratch) | 3.64 |
-| Seer | 3.98 |
-| Seer-Large (scratch) | 3.83 |
-| **Seer-Large** | **4.28** |
+| Method                           | Avg Len ↑     |
+| -------------------------------- | -------------- |
+| RoboFlamingo                     | 2.47           |
+| Susie (PIDM 2 giai đoạn)       | 2.69           |
+| GR-1 (video generative pretrain) | 3.06           |
+| 3D Diffuser Actor                | 3.27           |
+| CLOVER                           | 3.53           |
+| Seer (scratch)                   | 3.64           |
+| Seer                             | 3.98           |
+| Seer-Large (scratch)             | 3.83           |
+| **Seer-Large**             | **4.28** |
 
 Pretrain ở đây dùng **play data không có nhãn ngôn ngữ**, chứa hành vi ngẫu
 nhiên — vẫn cho +0.34 Avg Len.
@@ -141,11 +139,11 @@ nhiên — vẫn cho +0.34 Avg Len.
 
 ### 5.4 Ablation mục tiêu (CALVIN ABC-D, Avg Len)
 
-| $L_{fore}$ | $L_{inv}$ | Fine-tuning | Pre-training |
-|---|---|---|---|
-| ✗ | ✗ | 3.31 | 3.64 |
-| ✓ | ✗ | 3.41 | 3.73 |
-| ✓ | ✓ | **3.64** | **3.98** |
+| $L_{fore}$ | $L_{inv}$ | Fine-tuning    | Pre-training   |
+| ------------ | ----------- | -------------- | -------------- |
+| ✗           | ✗          | 3.31           | 3.64           |
+| ✓           | ✗          | 3.41           | 3.73           |
+| ✓           | ✓          | **3.64** | **3.98** |
 
 Đọc bảng: chỉ thêm dự đoán ảnh tương lai cho +0.10; **ghép** nó vào đường dẫn
 action cho thêm +0.23. Tức là giá trị nằm ở việc *dùng* foresight để điều kiện
@@ -158,12 +156,12 @@ method-task có 15 trial; mỗi trial cho tối đa 3 execution (45 execution ch
 method-task). Không dùng `>900` như một con số per-task vì đó chỉ có thể là phép
 cộng qua nhiều method và task trong bảng.
 
-| Method | Avg SR (%) / Score |
-|---|---|
-| OpenVLA | 16.7 / 11.0 |
-| MPI | 48.4 / 29.3 |
-| MVP | 55.0 / 29.8 |
-| Seer (scratch) | 60.0 / 32.8 |
+| Method         | Avg SR (%) / Score    |
+| -------------- | --------------------- |
+| OpenVLA        | 16.7 / 11.0           |
+| MPI            | 48.4 / 29.3           |
+| MVP            | 55.0 / 29.8           |
+| Seer (scratch) | 60.0 / 32.8           |
 | **Seer** | **78.4 / 39.5** |
 
 Robustness (SR không pretrain → có pretrain): nhiều vật gây nhiễu 33.3 → 60.0;

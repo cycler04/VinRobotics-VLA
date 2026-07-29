@@ -18,6 +18,8 @@ Làm sao để robot xử lý **prompt phức tạp và phản hồi giữa ch�
 đừng đụng bát đĩa", "cái đó không phải rác", "tôi dị ứng dưa muối") thay vì chỉ
 lệnh nguyên tử ("nhặt cái cốc")?
 
+![1785308413890](image/02_hi_robot/1785308413890.png)
+
 ## 3. Đóng góp
 
 1. Kiến trúc **System 1 / System 2** trong đó **cả hai tầng đều là VLM**: tầng
@@ -75,28 +77,28 @@ trên $D_{labeled} \cup D_{demo}$ (flow matching).
 
 ### 4.4 Độ trễ đo được (RTX 4090)
 
-| Thành phần | Thời gian |
-|---|---|
-| Image encoding (tầng thấp) | 14 ms |
-| Observation processing | 32 ms |
-| Action prediction (×10 bước) | 27 ms |
-| Tổng on-board tầng thấp | 73 ms |
-| Tổng off-board + WiFi | 86 ms |
-| Tầng cao — prefill / decode | 47 ms / 13.2 ms |
-| Tầng cao trên H100 | 17.3 ms / 5.7 ms |
+| Thành phần                    | Thời gian       |
+| ------------------------------- | ---------------- |
+| Image encoding (tầng thấp)    | 14 ms            |
+| Observation processing          | 32 ms            |
+| Action prediction (×10 bước) | 27 ms            |
+| Tổng on-board tầng thấp      | 73 ms            |
+| Tổng off-board + WiFi          | 86 ms            |
+| Tầng cao — prefill / decode   | 47 ms / 13.2 ms  |
+| Tầng cao trên H100            | 17.3 ms / 5.7 ms |
 
 Tác giả kết luận khả thi ~10 Hz; với action chunking điều khiển robot ở 50 Hz.
 
 ## 5. Claim → Evidence
 
-| Claim | Bằng chứng | Ghi chú |
-|---|---|---|
-| Hi Robot vượt GPT-4o làm tầng cao | Chênh trung bình >40 điểm Instruction Accuracy (Fig 5) | GPT-4o là model lớn hơn nhiều nhưng không được finetune bằng dữ liệu robot |
-| Hi Robot vượt flat VLA | Fig 5, cả 3 domain | Flat VLA không phản ứng với phản hồi real-time |
-| Tiến gần tới human high-level oracle | Fig 5 | Oracle cho thấy tầng thấp gần như không lỗi khi được ra lệnh đúng — lỗi nằm ở lý luận |
-| Dữ liệu tổng hợp là bắt buộc | Ablation Fig 7, khoảng cách lớn trên trung bình cả IA và TP | Bản trích PDF không cho phép gán chắc chắn con số nào cho IA và con số nào cho TP; hai khoảng cách trung bình được ghi là ~39 và ~46 điểm |
-| Hierarchy tốt hơn flat trên **cùng** dữ liệu tổng hợp | Ablation Fig 8, hai khoảng cách trung bình ~19 và ~34 điểm | Tách được đóng góp của hierarchy khỏi đóng góp của dữ liệu |
-| Chạy được trên 3 embodiment | UR5e (7 chiều), bimanual ARX (14), mobile ARX (16 action / 14 config) | Không có so sánh chéo embodiment |
+| Claim                                                              | Bằng chứng                                                           | Ghi chú                                                                                                                                                        |
+| ------------------------------------------------------------------ | ---------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Hi Robot vượt GPT-4o làm tầng cao                              | Chênh trung bình >40 điểm Instruction Accuracy (Fig 5)             | GPT-4o là model lớn hơn nhiều nhưng không được finetune bằng dữ liệu robot                                                                          |
+| Hi Robot vượt flat VLA                                           | Fig 5, cả 3 domain                                                    | Flat VLA không phản ứng với phản hồi real-time                                                                                                            |
+| Tiến gần tới human high-level oracle                            | Fig 5                                                                  | Oracle cho thấy tầng thấp gần như không lỗi khi được ra lệnh đúng — lỗi nằm ở lý luận                                                        |
+| Dữ liệu tổng hợp là bắt buộc                                | Ablation Fig 7, khoảng cách lớn trên trung bình cả IA và TP     | Bản trích PDF không cho phép gán chắc chắn con số nào cho IA và con số nào cho TP; hai khoảng cách trung bình được ghi là ~39 và ~46 điểm |
+| Hierarchy tốt hơn flat trên**cùng** dữ liệu tổng hợp | Ablation Fig 8, hai khoảng cách trung bình ~19 và ~34 điểm       | Tách được đóng góp của hierarchy khỏi đóng góp của dữ liệu                                                                                       |
+| Chạy được trên 3 embodiment                                   | UR5e (7 chiều), bimanual ARX (14), mobile ARX (16 action / 14 config) | Không có so sánh chéo embodiment                                                                                                                            |
 
 Metric: **Instruction Accuracy** (lệnh tầng cao có khớp ý người dùng + quan sát
 hiện tại không) và **Task Progress** (tỉ lệ vật thể về đúng chỗ). 20 trial mỗi
