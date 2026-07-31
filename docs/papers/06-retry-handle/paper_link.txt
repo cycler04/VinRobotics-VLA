@@ -1,4 +1,31 @@
-https://arxiv.org/pdf/2510.01642 
+# Retry / Recovery in VLA — retained paper index
+
+**Scope (31 July 2026):** this directory contains the four primary PDFs below.
+Venue/status is recorded from the PDF itself; where the PDF states no venue the
+entry says so rather than guessing. Citation counts are omitted because they
+change over time.
+
+| # | Paper | Source | Local PDF | Status |
+|---|---|---|---|---|
+| 1 | RoboMonkey: Scaling Test-Time Sampling and Verification for Vision-Language-Action Models | [arXiv 2506.17811](https://arxiv.org/abs/2506.17811) | `01_robomonkey_test_time_sampling_verification.pdf` | Venue not stated in the retained PDF |
+| 2 | FailSafe: Reasoning and Recovery from Failures in Vision-Language-Action Models | [arXiv 2510.01642](https://arxiv.org/abs/2510.01642) | `02_failsafe_reasoning_recovery_from_failures.pdf` | Venue not stated in the retained PDF (IEEE two-column format) |
+| 3 | Self-Correcting VLA: Online Action Refinement via Sparse World Imagination | [arXiv 2602.21633](https://arxiv.org/abs/2602.21633) | `03_self_correcting_vla_sparse_world_imagination.pdf` | Preprint |
+| 4 | FLARE: A Failure-Aware Framework for Autonomous Correction and Recovery in Visual-Language Robotic Manipulation | [CVF Open Access](https://openaccess.thecvf.com/content/CVPR2026/papers/Zhao_FLARE_A_Failure-Aware_Framework_for_Autonomous_Correction_and_Recovery_in_CVPR_2026_paper.pdf) | `04_flare_failure_aware_correction_recovery.pdf` | CVPR 2026 |
+
+Note: a different paper also named FLARE — *FLARE: Robot Learning with Implicit
+World Modeling* ([arXiv 2505.15659](https://arxiv.org/abs/2505.15659)) — is cited
+inside paper #3. It is a world-model paper, unrelated to retry/recovery, and is
+not part of this corpus.
+
+`deep-research-report.md` in this directory is a broader survey retained from
+earlier work. It covers papers with no PDF here and citation counts that were not
+re-verified; it is not the canonical index.
+
+The four Markdown analyses are indexed in
+[`docs/research_finding/06-retry-handle/01_tong_quan.md`](../../research_finding/06-retry-handle/01_tong_quan.md).
+
+## Raw source URLs as originally collected
+
+https://arxiv.org/pdf/2510.01642
 https://arxiv.org/html/2602.21633v1
 https://openaccess.thecvf.com/content/CVPR2026/papers/Zhao_FLARE_A_Failure-Aware_Framework_for_Autonomous_Correction_and_Recovery_in_CVPR_2026_paper.pdf
- 

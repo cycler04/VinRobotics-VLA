@@ -23,7 +23,6 @@ cho human ego clips, không phải robot-control stack hoàn chỉnh.
 
 ![VLA-Core architecture overview](model_overview.png)
 
-
 ```mermaid
 flowchart TD
     IMG[1–3 ảnh RGB]

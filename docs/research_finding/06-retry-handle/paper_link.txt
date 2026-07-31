@@ -1,4 +1,5 @@
-mấy paper kiểu như https://arxiv.org/pdf/2510.01642 
-https://arxiv.org/html/2602.21633v1
-https://openaccess.thecvf.com/content/CVPR2026/papers/Zhao_FLARE_A_Failure-Aware_Framework_for_Autonomous_Correction_and_Recovery_in_CVPR_2026_paper.pdf
- 
+# Paper index
+
+Nguồn chuẩn cho danh sách PDF, arXiv và trạng thái là
+[docs/papers/06-retry-handle/paper_link.txt](../../papers/06-retry-handle/paper_link.txt).
+Không lặp lại metadata tại đây để tránh hai chỉ mục lệch nhau.
