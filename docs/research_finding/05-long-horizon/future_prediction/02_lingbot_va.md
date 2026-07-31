@@ -31,13 +31,15 @@ diễn chung gây kém hiệu quả mẫu và khái quát kém.
 
 Nhưng các world model đã có cũng hỏng, vì ba lý do cụ thể:
 
-| Vấn đề | Mô tả |
-|---|---|
-| **Reactivity gap** | Sinh chunk/open-loop rollout đoạn dài không nhận phản hồi thời gian thực |
-| **Limited long-term memory** | Sinh theo chunk gây mâu thuẫn qua horizon dài khi lịch sử không được cache bền |
-| **Causality** | Bidirectional attention trong một segment cho phép token tương lai ảnh hưởng dự đoán quá khứ — trái với bản chất nhân quả của vật lý |
+| Vấn đề                          | Mô tả                                                                                                                                                    |
+| ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Reactivity gap**           | Sinh chunk/open-loop rollout đoạn dài không nhận phản hồi thời gian thực                                                                          |
+| **Limited long-term memory** | Sinh theo chunk gây mâu thuẫn qua horizon dài khi lịch sử không được cache bền                                                                  |
+| **Causality**                | Bidirectional attention trong một segment cho phép token tương lai ảnh hưởng dự đoán quá khứ — trái với bản chất nhân quả của vật lý |
 
 Ba lý do này dẫn thẳng tới lời giải: **công thức tự hồi quy (autoregressive)**.
+
+![1785484904923](image/02_lingbot_va/1785484904923.png)
 
 ## 3. Đóng góp
 
@@ -49,6 +51,8 @@ Ba lý do này dẫn thẳng tới lời giải: **công thức tự hồi quy (
    adapt) và khái quát.
 
 ## 4. Method
+
+![1785484930351](image/02_lingbot_va/1785484930351.png)
 
 ### 4.1 Phân rã hai tầng
 
@@ -96,7 +100,9 @@ $$
 
 Nghĩa là dự đoán $K$ frame video sinh ra $\tau K$ action — điều khiển tần số cao
 mà vẫn sinh video hiệu quả. Causal VAE Wan2.2 nén $4 \times 16 \times 16$, cộng
-patchify /2, cho $N = 192$ spatial token mỗi frame.
+patchify /2, cho $N = 192$ spatial token mỗi frame. S
+
+**Insight:** $K$ frame là guild chính thức cho các action output, không sinh future quá xa.
 
 ### 4.4 Noisy History Augmentation — mẹo giảm chi phí quan trọng nhất
 
@@ -154,12 +160,12 @@ step.
 
 ### 5.1 RoboTwin 2.0 (50 task bimanual, ALOHA-AgileX)
 
-| Metric | X-VLA | π0 | π0.5 | Motus | **LingBot-VA** |
-|---|---|---|---|---|---|
+| Metric                  | X-VLA       | π0         | π0.5       | Motus       | **LingBot-VA**                  |
+| ----------------------- | ----------- | ----------- | ----------- | ----------- | ------------------------------------- |
 | Horizon = 1 (Easy/Hard) | 81.6 / 82.5 | 66.5 / 61.6 | 85.1 / 80.2 | 91.0 / 90.6 | **94.18 / 93.56** (+3.2 / +3.0) |
-| Horizon = 2 | 59.3 / 55.9 | 66.1 / 54.7 | 79.3 / 73.0 | 85.2 / 80.9 | **90.35 / 86.95** (+5.2 / +6.1) |
-| Horizon = 3 | 61.2 / 66.0 | 61.6 / 50.2 | 78.6 / 67.4 | 85.0 / 84.2 | **93.22 / 93.28** (+8.2 / +9.1) |
-| Trung bình 50 task | 72.9 / 72.8 | 65.9 / 58.4 | 82.7 / 76.8 | 88.7 / 87.0 | **92.93 / 91.55** (+4.2 / +4.6) |
+| Horizon = 2             | 59.3 / 55.9 | 66.1 / 54.7 | 79.3 / 73.0 | 85.2 / 80.9 | **90.35 / 86.95** (+5.2 / +6.1) |
+| Horizon = 3             | 61.2 / 66.0 | 61.6 / 50.2 | 78.6 / 67.4 | 85.0 / 84.2 | **93.22 / 93.28** (+8.2 / +9.1) |
+| Trung bình 50 task     | 72.9 / 72.8 | 65.9 / 58.4 | 82.7 / 76.8 | 88.7 / 87.0 | **92.93 / 91.55** (+4.2 / +4.6) |
 
 Mức cải thiện **tăng theo horizon** (+3.2 → +5.2 → +8.2) — chữ ký nhất quán với
 mọi paper long-horizon trong tập.
@@ -197,23 +203,23 @@ toàn bộ thông tin lịch sử lúc inference.
 
 ### 5.5 Hiệu quả mẫu
 
-| Số demo | RoboTwin Easy (progress) | Real world (progress) |
-|---|---|---|
-| 5 | 46.6 vs 36.3 | — |
-| 10 | 58.2 vs 50.7 | **61.1 vs 45.5** |
-| 25 | 74.2 vs 70.5 | 81.7 vs 60.0 |
-| 50 | 84.6 vs 81.2 | 97.0 vs 73.0 |
+| Số demo | RoboTwin Easy (progress) | Real world (progress)  |
+| -------- | ------------------------ | ---------------------- |
+| 5        | 46.6 vs 36.3             | —                     |
+| 10       | 58.2 vs 50.7             | **61.1 vs 45.5** |
+| 25       | 74.2 vs 70.5             | 81.7 vs 60.0           |
+| 50       | 84.6 vs 81.2             | 97.0 vs 73.0           |
 
 (Ours vs π0.5.) Ở chế độ 10 demo: +15.6% real, +10.3% sim.
 
 ### 5.6 Ablation (RoboTwin Easy)
 
-| Cấu hình | Easy toàn bộ | H=1 | H=2 | H=3 |
-|---|---|---|---|---|
-| LingBot-VA (tham chiếu) | **92.9** | 94.2 | 90.4 | 93.2 |
-| FDM-grounded Async | 90.4 | 92.5 | 87.7 | 85.6 |
-| **Naive Async** | **74.3** | 83.3 | 70.3 | **32.9** |
-| Khởi tạo từ WAN (không joint pretrain) | 80.6 | 84.9 | 76.3 | 67.6 |
+| Cấu hình                                 | Easy toàn bộ | H=1  | H=2  | H=3            |
+| ------------------------------------------ | -------------- | ---- | ---- | -------------- |
+| LingBot-VA (tham chiếu)                   | **92.9** | 94.2 | 90.4 | 93.2           |
+| FDM-grounded Async                         | 90.4           | 92.5 | 87.7 | 85.6           |
+| **Naive Async**                      | **74.3** | 83.3 | 70.3 | **32.9** |
+| Khởi tạo từ WAN (không joint pretrain) | 80.6           | 84.9 | 76.3 | 67.6           |
 
 Hai điều đáng chú ý:
 
@@ -273,5 +279,4 @@ Async vs sync: success rate tương đương, nhưng async **nhanh gấp 2 lần
    hỏi chi phí/chất lượng mà LingBot-VA để ngỏ.
 3. **Đo latency tuyệt đối** của checkpoint công khai trên GPU consumer, đối chiếu
    với latency của các policy khác trên cùng phần cứng/cấu hình.
-   [Hi Robot](../hierarchical_agent/02_hi_robot.md). Không paper nào cho phép so
-   trực tiếp; ta tự đo được vì có checkpoint.
+   [Hi Robot](../hierarchical_agent/02_hi_robot.md). Không paper nào cho phép so trực tiếp; ta tự đo được vì có checkpoint.
