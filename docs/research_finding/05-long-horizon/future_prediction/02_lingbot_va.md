@@ -234,23 +234,12 @@ Async vs sync: success rate tương đương, nhưng async **nhanh gấp 2 lần
 
 ## 6. Giới hạn và điểm chưa rõ
 
-- **Không có mục Limitations**, chỉ có "Future Work" (nén video hiệu quả hơn; thêm
-  tactile/force/audio). Đây là paper thứ ba liên tiếp trong đợt đọc này thiếu mục
-  Limitations.
-- **Venue chưa xác minh.** `sota_with_code.txt` ghi RSS 2026; PDF không ghi gì.
-- Bảng ablation (Table 3) đặt "LingBot-VA (Ours)" làm baseline row rồi liệt kê
-  "FDM-grounded Async" 90.4 như một biến thể — nhưng FDM-grounded async **chính
-  là** phương pháp đề xuất ở mục 3.4. Không rõ row baseline 92.9 ứng với cấu hình
-  nào (sync?). **Không nên trích 92.9 vs 90.4 như một so sánh có ý nghĩa** khi
-  chưa đọc lại bản gốc.
-- **Không có bảng latency tuyệt đối.** Chỉ có "async nhanh gấp 2 lần sync". Với
-  model 5.3B sinh video token, con số giây/bước là thông tin quyết định — thiếu.
 - **Không có ablation Noisy History Augmentation.** Mức $s = 0.5$ (hoặc 0.6) được
   chọn mà không quét, dù đây là tham số đánh đổi chi phí/chất lượng trực tiếp.
 - Baseline chính chỉ là π0.5 và Motus. Không so với các hướng world model +
   memory khác dù paper cũng chạm vào bài toán đếm/nhớ.
-- 16K giờ dữ liệu và 1.4T token pretrain — **không tái lập được** ngoài phòng lab
-  công nghiệp. Checkpoint công khai làm giảm nhẹ vấn đề này.
+- 16K giờ dữ liệu và 1.4T token pretrain — **không tái lập được** ngoài phòng lab công nghiệp. Checkpoint công khai làm giảm nhẹ vấn đề này.
+- **Insight:** Future prediction is probably beneficial, but it introduces an imagination-to-control failure path. LingBot’s major achievement is showing that this path can be controlled using joint training, real-observation replacement, KV cache and FDM-grounded asynchronous inference.
 
 ## 7. Liên hệ với workspace
 
@@ -274,9 +263,7 @@ Async vs sync: success rate tương đương, nhưng async **nhanh gấp 2 lần
 1. **Tái lập hai task memory** (Wipe Plate, Search Box) — thiết kế rẻ và có mức
    baseline tính toán được trước (50% ngẫu nhiên cho Search Box). Đây là cách tốt
    nhất trong cả tập để đo "policy này có nhớ không" mà không cần benchmark lớn.
-2. **Quét $s_{aug}$ / mức partial denoise** trên checkpoint công khai: $s \in
-   \{0.3, 0.5, 0.6, 0.8, 1.0\}$, đo latency và success rate. Trả lời trực tiếp câu
-   hỏi chi phí/chất lượng mà LingBot-VA để ngỏ.
+2. **Quét $s_{aug}$ / mức partial denoise** trên checkpoint công khai: $s \in\{0.3, 0.5, 0.6, 0.8, 1.0\}$, đo latency và success rate. Trả lời trực tiếp câu hỏi chi phí/chất lượng mà LingBot-VA để ngỏ.
 3. **Đo latency tuyệt đối** của checkpoint công khai trên GPU consumer, đối chiếu
    với latency của các policy khác trên cùng phần cứng/cấu hình.
    [Hi Robot](../hierarchical_agent/02_hi_robot.md). Không paper nào cho phép so trực tiếp; ta tự đo được vì có checkpoint.
