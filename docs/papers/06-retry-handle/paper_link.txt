@@ -1,9 +1,9 @@
 # Retry / Recovery in VLA — retained paper index
 
-**Scope (31 July 2026):** this directory contains the four primary PDFs below.
-Venue/status is recorded from the PDF itself; where the PDF states no venue the
-entry says so rather than guessing. Citation counts are omitted because they
-change over time.
+**Scope (31 July 2026; extended 3 August 2026):** this directory contains the six
+primary PDFs below. Venue/status is recorded from the PDF itself; where the PDF
+states no venue the entry says so rather than guessing. Citation counts are
+omitted because they change over time.
 
 | # | Paper | Source | Local PDF | Status |
 |---|---|---|---|---|
@@ -11,6 +11,8 @@ change over time.
 | 2 | FailSafe: Reasoning and Recovery from Failures in Vision-Language-Action Models | [arXiv 2510.01642](https://arxiv.org/abs/2510.01642) | `02_failsafe_reasoning_recovery_from_failures.pdf` | Venue not stated in the retained PDF (IEEE two-column format) |
 | 3 | Self-Correcting VLA: Online Action Refinement via Sparse World Imagination | [arXiv 2602.21633](https://arxiv.org/abs/2602.21633) | `03_self_correcting_vla_sparse_world_imagination.pdf` | Preprint |
 | 4 | FLARE: A Failure-Aware Framework for Autonomous Correction and Recovery in Visual-Language Robotic Manipulation | [CVF Open Access](https://openaccess.thecvf.com/content/CVPR2026/papers/Zhao_FLARE_A_Failure-Aware_Framework_for_Autonomous_Correction_and_Recovery_in_CVPR_2026_paper.pdf) | `04_flare_failure_aware_correction_recovery.pdf` | CVPR 2026 |
+| 5 | NORA-1.5: A Vision-Language-Action Model Trained using World Model- and Action-based Preference Rewards | [arXiv 2511.14659](https://arxiv.org/abs/2511.14659) | `05_nora_1_5_world_model_preference_rewards.pdf` | arXiv preprint (v1, 18 Nov 2025); no venue stated in the retained PDF |
+| 6 | ThinkAct: Vision-Language-Action Reasoning via Reinforced Visual Latent Planning | [arXiv 2507.16815](https://arxiv.org/abs/2507.16815) | `06_thinkact_reinforced_visual_latent_planning.pdf` | arXiv preprint (v2, 18 Sep 2025); no venue stated in the retained PDF |
 
 Note: a different paper also named FLARE — *FLARE: Robot Learning with Implicit
 World Modeling* ([arXiv 2505.15659](https://arxiv.org/abs/2505.15659)) — is cited
@@ -21,7 +23,13 @@ not part of this corpus.
 earlier work. It covers papers with no PDF here and citation counts that were not
 re-verified; it is not the canonical index.
 
-The four Markdown analyses are indexed in
+Papers #5 and #6 were added on 3 August 2026. Neither is a retry system: NORA-1.5
+is offline preference post-training and ThinkAct is a reasoning architecture whose
+self-correction evidence is qualitative only. Both are retained because they sit
+on the same reliability axis; the classification caveats are in the Vietnamese
+reports.
+
+The six Markdown analyses are indexed in
 [`docs/research_finding/06-retry-handle/01_tong_quan.md`](../../research_finding/06-retry-handle/01_tong_quan.md).
 
 ## Raw source URLs as originally collected
@@ -29,3 +37,5 @@ The four Markdown analyses are indexed in
 https://arxiv.org/pdf/2510.01642
 https://arxiv.org/html/2602.21633v1
 https://openaccess.thecvf.com/content/CVPR2026/papers/Zhao_FLARE_A_Failure-Aware_Framework_for_Autonomous_Correction_and_Recovery_in_CVPR_2026_paper.pdf
+https://arxiv.org/pdf/2511.14659
+https://arxiv.org/pdf/2507.16815

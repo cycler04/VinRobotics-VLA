@@ -1,31 +1,39 @@
-# Retry / Recovery trong VLA — tổng hợp 4 paper
+# Retry / Recovery trong VLA — tổng hợp 6 paper
 
 ## Ý tưởng chính
 
-Bốn paper cùng nhắm vào một triệu chứng: VLA được train trên demo sạch, thành
+Sáu paper cùng nhắm vào một triệu chứng: VLA được train trên demo sạch, thành
 công, nên khi thực thi lệch đi thì không biết làm lại. Nhưng chúng **can thiệp ở
-bốn chỗ khác nhau trên đường từ dữ liệu tới action**, và chỉ ba trong bốn paper
+sáu chỗ khác nhau trên đường từ dữ liệu tới action**, và chỉ ba trong sáu paper
 thực sự nói về recovery theo nghĩa đen.
 
-**Verified:** phạm vi này gồm đúng bốn PDF đang có trong
+**Verified:** phạm vi này gồm đúng sáu PDF đang có trong
 [`docs/papers/06-retry-handle/`](../../papers/06-retry-handle/). Chỉ mục nguồn
 chuẩn là [paper_link.txt](../../papers/06-retry-handle/paper_link.txt); trạng
 thái code nằm ở [02_sota_co_code.md](02_sota_co_code.md).
 
 ## 1. Câu hỏi nghiên cứu
 
-Khi một rollout đi chệch, hệ thống thiếu gì: candidate action tốt hơn, khả năng
-nhận ra mình đã sai, dữ liệu dạy cách quay lại, hay một vòng tinh chỉnh online?
+Khi một rollout đi chệch, hệ thống thiếu gì: một policy được dạy tốt hơn từ đầu,
+một cách sinh action tốt hơn ngay lúc chạy, hay khả năng nhận ra mình đã sai và
+làm lại?
 
-## 2. Chỉ mục theo cơ chế
+## 2. Chỉ mục theo giai đoạn can thiệp
 
-| Nhóm | Vấn đề chính | Paper |
+Ba nhóm, chia theo **lúc nào cơ chế tác động**:
+
+| Nhóm | Tác động lúc nào | Paper |
 |---|---|---|
-| [test_time_verification/](test_time_verification/) | Chọn action tốt hơn **trước khi** thực thi, policy đóng băng | [RoboMonkey](test_time_verification/01_robomonkey.md) |
-| [failure_recovery_data/](failure_recovery_data/) | Sinh dữ liệu failure + recovery mà demo sạch không có | [FailSafe](failure_recovery_data/01_failsafe.md), [FLARE](failure_recovery_data/02_flare.md) |
-| [online_refinement/](online_refinement/) | Tinh chỉnh action online bằng RL với reward nội sinh | [SC-VLA](online_refinement/01_sc_vla.md) |
+| [training/](training/) | **Trước deploy** — đổi trọng số policy, bằng dữ liệu hoặc objective | [NORA-1.5](training/01_nora_1_5.md), [SC-VLA](training/02_sc_vla.md) |
+| [action_generation/](action_generation/) | **Lúc sinh action** — policy đã cố định, cải thiện chính bước tạo ra action | [RoboMonkey](action_generation/01_robomonkey.md), [ThinkAct](action_generation/02_thinkact.md) |
+| [failure_adaptation/](failure_adaptation/) | **Sau khi đã lệch** — phát hiện lỗi đã xảy ra rồi sửa | [FailSafe](failure_adaptation/01_failsafe.md), [FLARE](failure_adaptation/02_flare.md) |
 
-Hai lưu ý phân loại:
+Ranh giới không tuyệt đối: FailSafe và FLARE đều *cũng* phải train lại policy trên
+dữ liệu mới, ThinkAct *cũng* cần RL huấn luyện MLLM. Mỗi paper xếp theo **chỗ đóng
+góp chính** — thứ mà bỏ đi thì paper không còn gì. Các giao thoa ghi trong phần
+"Liên hệ" của từng báo cáo.
+
+Bốn lưu ý phân loại:
 
 - **RoboMonkey không phải recovery.** Nó lọc action *trước* khi thực thi, không
   phát hiện lỗi đã xảy ra, không quay lui. Xếp vào tập này vì vị trí can thiệp
@@ -33,8 +41,17 @@ Hai lưu ý phân loại:
 - **SC-VLA cũng không phải recovery.** "Self-correcting" ở đây là *policy tự tinh
   chỉnh action của mình*, không phải phát hiện và sửa failure. Nó nâng độ chính
   xác để lỗi ít xảy ra, chứ không xử lý lỗi đã xảy ra.
+- **NORA-1.5 cũng không phải recovery.** Toàn bộ can thiệp là post-training
+  offline; lúc deploy không có gì ngoài chính policy. Xếp vào tập vì cùng trục
+  *độ tin cậy*, và vì paper tự nêu rằng reward kiểu khoảng-cách-tới-demo gây phục
+  hồi lỗi kém ở trạng thái off-distribution — đúng chẩn đoán của FLARE/FailSafe.
+- **ThinkAct có cơ chế recovery nhưng chưa có phép đo.** Nó phát hiện lỗi và
+  replan bằng chính reasoning MLLM khi đọc lại video $o_{t-N:t}$, không cần
+  monitor riêng. Bằng chứng chỉ là ba hình định tính; không có tỉ lệ phát hiện
+  hay tỉ lệ phục hồi.
 
-Chỉ **FailSafe** và **FLARE** thực sự xây dựng khả năng phục hồi sau lỗi.
+Chỉ **FailSafe** và **FLARE** vừa xây dựng khả năng phục hồi sau lỗi vừa đo được
+nó. ThinkAct có cơ chế nhưng chưa đo.
 
 ## 3. So sánh tối thiểu
 
@@ -44,12 +61,15 @@ Chỉ **FailSafe** và **FLARE** thực sự xây dựng khả năng phục hồ
 | FailSafe | Dữ liệu + assistant chạy song song | 131k cặp failure–action sinh trong sim, VLM 7B | ManiSkill: π0-FAST +4.0, OpenVLA-OFT +8.0, OpenVLA +22.6 | **Không** |
 | FLARE | Dữ liệu + skill bank + MLLM monitor | Augmentation, 10–20 demo/reset skill, Gemini-2.5-Pro | RoboMimic 9 task: π0.5 72.2% → 84.0% | Có (Piper arm) |
 | SC-VLA | Kiến trúc (2 head phụ) + RL online | Nhãn tính từ demo có sẵn; 0.5–3M bước môi trường cho OAR | ManiSkill 0.72 → 0.82 (SPI) → 0.86 (+OAR) | Có, nhưng **chỉ SPI** |
+| NORA-1.5 | Kiến trúc (action expert) + DPO offline | World model V-JEPA2-AC 1.3B; 960 giờ H100 cho giai đoạn expert | LIBERO 94.5 → 95.0 (DPO chỉ +0.6); Galaxea A1 thật +13.08 | Có (Galaxea A1) |
+| ThinkAct | Kiến trúc dual-system + GRPO | MLLM 7B + DiT policy 432M, 16× A100, quỹ đạo 2D trích bằng detector | LIBERO 76.8 (DiT-Policy) → 84.4; SimplerEnv +11.4…+16.9 | **Không** |
 
-Không so xếp hạng trực tiếp các con số: bốn paper dùng bốn benchmark khác nhau
-(SIMPLER/Bridge, ManiSkill, RoboMimic, ManiSkill3) và bốn base policy khác nhau
-(OpenVLA, OpenVLA-OFT/π0-FAST, π0.5, GR00T N1.5).
+Không so xếp hạng trực tiếp các con số: sáu paper dùng benchmark khác nhau
+(SIMPLER/Bridge, ManiSkill, RoboMimic, ManiSkill3, LIBERO, SimplerEnv) và base
+policy khác nhau (OpenVLA, OpenVLA-OFT/π0-FAST, π0.5, GR00T N1.5, NORA,
+DiT-Policy).
 
-## 4. Điều có thể kết luận từ bốn paper
+## 4. Điều có thể kết luận từ sáu paper
 
 1. **Chẩn đoán chung: lỗi nằm ở chế độ dữ liệu, không ở kiến trúc.** FLARE nêu rõ
    nhất — demo là *trajectory-monotonic*, nên policy học tương quan giả giữa pose
@@ -84,6 +104,19 @@ Không so xếp hạng trực tiếp các con số: bốn paper dùng bốn benc
    baseline 14.7%; trên hai baseline mạnh chỉ +4.0 và +8.0. "84.0% vs 57.8%" của
    FLARE phần lớn là do backbone π0.5; đóng góp riêng là +11.8. "16% fewer steps"
    của SC-VLA là delta nội bộ SPI→OAR, so với baseline mạnh nhất chỉ 8.7%.
+   NORA-1.5 mang tên reward và DPO, nhưng trên LIBERO kiến trúc mang +6.6 còn DPO
+   chỉ +0.6; "+45.56 điểm so với π0" trên Galaxea là do π0 sập ở nhóm có
+   distractor, so với NORA thì là +12.2. ThinkAct hơn CoT-VLA đúng +0.5 trên
+   LIBERO overall; con số đáng tin là +7.6 so với chính DiT-Policy của họ.
+7. **Reward proxy offline đã đủ chín để thay reward thủ công.** NORA-1.5 dùng
+   world model dự đoán embedding tương lai, ThinkAct dùng quỹ đạo 2D của gripper.
+   Cả hai kiểm chứng được từ dữ liệu có sẵn, không cần simulator chính xác cho
+   embodiment đích và không cần giờ robot. Đây là điểm khác biệt lớn nhất so với
+   SC-VLA (0.5–3M bước môi trường online).
+8. **Ngữ cảnh thời gian là điều kiện cần để phát hiện lỗi.** ThinkAct phải mở
+   input từ một frame $o_t$ thành đoạn video $o_{t-N:t}$ mới self-correct được;
+   FailSafe cần cửa sổ 10 frame liên tiếp. Hai paper độc lập cùng chỉ ra: **schema
+   mức frame đơn là không đủ.**
 
 ## 5. Giới hạn của tổng hợp
 
@@ -133,6 +166,10 @@ episode:
 | Nhãn frame: `perturbation` / `bridging` / `task` | FLARE | Chưa |
 | `failure_type`, `subtask`, vector $\Delta A$ 7 chiều gắn timestep | FailSafe | Chưa |
 | Multi-view đồng bộ (3 view) + cửa sổ 10 frame liên tiếp | FailSafe | Cần xác minh |
+| Truy cập frame $o_{t+N}$ trong cùng episode (subgoal image) | NORA-1.5 (WM subgoal) | **Có** |
+| Cặp (action sinh ra, action chuẩn) để tính $L_1$ | NORA-1.5 (GTA) | **Có** |
+| Quỹ đạo 2D gripper $K=8$ keypoint chuẩn hoá `[0,1]` trên ảnh | ThinkAct | Chưa — trích được từ video bằng detector |
+| Cửa sổ video $o_{t-N:t}$ có độ dài xác định gắn timestep | ThinkAct | Cần xác minh |
 
 Đây cùng loại khoảng trống mà [RaC](../05-long-horizon/recovery_data/01_rac.md)
 đã chỉ ra — **provenance ở mức segment, không phải mức episode**. Hai corpus độc
@@ -141,7 +178,7 @@ lập cùng chỉ vào một chỗ.
 ## Nguồn
 
 - [Chỉ mục PDF và metadata](../../papers/06-retry-handle/paper_link.txt)
-- Bốn báo cáo theo thư mục ở mục 2; mỗi báo cáo liên kết trực tiếp tới PDF nguồn.
+- Sáu báo cáo theo thư mục ở mục 2; mỗi báo cáo liên kết trực tiếp tới PDF nguồn.
 - [docs/papers/06-retry-handle/deep-research-report.md](../../papers/06-retry-handle/deep-research-report.md)
   là khảo sát rộng hơn có sẵn từ trước; nó bao gồm nhiều paper **không** có PDF
   trong repo và các citation count chưa xác minh lại. Không dùng làm nguồn chuẩn.
