@@ -20,41 +20,34 @@
   thi, và việc phát hiện lỗi xảy ra **trong bước suy luận định kỳ**, không phải
   bằng một monitor riêng.
 
-⚠️ **Bằng chứng self-correction của paper là định tính.** Ba hình minh hoạ
-(Fig. 6, Fig. A8a, A8b) và không có metric nào đo tỉ lệ phát hiện lỗi hay tỉ lệ
-phục hồi. Xem §5.5 và §6.
+⚠️ **Bằng chứng self-correction của paper là định tính.** Ba hình minh hoạ(Fig. 6, Fig. A8a, A8b) và không có metric nào đo tỉ lệ phát hiện lỗi hay tỉ lệ phục hồi. Xem §5.5 và §6.
 
 ## 2. Câu hỏi nghiên cứu
 
-VLA end-to-end ánh xạ thẳng (quan sát, instruction) → action. Cách đó chặn hai
-thứ: **lập kế hoạch nhiều bước** và **thích nghi với biến thể task phức tạp**.
-Hai hướng vá đã có, và paper chỉ ra chỗ hỏng của cả hai:
+VLA end-to-end ánh xạ thẳng (quan sát, instruction) → action. Cách đó chặn hai thứ: **lập kế hoạch nhiều bước** và **thích nghi với biến thể task phức tạp**. Hai hướng vá đã có, và paper chỉ ra chỗ hỏng của cả hai:
 
-| Hướng | Ví dụ | Hỏng ở đâu |
-|---|---|---|
-| CoT có giám sát | ECoT, RAD, CoT-VLA | Chi phí sinh reasoning trace chất lượng cao rất lớn; model **overfit vào cảnh cụ thể hoặc mẫu suy luận cụ thể** |
-| RL với reward dạng QA | Video-R1, Reason-RFT | Sinh được suy luận dài mà không cần giám sát mức bước, nhưng **reward kiểu QA không nối được suy luận với thực thi action thật**, và không hỗ trợ kế hoạch dài hạn |
+| Hướng                 | Ví dụ              | Hỏng ở đâu                                                                                                                                                                                          |
+| ----------------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| CoT có giám sát      | ECoT, RAD, CoT-VLA   | Chi phí sinh reasoning trace chất lượng cao rất lớn; model**overfit vào cảnh cụ thể hoặc mẫu suy luận cụ thể**                                                                     |
+| RL với reward dạng QA | Video-R1, Reason-RFT | Sinh được suy luận dài mà không cần giám sát mức bước, nhưng**reward kiểu QA không nối được suy luận với thực thi action thật**, và không hỗ trợ kế hoạch dài hạn |
 
-Câu hỏi cụ thể: **lấy reward gì để RL dạy MLLM suy luận, mà reward đó vừa kiểm
-chứng được (như đáp án QA) vừa gắn với hành động vật lý (không như đáp án QA)?**
+Câu hỏi cụ thể: **lấy reward gì để RL dạy MLLM suy luận, mà reward đó vừa kiểm chứng được (như đáp án QA) vừa gắn với hành động vật lý (không như đáp án QA)?**
 
-Trả lời của ThinkAct: **quỹ đạo 2D của gripper trên ảnh**. Nó có sẵn từ video
-(trích bằng detector), kiểm chứng được bằng khoảng cách, và là biểu diễn trung
-gian đúng nghĩa giữa ngôn ngữ và điều khiển.
+Trả lời của ThinkAct: **quỹ đạo 2D của gripper trên ảnh**. Nó có sẵn từ video (trích bằng detector), kiểm chứng được bằng khoảng cách, và là biểu diễn trung gian đúng nghĩa giữa ngôn ngữ và điều khiển.
+
+![1785816241879](image/03_thinkact/1785816241879.png)
 
 ## 3. Đóng góp
 
-1. **Khung dual-system** nối suy luận có cấu trúc với action thực thi được, qua
-   **visual plan latent**.
-2. **Action-aligned visual reward**: goal reward (điểm đầu/cuối của quỹ đạo) +
-   trajectory reward (khớp phân bố quỹ đạo bằng DTW).
-3. **Visual latent planning** để dẫn hướng action model — dùng latent thay vì
-   text, nên chuyển được sang môi trường mới bằng cách chỉ train lại projector +
-   action model.
-4. Chứng minh ba năng lực nổi lên: **few-shot adaptation**, **long-horizon
-   planning**, **self-correction**.
+1. **Khung dual-system** nối suy luận có cấu trúc với action thực thi được, qua **visual plan latent**.
+2. **Action-aligned visual reward**: goal reward (điểm đầu/cuối của quỹ đạo) + trajectory reward (khớp phân bố quỹ đạo bằng DTW).
+3. **Visual latent planning** để dẫn hướng action model — dùng latent thay vì text, nên chuyển được sang môi trường mới bằng cách chỉ train lại projector + action model.
+4. Chứng minh ba năng lực nổi lên: **few-shot adaptation**, **long-horizon planning**, **self-correction**.
+5. **Insight:** Method **không cần text label** để train, sử dụng trajectory từ chính video Ego. Propose method training CoT nhưng với actions, với (answer) là các vị trí 2D, mô phỏng đường đi của gripper (M = 8)
 
 ## 4. Method
+
+![1785816223459](image/03_thinkact/1785816223459.png)
 
 ### 4.1 Bài toán và hai hệ thống
 
@@ -89,16 +82,22 @@ hơn 8 cặp số.
 **Goal reward** — so điểm đầu và điểm cuối với quỹ đạo trích bằng detector sẵn có
 $\hat\tau = [\hat p_k]_{k=1}^{K}$:
 
-$$r_{goal} = \tfrac{1}{2}\big(f(p_1, \hat p_1) + f(p_K, \hat p_K)\big), \qquad f(p, p') = \max\big(0,\; 1 - \lVert p - p' \rVert_2^2\big)$$
+$$
+r_{goal} = \tfrac{1}{2}\big(f(p_1, \hat p_1) + f(p_K, \hat p_K)\big), \qquad f(p, p') = \max\big(0,\; 1 - \lVert p - p' \rVert_2^2\big)
+$$
 
 **Trajectory reward** — ép quỹ đạo dự đoán khớp phân bố quỹ đạo demo, dùng
 **Dynamic Time Warping**:
 
-$$r_{traj} = \max\big(0,\; 1 - d(\tau, \hat\tau)\big)$$
+$$
+r_{traj} = \max\big(0,\; 1 - d(\tau, \hat\tau)\big)
+$$
 
 **Tổng**:
 
-$$r = 0.9\, r_{visual} + 0.1\, r_{format}, \qquad r_{visual} = \omega_{goal} r_{goal} + \omega_{traj} r_{traj}, \quad \omega_{goal} = \omega_{traj} = 0.5$$
+$$
+r = 0.9\, r_{visual} + 0.1\, r_{format}, \qquad r_{visual} = \omega_{goal} r_{goal} + \omega_{traj} r_{traj}, \quad \omega_{goal} = \omega_{traj} = 0.5
+$$
 
 Hai reward chia vai rõ: $r_{goal}$ hỏi "có tới đích không", $r_{traj}$ hỏi "đường
 đi có khả thi về vật lý không". Bỏ $r_{traj}$ thì model có thể vẽ đường tắt xuyên
@@ -112,15 +111,16 @@ robotic VQA và **failure detection** (dataset Reflect/RoboFail).
 Với mỗi input $(o_t, l)$, sample $M$ response từ $\mathcal{F}_{\theta_{old}}$,
 chấm reward, chuẩn hoá thành advantage:
 
-$$\mathcal{J}_{GRPO}(\theta) = \frac{1}{M}\sum_{i=1}^{M}\Big(\frac{\mathcal{F}_\theta(z_i|o_t,l)}{\mathcal{F}_{\theta_{old}}(z_i|o_t,l)} A_i - \beta D_{KL}\big(\mathcal{F}_\theta \,\Vert\, \mathcal{F}_{\theta_{old}}\big)\Big), \qquad A_i = \frac{r_i - \text{mean}(\{r\})}{\text{std}(\{r\})}$$
+$$
+\mathcal{J}_{GRPO}(\theta) = \frac{1}{M}\sum_{i=1}^{M}\Big(\frac{\mathcal{F}_\theta(z_i|o_t,l)}{\mathcal{F}_{\theta_{old}}(z_i|o_t,l)} A_i - \beta D_{KL}\big(\mathcal{F}_\theta \,\Vert\, \mathcal{F}_{\theta_{old}}\big)\Big), \qquad A_i = \frac{r_i - \text{mean}(\{r\})}{\text{std}(\{r\})}
+$$
 
 Cấu hình: $\beta = 10^{-2}$, độ dài response tối đa 1024, temperature 1.0,
 top-$p$ 0.99, rollout size $M = 5$.
 
 ### 4.5 Action model và cầu nối
 
-- $\pi_\varphi$ là **diffusion policy dựa DiT**, **432M tham số**, pretrain trên
-  OXE.
+- $\pi_\varphi$ là **diffusion policy dựa DiT**, **432M tham số**, pretrain trên OXE.
 - **State encoder**: DINOv2 (ảnh) + CLIP text encoder → embedding 1024 chiều.
 - **Latent projector**: **Q-Former với 32 query**, nối $c_t$ vào không gian input
   của action model.
@@ -129,7 +129,9 @@ top-$p$ 0.99, rollout size $M = 5$.
 
 Huấn luyện bằng imitation learning, **MLLM đóng băng**:
 
-$$\mathcal{L}_{IL}(\varphi) = \mathbb{E}_{(o_i, l, a_i)}\big[\ell(\pi_\varphi(c_t, o_i, l), a_i)\big], \qquad i \in [t, t+N]$$
+$$
+\mathcal{L}_{IL}(\varphi) = \mathbb{E}_{(o_i, l, a_i)}\big[\ell(\pi_\varphi(c_t, o_i, l), a_i)\big], \qquad i \in [t, t+N]
+$$
 
 Chỉ cập nhật **state encoder, latent projector và action model**. Để tăng tốc,
 $c_t$ được **sinh sẵn offline và cache lại**.
@@ -139,11 +141,11 @@ $c_t$ được **sinh sẵn offline và cache lại**.
 
 ### 4.6 Ba giai đoạn huấn luyện
 
-| Giai đoạn | Cập nhật gì | Cấu hình | Dữ liệu |
-|---|---|---|---|
-| **1. SFT cold-start** (MLLM) | $\mathcal{F}_\theta$ | 20K iter, batch 32, lr 1e-5, DeepSpeed ZeRO-3 | 30K quỹ đạo 2D (OXE), 50K RoboVQA, 50K EgoPlan-IT, 165K Video-R1-CoT |
-| **2. Reinforced fine-tuning** (GRPO) | $\mathcal{F}_\theta$ | 6K iter, batch 64, lr 1e-6, rollout 5 | 12.5K quỹ đạo 2D (OXE + Something-Something V2), 10K RoboVQA, 10K EgoPlan-IT/Val, **0.5K RoboFail**, 10K LLaVA-Video-178K |
-| **3. Action adaptation** | state encoder + projector + $\pi_\varphi$ (**MLLM đóng băng**) | 100K mẫu OXE, 120K iter, batch 256, lr 2e-5; LIBERO thêm 75K iter, batch 128 | OXE, rồi dữ liệu môi trường đích |
+| Giai đoạn                                | Cập nhật gì                                                           | Cấu hình                                                                     | Dữ liệu                                                                                                                         |
+| ------------------------------------------ | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
+| **1. SFT cold-start** (MLLM)         | $\mathcal{F}_\theta$                                                   | 20K iter, batch 32, lr 1e-5, DeepSpeed ZeRO-3                                  | 30K quỹ đạo 2D (OXE), 50K RoboVQA, 50K EgoPlan-IT, 165K Video-R1-CoT                                                           |
+| **2. Reinforced fine-tuning** (GRPO) | $\mathcal{F}_\theta$                                                   | 6K iter, batch 64, lr 1e-6, rollout 5                                          | 12.5K quỹ đạo 2D (OXE + Something-Something V2), 10K RoboVQA, 10K EgoPlan-IT/Val,**0.5K RoboFail**, 10K LLaVA-Video-178K |
+| **3. Action adaptation**             | state encoder + projector +$\pi_\varphi$ (**MLLM đóng băng**) | 100K mẫu OXE, 120K iter, batch 256, lr 2e-5; LIBERO thêm 75K iter, batch 128 | OXE, rồi dữ liệu môi trường đích                                                                                          |
 
 Toàn bộ trên **16 GPU A100 80GB**. Action model được pretrain riêng trên OXE
 trước giai đoạn 1.
@@ -163,7 +165,7 @@ Mục đích cold-start: dạy model **đọc quỹ đạo trực quan** và **x
 - Video xử lý tối đa 16 frame, độ phân giải tối đa $128 \times 28 \times 28$ pixel
   (video) và $256 \times 28 \times 28$ (ảnh).
 
-Điểm đáng chú ý: **video người không có action label vẫn dùng được**, vì reward
+**Điểm đáng chú ý:** **video người không có action label vẫn dùng được**, vì reward
 chỉ cần quỹ đạo bàn tay trên ảnh. Đây là cách paper mở rộng dữ liệu RL vượt ra
 ngoài dataset robot.
 
@@ -171,12 +173,12 @@ ngoài dataset robot.
 
 ### 5.1 Manipulation (Tab. 1)
 
-| Benchmark | DiT-Policy (baseline của chính họ) | Magma | CoT-VLA | **ThinkAct** |
-|---|---|---|---|---|
-| Simpler-Google VM (overall) | 56.0 | 68.4 | — | **71.5** |
-| Simpler-Google VA (overall) | 48.2 | 62.6 | — | **65.1** |
-| Simpler-Bridge VM (overall) | 32.4 | 35.4 | — | **43.8** |
-| LIBERO (overall) | 76.8 | — | 83.9 | **84.4** |
+| Benchmark                   | DiT-Policy (baseline của chính họ) | Magma | CoT-VLA | **ThinkAct** |
+| --------------------------- | ------------------------------------- | ----- | ------- | ------------------ |
+| Simpler-Google VM (overall) | 56.0                                  | 68.4  | —      | **71.5**     |
+| Simpler-Google VA (overall) | 48.2                                  | 62.6  | —      | **65.1**     |
+| Simpler-Bridge VM (overall) | 32.4                                  | 35.4  | —      | **43.8**     |
+| LIBERO (overall)            | 76.8                                  | —    | 83.9    | **84.4**     |
 
 **Đọc đúng mức đóng góp.** Con số đáng tin nhất là so với **DiT-Policy**, vì đó
 chính là action model của ThinkAct khi *không* có visual plan latent:
@@ -192,11 +194,11 @@ DiT-Policy 57.6, OpenVLA 53.7 — khớp với luận điểm long-horizon plann
 
 ### 5.2 Embodied reasoning (Tab. 2)
 
-| Benchmark | Baseline mạnh nhất | ThinkAct |
-|---|---|---|
-| EgoPlan-Bench2 (overall) | Qwen2.5-VL* 45.7 | **48.2** |
-| RoboVQA (BLEU overall) | Qwen2.5-VL* 55.7 | **59.8** |
-| OpenEQA (overall) | InternVL3 55.5 | **56.2** |
+| Benchmark                | Baseline mạnh nhất | ThinkAct       |
+| ------------------------ | -------------------- | -------------- |
+| EgoPlan-Bench2 (overall) | Qwen2.5-VL* 45.7     | **48.2** |
+| RoboVQA (BLEU overall)   | Qwen2.5-VL* 55.7     | **59.8** |
+| OpenEQA (overall)        | InternVL3 55.5       | **56.2** |
 
 `Qwen2.5-VL*` là chính backbone đã finetune trên EgoPlan-IT + RoboVQA — tức
 **so sánh có kiểm soát đúng**: cùng backbone, cùng dữ liệu, khác ở chỗ có RL
@@ -208,13 +210,13 @@ tăng là suy luận *embodied*.
 
 ### 5.3 Ablation reward (Tab. 3, Tab. A6)
 
-| Method | SimplerEnv | EgoPlan | RoboVQA | LIBERO | OpenEQA |
-|---|---|---|---|---|---|
-| ThinkAct (đầy đủ) | **60.1** | **48.2** | **59.8** | **84.4** | **56.2** |
-| w/o $r_{traj}$ | 59.2 | 47.9 | 58.5 | 82.1 | 55.9 |
-| w/o $r_{goal}$ | 59.1 | 47.6 | 58.9 | 81.7 | 55.6 |
-| w/o cả hai (chỉ reward QA) | 56.9 | 47.2 | 58.3 | 81.6 | 55.7 |
-| SFT cold-start (không RL) | 56.4 | 46.4 | 57.9 | 79.1 | 53.3 |
+| Method                       | SimplerEnv     | EgoPlan        | RoboVQA        | LIBERO         | OpenEQA        |
+| ---------------------------- | -------------- | -------------- | -------------- | -------------- | -------------- |
+| ThinkAct (đầy đủ)        | **60.1** | **48.2** | **59.8** | **84.4** | **56.2** |
+| w/o$r_{traj}$              | 59.2           | 47.9           | 58.5           | 82.1           | 55.9           |
+| w/o$r_{goal}$              | 59.1           | 47.6           | 58.9           | 81.7           | 55.6           |
+| w/o cả hai (chỉ reward QA) | 56.9           | 47.2           | 58.3           | 81.6           | 55.7           |
+| SFT cold-start (không RL)   | 56.4           | 46.4           | 57.9           | 79.1           | 53.3           |
 
 Ba kết luận:
 
@@ -250,16 +252,15 @@ chuyện gì".
 
 Ba ví dụ định tính:
 
-| Hình | Tình huống | MLLM làm gì |
-|---|---|---|
-| Fig. 6 | Rơi hộp cream cheese giữa chừng | Nhận ra đã rơi, xác định vị trí mới, replan để quay lại gắp lại |
+| Hình      | Tình huống                                      | MLLM làm gì                                                                  |
+| ---------- | ------------------------------------------------- | ------------------------------------------------------------------------------ |
+| Fig. 6     | Rơi hộp cream cheese giữa chừng               | Nhận ra đã rơi, xác định vị trí mới, replan để quay lại gắp lại |
 | Fig. A8(a) | Gripper vật lộn, không kẹp chặt được cốc | Nhận ra grasp trước thất bại, đề xuất chỉnh lại vị trí và regrasp |
-| Fig. A8(b) | Không gắp được object ngay từ đầu | Phát hiện chưa gắp được, replan lại bước pickup |
+| Fig. A8(b) | Không gắp được object ngay từ đầu         | Phát hiện chưa gắp được, replan lại bước pickup                      |
 
 **Không có một metric nào.** Không có tỉ lệ phát hiện lỗi, không có tỉ lệ phục
 hồi thành công, không có so sánh với baseline không self-correction, không có
-tập test lỗi. Điều này khác hẳn [FailSafe](../failure_adaptation/01_failsafe.md)
-(bảng phát hiện lỗi đầy đủ) và [FLARE](../failure_adaptation/02_flare.md)
+tập test lỗi. Điều này khác hẳn [FailSafe](../failure_adaptation/01_failsafe.md) (bảng phát hiện lỗi đầy đủ) và [FLARE](../failure_adaptation/02_flare.md)
 (bảng độ chính xác phân loại ID/OOD trên 50 video có nhãn tay).
 
 Bằng chứng gián tiếp duy nhất nằm ở **ablation $N$** (§5.6): đặt $N=100$ làm
@@ -271,8 +272,8 @@ không phải phép đo trực tiếp.
 
 Ablation trên LIBERO:
 
-| $N$ | 25 | 50 | 75 | 100 |
-|---|---|---|---|---|
+| $N$       | 25    | 50              | 75    | 100   |
+| ----------- | ----- | --------------- | ----- | ----- |
 | Avg success | 84.0% | **84.6%** | 84.4% | 83.7% |
 
 Đường cong rất phẳng (0.9 điểm giữa cực trị). Tác giả chọn $N = 75$. Lập luận hai
@@ -315,8 +316,7 @@ model 2B khác. Phương pháp không phụ thuộc backbone 7B.
   self-correct. Không có wrist camera, không có multi-view.
 - **Cải thiện so với SOTA ngoài rất mỏng trên LIBERO** (+0.5 so với CoT-VLA), và
   ThinkAct thua xa π0/NORA-1.5 trên cùng benchmark (84.4 so với 94.2/94.5 —
-  xem [NORA-1.5](../training/01_nora_1_5.md) §5.2, nơi ThinkAct là
-  một baseline).
+  xem [NORA-1.5](../training/01_nora_1_5.md) §5.2, nơi ThinkAct là một baseline).
 - **Unknown:** tổng chi phí huấn luyện (paper cho iteration và số GPU nhưng không
   cho giờ GPU).
 - **Unknown:** trong 0.5K mẫu RoboFail dùng cho RL, phần nào đóng góp vào khả năng
