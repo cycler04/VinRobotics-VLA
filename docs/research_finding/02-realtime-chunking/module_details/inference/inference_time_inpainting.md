@@ -182,11 +182,11 @@ Euler update sau đó dùng `v_RTC` thay cho velocity gốc.
 
 Ba vùng của chunk mới là:
 
-| Vùng         | Weight  | Ý nghĩa                              |
-| ------------ | ------- | ------------------------------------ |
-| `i < d`      | `1`     | Action đã cam kết, phải giữ chắc      |
-| `d <= i < e` | giảm dần | Soft overlap, ưu tiên tính liên tục   |
-| `i >= e`     | `0`     | Không còn guidance, sinh tự do       |
+| Vùng          | Weight     | Ý nghĩa                                |
+| -------------- | ---------- | ---------------------------------------- |
+| `i < d`      | `1`      | Action đã cam kết, phải giữ chắc   |
+| `d <= i < e` | giảm dần | Soft overlap, ưu tiên tính liên tục |
+| `i >= e`     | `0`      | Không còn guidance, sinh tự do        |
 
 Các schedule được hiện thực trong
 [`get_prefix_weights`, `model.py` dòng 40–63](../../../../../third_party/01-real-time-chunking-kinetix/src/model.py#L40).
@@ -379,8 +379,8 @@ Sự tương đồng có thể tóm tắt như sau:
 
 | Image inpainting   | RTC                  |
 | ------------------ | -------------------- |
-| Ảnh gốc            | Chunk cũ             |
-| Known pixels       | Action đã cam kết    |
+| Ảnh gốc          | Chunk cũ            |
+| Known pixels       | Action đã cam kết |
 | Soft boundary      | Soft overlap         |
 | Missing region     | Free postfix         |
 | Denoising guidance | Flow VJP guidance    |
@@ -397,10 +397,10 @@ trọng số giảm dần theo tương lai.
 
 ## Hai branch trong `realtime_action`
 
-| Điều kiện                    | Cách sampling                                   |
-| --------------------------- | ---------------------------------------------- |
-| `simulated_delay is None`   | Dùng inference-time VJP guidance                |
-| `simulated_delay is not None` | Dùng hard-prefix sampling, không gọi `jax.vjp` |
+| Điều kiện                    | Cách sampling                                     |
+| ------------------------------- | -------------------------------------------------- |
+| `simulated_delay is None`     | Dùng inference-time VJP guidance                  |
+| `simulated_delay is not None` | Dùng hard-prefix sampling, không gọi`jax.vjp` |
 
 Hai branch được chọn tại
 [`model.py` dòng 253–260](../../../../../third_party/01-real-time-chunking-kinetix/src/model.py#L253).

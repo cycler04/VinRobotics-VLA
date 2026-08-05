@@ -1,0 +1,4 @@
+https://openaccess.thecvf.com/content/CVPR2026/html/Lin_HiF-VLA_Hindsight_Insight_and_Foresight_through_Motion_Representation_for_Vision-Language-Action_CVPR_2026_paper.html
+https://arxiv.org/pdf/2510.04246
+https://arxiv.org/pdf/2603.04639
+https://arxiv.org/pdf/2603.12942
