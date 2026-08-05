@@ -1,1 +1,4 @@
 https://www.sciencedirect.com/science/article/pii/S095741742600655X
+https://arxiv.org/pdf/2605.09410
+https://openaccess.thecvf.com/content/CVPR2026/papers/Zeng_Diagnose_Correct_and_Learn_from_Manipulation_Failures_via_Visual_Symbols_CVPR_2026_paper.pdf
+https://linklings.s3.amazonaws.com/organizations/WCCI/wcci2026/submissions/stype114/5oRpz-ijcnn_pap5374s2.pdf
