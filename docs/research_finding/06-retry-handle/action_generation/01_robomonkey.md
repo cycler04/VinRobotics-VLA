@@ -198,7 +198,7 @@ SIMPLER avg tăng **37.5% → 46.3%** khi tăng số cặp so sánh; gần log-l
 
 ## 7. Liên hệ với workspace
 
-- Đây là paper **rẻ nhất để thử** trong tập 4: không cần đổi kiến trúc, không
+- Đây là paper **rẻ nhất để thử** trong corpus bốn paper ban đầu: không cần đổi kiến trúc, không
   cần thu dữ liệu robot mới. Chỉ cần một VLA có thể sample nhiều lần và một
   verifier.
 - Pipeline sinh preference chỉ cần `(observation, ground-truth action, instruction)` — đúng ba trường mà canonical episode v0.1 đã có. **Đây là paper

@@ -1,6 +1,6 @@
 # Retry / Recovery in VLA — retained paper index
 
-**Scope (31 July 2026; extended 3 August 2026):** this directory contains the six
+**Scope (31 July 2026; extended 5 August 2026):** this directory contains the nine
 primary PDFs below. Venue/status is recorded from the PDF itself; where the PDF
 states no venue the entry says so rather than guessing. Citation counts are
 omitted because they change over time.
@@ -13,6 +13,9 @@ omitted because they change over time.
 | 4 | FLARE: A Failure-Aware Framework for Autonomous Correction and Recovery in Visual-Language Robotic Manipulation | [CVF Open Access](https://openaccess.thecvf.com/content/CVPR2026/papers/Zhao_FLARE_A_Failure-Aware_Framework_for_Autonomous_Correction_and_Recovery_in_CVPR_2026_paper.pdf) | `04_flare_failure_aware_correction_recovery.pdf` | CVPR 2026 |
 | 5 | NORA-1.5: A Vision-Language-Action Model Trained using World Model- and Action-based Preference Rewards | [arXiv 2511.14659](https://arxiv.org/abs/2511.14659) | `05_nora_1_5_world_model_preference_rewards.pdf` | arXiv preprint (v1, 18 Nov 2025); no venue stated in the retained PDF |
 | 6 | ThinkAct: Vision-Language-Action Reasoning via Reinforced Visual Latent Planning | [arXiv 2507.16815](https://arxiv.org/abs/2507.16815) | `06_thinkact_reinforced_visual_latent_planning.pdf` | arXiv preprint (v2, 18 Sep 2025); no venue stated in the retained PDF |
+| 7 | FPC-VLA: A Vision-Language-Action Framework with a Supervisor for Failure Prediction and Correction | [arXiv 2509.04018](https://arxiv.org/abs/2509.04018), [journal DOI](https://doi.org/10.1016/j.eswa.2026.131742) | `07_fpc_vla_failure_prediction_correction.pdf` | Retained PDF is the arXiv version; journal version published in *Expert Systems with Applications* 316 (2026), 131742 |
+| 8 | RePO-VLA: Recovery-Driven Policy Optimization for Vision-Language-Action Models | [arXiv 2605.09410](https://arxiv.org/abs/2605.09410) | `08_repo_vla_recovery_driven_policy_optimization.pdf` | arXiv preprint (v1, 10 May 2026) |
+| 9 | Diagnose, Correct, and Learn from Manipulation Failures via Visual Symbols | [CVF Open Access](https://openaccess.thecvf.com/content/CVPR2026/html/Zeng_Diagnose_Correct_and_Learn_from_Manipulation_Failures_via_Visual_Symbols_CVPR_2026_paper.html) | `09_vifailback_visual_symbols.pdf` | CVPR 2026 |
 
 Note: a different paper also named FLARE — *FLARE: Robot Learning with Implicit
 World Modeling* ([arXiv 2505.15659](https://arxiv.org/abs/2505.15659)) — is cited
@@ -29,7 +32,11 @@ self-correction evidence is qualitative only. Both are retained because they sit
 on the same reliability axis; the classification caveats are in the Vietnamese
 reports.
 
-The six Markdown analyses are indexed in
+Papers #7--#9 were added on 5 August 2026 from `new_paper_link_note.txt`. The
+ScienceDirect link for FPC-VLA is paywalled, so the retained PDF is the official
+open arXiv version of the same work; its journal DOI remains recorded above.
+
+The nine Markdown analyses are indexed in
 [`docs/research_finding/06-retry-handle/01_tong_quan.md`](../../research_finding/06-retry-handle/01_tong_quan.md).
 
 ## Raw source URLs as originally collected

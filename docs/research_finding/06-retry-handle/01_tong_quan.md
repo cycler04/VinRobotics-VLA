@@ -1,13 +1,13 @@
-# Retry / Recovery trong VLA — tổng hợp 6 paper
+# Retry / Recovery trong VLA — tổng hợp 9 paper
 
 ## Ý tưởng chính
 
-Sáu paper cùng nhắm vào một triệu chứng: VLA được train trên demo sạch, thành
-công, nên khi thực thi lệch đi thì không biết làm lại. Nhưng chúng **can thiệp ở
-sáu chỗ khác nhau trên đường từ dữ liệu tới action**, và chỉ ba trong sáu paper
-thực sự nói về recovery theo nghĩa đen.
+Chín paper cùng nhắm vào một triệu chứng: VLA được train trên demo sạch, thành
+công, nên khi thực thi lệch đi thì không biết làm lại. Nhưng chúng can thiệp ở
+nhiều vị trí khác nhau, từ post-training, sinh action, giám sát trước lỗi tới
+chẩn đoán và phục hồi sau lỗi. Vì vậy không nên gọi tất cả là “retry system”.
 
-**Verified:** phạm vi này gồm đúng sáu PDF đang có trong
+**Verified:** phạm vi này gồm đúng chín PDF đang có trong
 [`docs/papers/06-retry-handle/`](../../papers/06-retry-handle/). Chỉ mục nguồn
 chuẩn là [paper_link.txt](../../papers/06-retry-handle/paper_link.txt); trạng
 thái code nằm ở [02_sota_co_code.md](02_sota_co_code.md).
@@ -24,9 +24,9 @@ Ba nhóm, chia theo **lúc nào cơ chế tác động**:
 
 | Nhóm | Tác động lúc nào | Paper |
 |---|---|---|
-| [training/](training/) | **Trước deploy** — đổi trọng số policy, bằng dữ liệu hoặc objective | [NORA-1.5](training/01_nora_1_5.md), [SC-VLA](training/02_sc_vla.md) |
-| [action_generation/](action_generation/) | **Lúc sinh action** — policy đã cố định, cải thiện chính bước tạo ra action | [RoboMonkey](action_generation/01_robomonkey.md), [ThinkAct](action_generation/02_thinkact.md) |
-| [failure_adaptation/](failure_adaptation/) | **Sau khi đã lệch** — phát hiện lỗi đã xảy ra rồi sửa | [FailSafe](failure_adaptation/01_failsafe.md), [FLARE](failure_adaptation/02_flare.md) |
+| [training/](training/) | **Trước deploy** — đổi trọng số policy, bằng dữ liệu hoặc objective | [NORA-1.5](training/01_nora_1_5.md), [SC-VLA](training/02_sc_vla.md), [RePO-VLA](training/04_repo_vla.md) |
+| [action_generation/](action_generation/) | **Lúc sinh action** — cải thiện hoặc kiểm tra action trước khi thực thi | [RoboMonkey](action_generation/01_robomonkey.md), [ThinkAct](training/03_thinkact.md), [FPC-VLA](action_generation/02_fpc_vla.md) |
+| [failure_adaptation/](failure_adaptation/) | **Sau khi đã lệch** — phát hiện lỗi đã xảy ra rồi sửa | [FailSafe](failure_adaptation/01_failsafe.md), [FLARE](failure_adaptation/02_flare.md), [ViFailback](failure_adaptation/03_vifailback.md) |
 
 Ranh giới không tuyệt đối: FailSafe và FLARE đều *cũng* phải train lại policy trên
 dữ liệu mới, ThinkAct *cũng* cần RL huấn luyện MLLM. Mỗi paper xếp theo **chỗ đóng
@@ -50,8 +50,9 @@ Bốn lưu ý phân loại:
   monitor riêng. Bằng chứng chỉ là ba hình định tính; không có tỉ lệ phát hiện
   hay tỉ lệ phục hồi.
 
-Chỉ **FailSafe** và **FLARE** vừa xây dựng khả năng phục hồi sau lỗi vừa đo được
-nó. ThinkAct có cơ chế nhưng chưa đo.
+**FailSafe**, **FLARE**, **RePO-VLA** và hệ thống **ViFailback + executor** vừa
+xây dựng khả năng phục hồi sau lỗi vừa đo nó. ThinkAct có cơ chế nhưng chưa đo;
+FPC-VLA chủ yếu ngăn lỗi tại keyframe trước khi action được thực thi.
 
 ## 3. So sánh tối thiểu
 
@@ -63,13 +64,16 @@ nó. ThinkAct có cơ chế nhưng chưa đo.
 | SC-VLA | Kiến trúc (2 head phụ) + RL online | Nhãn tính từ demo có sẵn; 0.5–3M bước môi trường cho OAR | ManiSkill 0.72 → 0.82 (SPI) → 0.86 (+OAR) | Có, nhưng **chỉ SPI** |
 | NORA-1.5 | Kiến trúc (action expert) + DPO offline | World model V-JEPA2-AC 1.3B; 960 giờ H100 cho giai đoạn expert | LIBERO 94.5 → 95.0 (DPO chỉ +0.6); Galaxea A1 thật +13.08 | Có (Galaxea A1) |
 | ThinkAct | Kiến trúc dual-system + GRPO | MLLM 7B + DiT policy 432M, 16× A100, quỹ đạo 2D trích bằng detector | LIBERO 76.8 (DiT-Policy) → 84.4; SimplerEnv +11.4…+16.9 | **Không** |
+| FPC-VLA | Fusion + VLM supervisor tại gripper keyframe | Qwen2.5-VL-7B, synthetic correction QA, 16× H100 | Ablation task average 74.4 (không supervisor) → 82.1; robot thật 86.0% task success | Có (Xiaomi, ALOHA) |
+| RePO-VLA | RAI + progress value + value-conditioned policy | Failure/recovery rollout, V-JEPA value model, π0.5 | FRBench-Sim injected failure 15.0 → 37.0; real adversarial 20 → 75% chỉ ở 4× data/2 task | Có (bimanual) |
+| ViFailback | External failure VLM + visual symbol + executor | 5,202 ALOHA trajectory, 58,128 VQA, Qwen3-VL-8B | Unseen real tasks: 52.4 → 73.0 (VSF), 50.8 → 74.6 (PMC) | Có (ALOHA) |
 
-Không so xếp hạng trực tiếp các con số: sáu paper dùng benchmark khác nhau
+Không so xếp hạng trực tiếp các con số: chín paper dùng benchmark khác nhau
 (SIMPLER/Bridge, ManiSkill, RoboMimic, ManiSkill3, LIBERO, SimplerEnv) và base
 policy khác nhau (OpenVLA, OpenVLA-OFT/π0-FAST, π0.5, GR00T N1.5, NORA,
 DiT-Policy).
 
-## 4. Điều có thể kết luận từ sáu paper
+## 4. Điều có thể kết luận từ chín paper
 
 1. **Chẩn đoán chung: lỗi nằm ở chế độ dữ liệu, không ở kiến trúc.** FLARE nêu rõ
    nhất — demo là *trajectory-monotonic*, nên policy học tương quan giả giữa pose
@@ -117,21 +121,32 @@ DiT-Policy).
    input từ một frame $o_t$ thành đoạn video $o_{t-N:t}$ mới self-correct được;
    FailSafe cần cửa sổ 10 frame liên tiếp. Hai paper độc lập cùng chỉ ra: **schema
    mức frame đơn là không đủ.**
+9. **“Ngăn lỗi”, “phục hồi” và “học từ failure” là ba contract khác nhau.**
+   FPC-VLA kiểm tra action trước execution; ViFailback chẩn đoán rồi giao guidance
+   cho executor ngoài; RePO-VLA distill recovery vào policy và deploy không có
+   monitor. Cả ba tăng success nhưng không thay thế nhau trực tiếp.
+10. **Headline recovery dễ bị data/protocol confound.** RePO-VLA đạt `20 → 75%`
+    ở cấu hình 4× recovery data và chỉ hai task; ViFailback thay cả supervisor
+    lẫn executor; FPC-VLA dùng dữ liệu supervisor theo embodiment. Không headline
+    nào tự cô lập causal gain của một module.
 
 ## 5. Giới hạn của tổng hợp
 
 - **Không paper nào đo tỉ lệ ID error so với OOD error trong thực tế.** Cả kinh
   tế của phần Reset lẫn thứ tự ưu tiên đều phụ thuộc con số này.
-- **Không paper nào báo cáo chi phí giám sát online đầy đủ.** RoboMonkey chạy
-  1.5 Hz và tự nhận không hợp control tần số cao; FailSafe đo overhead lẫn với
-  replanning của simulator; FLARE không báo cáo latency của MLLM monitor.
-- **Đánh giá recovery đều là sim.** FailSafe hoàn toàn không có robot thật.
-  SC-VLA có robot thật nhưng không chạy nửa OAR. Chỉ FLARE kiểm chứng đúng cơ chế
-  đề xuất trên phần cứng, và chỉ với 2 task × 40 trial.
+- **Chi phí giám sát online vẫn chưa đầy đủ.** FPC-VLA là ngoại lệ hữu ích khi
+  báo `0.176 s` ở non-keyframe và `1.766 s` ở keyframe, nhưng không báo deadline
+  hay jitter; RoboMonkey chạy 1.5 Hz; FailSafe trộn overhead với replanning;
+  FLARE và ViFailback không báo latency monitor end-to-end.
+- **Bằng chứng recovery robot thật còn nhỏ và bị confound.** FLARE chỉ có 2 task
+  × 40 trial; RePO-VLA 10 trial/task và kết quả mạnh nhất dùng 4× data trên hai
+  task; ViFailback 21 trial/task và thay cả supervisor lẫn executor. FailSafe vẫn
+  hoàn toàn trong simulator; SC-VLA không chạy OAR trên robot thật.
 - Các thành công được báo cáo không phải kết quả đã tái lập trong workspace.
-- `vla-data-tools` hiện chỉ đọc/chuyển đổi dataset; chưa có training loop hay
-  robot execution. Mọi đề xuất bên dưới là **Planned**, không phải capability
-  hiện có.
+- Checkout hiện không chứa package `src/vla_data_tools/` dù overview và
+  `pyproject.toml` vẫn mô tả entry point đó. Code đang thấy chủ yếu là pipeline
+  ego-video inference/inspection; chưa có robot execution. Mọi đề xuất bên dưới
+  là **Planned**, không phải capability hiện có.
 
 ## 6. Bước kiểm chứng tiếp theo
 
@@ -142,7 +157,7 @@ Xếp theo chi phí tăng dần:
    nên đầu tư vào phần Reset hay không.
 2. **Planned — sinh nhãn SPI offline.** $p_t$ và $\Delta s_t$ của SC-VLA tính
    được thẳng từ trajectory có sẵn, không cần trường schema mới. Đây là can thiệp
-   duy nhất trong tập 4 mà dữ liệu hiện tại đã đủ.
+   duy nhất trong corpus ban đầu mà dữ liệu hiện tại đã đủ.
 3. **Planned — tái lập scaling law của RoboMonkey offline.** Sample $k$ action từ
    một VLA trên dataset local, đo RMSE oracle theo $k$, fit power law. Nếu độ dốc
    ≈ 0 thì tiền đề của RoboMonkey không áp dụng cho dữ liệu này.
@@ -155,7 +170,7 @@ Xếp theo chi phí tăng dần:
 
 ## 7. Khoảng trống schema mà tập paper này chỉ ra
 
-Cả bốn paper đều cần annotation ở mức **frame hoặc segment**, không phải mức
+Các paper trong corpus cần annotation ở mức **frame hoặc segment**, không phải mức
 episode:
 
 | Cần gì | Paper nào cần | Schema v0.1 có chưa |
@@ -170,6 +185,9 @@ episode:
 | Cặp (action sinh ra, action chuẩn) để tính $L_1$ | NORA-1.5 (GTA) | **Có** |
 | Quỹ đạo 2D gripper $K=8$ keypoint chuẩn hoá `[0,1]` trên ảnh | ThinkAct | Chưa — trích được từ video bằng detector |
 | Cửa sổ video $o_{t-N:t}$ có độ dài xác định gắn timestep | ThinkAct | Cần xác minh |
+| Gripper keyframe + correction direction/magnitude | FPC-VLA | Chưa; cần semantics action 7-D rõ ràng |
+| `trajectory_type`, `failure_phase`, `recovery_start`, dense `value_label` | RePO-VLA | Chưa |
+| Failure keyframe/subtask/type + visual-symbol geometry + VQA provenance | ViFailback | Chưa |
 
 Đây cùng loại khoảng trống mà [RaC](../05-long-horizon/recovery_data/01_rac.md)
 đã chỉ ra — **provenance ở mức segment, không phải mức episode**. Hai corpus độc
@@ -178,7 +196,7 @@ lập cùng chỉ vào một chỗ.
 ## Nguồn
 
 - [Chỉ mục PDF và metadata](../../papers/06-retry-handle/paper_link.txt)
-- Sáu báo cáo theo thư mục ở mục 2; mỗi báo cáo liên kết trực tiếp tới PDF nguồn.
+- Chín báo cáo theo thư mục ở mục 2; mỗi báo cáo liên kết trực tiếp tới PDF nguồn.
 - [docs/papers/06-retry-handle/deep-research-report.md](../../papers/06-retry-handle/deep-research-report.md)
   là khảo sát rộng hơn có sẵn từ trước; nó bao gồm nhiều paper **không** có PDF
   trong repo và các citation count chưa xác minh lại. Không dùng làm nguồn chuẩn.

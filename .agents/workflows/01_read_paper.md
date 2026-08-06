@@ -47,8 +47,25 @@ Sau citation/identity và câu hỏi nghiên cứu, luôn trình bày `Why` trư
 
 ### 2. How — xử lý như thế nào?
 
-Mở đầu bằng một ánh xạ ngắn `vấn đề con -> cơ chế -> bằng chứng`. Sau đó giữ các
-phần kỹ thuật phù hợp với paper:
+Trình bày phần này dưới heading `Method`, theo data flow hoặc thứ tự vận hành của
+hệ thống giống cấu trúc method của paper. Mỗi module/stage là một subsection văn
+xuôi riêng và phải mở đầu bằng câu **"Failure mode được xử lý:"** (hoặc một câu
+tương đương rõ nghĩa), rồi lần lượt giải thích input, xử lý, output và evidence
+kiểm tra cơ chế. Không dùng bảng truy vết làm cấu trúc chính của `Method`.
+
+Sau `## 4. Method`, giữ riêng `## 5. Training` nếu paper có huấn luyện hoặc
+post-training. Phần này mô tả stage, dữ liệu, target/loss, module được freeze hay
+update, hyperparameter và compute. Trong `Method` chỉ giữ cơ chế/modeling/data
+flow/inference; không gộp training config vào một method subsection.
+
+Đây là cấu trúc mặc định, không phải khuôn cứng. Nếu paper có nhiều artifact là
+đóng góp ngang hàng — đặc biệt `Dataset`, `Benchmark`, `Model` hoặc `System` —
+đưa mỗi artifact thành một main section và đặt collection/protocol/training bên
+trong section sở hữu nó. Không ép một dataset/benchmark paper vào hai mục chung
+`Method` và `Training`, vì cách đó làm mờ contract và evidence riêng của từng
+artifact.
+
+Giữ các phần kỹ thuật phù hợp với paper:
 
 - **Modeling/architecture:** mô tả input, representation, module và data flow,
   đồng thời nói mỗi lựa chọn sửa failure mode nào. Không liệt kê block mà không
@@ -64,10 +81,11 @@ phần kỹ thuật phù hợp với paper:
 - **Residual problems:** nêu failure mode, phạm vi hoặc giả định vẫn còn sau giải
   pháp.
 
-Khi paper có nhiều thành phần, ưu tiên bảng truy vết:
-
-| Vấn đề/failure mode | Thành phần xử lý | Cơ chế kỳ vọng | Evidence/ablation | Phần chưa giải quyết |
-|---|---|---|---|---|
+Khi paper có nhiều thành phần, đi theo pipeline bằng các subsection đánh số,
+ví dụ `4.1 Data`, `4.2 Module A`, `4.3 Inference`; phần training tách thành mục 5.
+Bảng chỉ dùng
+cho claim → evidence, benchmark, ablation hoặc so sánh nhiều cấu hình; không thay
+thế giải thích method bằng prose.
 
 Không ép đủ mọi heading nếu nguồn không có thông tin. Gắn nhãn `Unknown` thay vì
 suy diễn modeling, training hoặc benchmark chưa được công bố.
@@ -77,7 +95,10 @@ suy diễn modeling, training hoặc benchmark chưa được công bố.
 - Citation/identity của nguồn.
 - Câu hỏi nghiên cứu.
 - `Why`: vấn đề, prior limitation, gap và success criteria.
-- `How`: modeling/training/benchmark liên kết với vấn đề mà từng phần xử lý.
+- `How`/`Method`: narrative theo data flow; mỗi module liên kết rõ với failure
+  mode mà nó xử lý.
+- `Training`: mục 5 riêng trong cấu trúc mặc định; với paper nhiều artifact,
+  training nằm trong main section của model mà nó huấn luyện.
 - Evidence table hoặc danh sách claim → evidence.
 - Limitations và điểm chưa rõ.
 - Liên hệ với workspace.

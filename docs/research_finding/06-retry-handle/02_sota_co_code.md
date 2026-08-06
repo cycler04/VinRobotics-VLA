@@ -1,7 +1,7 @@
 # Paper có mã nguồn công khai — chỉ mục khả năng tái lập
 
-Ba trong sáu paper có repository công khai. Đây là **Verified** ở mức đường dẫn
-tồn tại (kiểm tra 31 Jul 2026; NORA-1.5 và ThinkAct kiểm tra 03 Aug 2026); chưa
+Ba trong chín paper có repository công khai. Đây là **Verified** ở mức đường dẫn
+tồn tại (kiểm tra 31 Jul 2026; cập nhật corpus 05 Aug 2026); chưa
 clone, cài môi trường hay chạy checkpoint trong workspace.
 
 | Paper | Báo cáo | Code / trang dự án | Ràng buộc chính |
@@ -10,8 +10,11 @@ clone, cài môi trường hay chạy checkpoint trong workspace.
 | RoboMonkey | [01_robomonkey.md](action_generation/01_robomonkey.md) | [Code](https://github.com/robomonkey-vla/RoboMonkey), [trang dự án](https://robomonkey-vla.github.io) | Verifier LLaVA-7B train trên 20M cặp preference, 8× H100. Deploy cần 28 GB VRAM và chạy ở 1.5 Hz. |
 | SC-VLA | [02_sc_vla.md](training/02_sc_vla.md) | [Code](https://github.com/Kisaragi0/SC-VLA) | Stage I rẻ (50k iteration, 1× L40). Stage II cần 0.5–3 triệu bước môi trường online — chỉ khả thi trong simulator. |
 | FailSafe | [01_failsafe.md](failure_adaptation/01_failsafe.md) | [Trang dự án](https://jimntu.github.io/FailSafe/) — **chưa có code** | Paper ghi "plan to release"; trang dự án hiện không có link GitHub. Train cần 32× H100. |
-| ThinkAct | [02_thinkact.md](action_generation/02_thinkact.md) | [Trang dự án](https://jasper0314-huang.github.io/thinkact-vla/) — **chưa có code** | Không tìm thấy repo chính thức (`NVlabs/ThinkAct` trả 404). Ba giai đoạn train trên 16× A100: Qwen2.5-VL-7B + GRPO + DiT policy 432M + Q-Former. |
+| ThinkAct | [03_thinkact.md](training/03_thinkact.md) | [Trang dự án](https://jasper0314-huang.github.io/thinkact-vla/) — **chưa có code** | Không tìm thấy repo chính thức (`NVlabs/ThinkAct` trả 404). Ba giai đoạn train trên 16× A100: Qwen2.5-VL-7B + GRPO + DiT policy 432M + Q-Former. |
 | FLARE | [02_flare.md](failure_adaptation/02_flare.md) | **Unknown** — paper không ghi repo hay trang dự án | Pipeline gồm MimicGen + LoRA trên π0.5 + Gemini-2.5-Pro + Any6D. Khó tái lập nhất trong tập. |
+| FPC-VLA | [02_fpc_vla.md](action_generation/02_fpc_vla.md) | [Trang dự án](https://fpcvla.github.io/) — nút Code/Model hiện trỏ `#`, chưa có artifact tải được | Data engine cần RLDS có pose 7-D và binary gripper; supervisor Qwen2.5-VL-7B train trên 16 H100. |
+| RePO-VLA | [04_repo_vla.md](training/04_repo_vla.md) | **Unknown** — PDF không ghi project page/repo/dataset URL | Cần failure/recovery rollout, adverse-state verification và π0.5; số recovery episode ở cấu hình 2×/4× không được công bố. |
+| ViFailback | [03_vifailback.md](failure_adaptation/03_vifailback.md) | [Code](https://github.com/x1nyuzhou/ViFailback), [dataset](https://huggingface.co/datasets/sii-rhos-ai/ViFailback-Dataset), [model](https://huggingface.co/sii-rhos-ai/ViFailback-8B), [trang dự án](https://x1nyuzhou.github.io/vifailback.github.io/) | Artifact đã được liên kết công khai; chưa clone hoặc kiểm tra license/runtime trong workspace. |
 
 ## Phần tái lập được mà không cần repo
 

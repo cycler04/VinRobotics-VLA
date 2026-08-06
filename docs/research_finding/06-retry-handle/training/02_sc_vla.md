@@ -226,7 +226,7 @@ hai mất 10 điểm. $\Delta s$ quan trọng hơn progress, đặc biệt ở t
   so sánh modality dự báo thì SC-VLA bổ sung điểm cực rẻ nhất của phổ đó.
 - Với `vla-data-tools`: sinh nhãn SPI chỉ cần pose end-effector và gripper theo
   timestep, cộng chỉ số bước / độ dài episode để tính $p_t$. **Đây là nhãn duy
-  nhất trong cả tập 4 paper mà schema hiện tại đủ để tạo, không cần trường mới.**
+  nhất trong corpus bốn paper ban đầu mà schema hiện tại đủ để tạo, không cần trường mới.**
 - OAR thì không: cần vòng lặp môi trường online, tức simulator hoặc robot chạy
   triệu bước. Ngoài phạm vi workspace hiện tại.
 

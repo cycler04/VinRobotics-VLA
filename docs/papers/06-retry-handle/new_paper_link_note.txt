@@ -1,3 +1,4 @@
+# Đã xử lý ngày 5 Aug 2026; xem paper_link.txt và các PDF 07--09.
 https://www.sciencedirect.com/science/article/pii/S095741742600655X
 https://arxiv.org/pdf/2605.09410
 https://openaccess.thecvf.com/content/CVPR2026/papers/Zeng_Diagnose_Correct_and_Learn_from_Manipulation_Failures_via_Visual_Symbols_CVPR_2026_paper.pdf

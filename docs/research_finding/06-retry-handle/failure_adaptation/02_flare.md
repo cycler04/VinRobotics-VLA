@@ -8,7 +8,7 @@
   Guanbin Li (CUHK; CPII; Duke; Sun Yat-sen University; TengenX;
   Tencent Robotics X; Shenzhen Loop Area Institute)
 - Venue: **CVPR 2026** (pp. 22391–22401, bản CVF Open Access) — venue chắc chắn
-  nhất trong tập 4 paper.
+  nhất trong corpus bốn paper ban đầu.
 - PDF trong repo: [docs/papers/06-retry-handle/04_flare_failure_aware_correction_recovery.pdf](../../../papers/06-retry-handle/04_flare_failure_aware_correction_recovery.pdf)
 - Nguồn: https://openaccess.thecvf.com/content/CVPR2026/papers/Zhao_FLARE_A_Failure-Aware_Framework_for_Autonomous_Correction_and_Recovery_in_CVPR_2026_paper.pdf
 - Code: **Unknown** — paper không ghi repo hay project page.
@@ -56,7 +56,7 @@ hợp lệ trên mọi đường thành công.
 - **OOD Error**: $s^e_t \notin S^e_{task}$ (ly đã đổ). Không action nào của task
   policy cứu được. → cần **Reset skill** riêng.
 
-Đây là đóng góp khái niệm rõ ràng nhất trong cả tập 4 paper: nó nói tại sao
+Đây là đóng góp khái niệm rõ ràng nhất trong corpus bốn paper ban đầu: nó nói tại sao
 "làm lại" và "dọn hiện trường" là hai bài toán khác nhau, không thể gộp.
 
 ### 4.2 Retry — Perturbation & Bridging
@@ -199,13 +199,13 @@ Any6D để ước lượng pose object phục vụ augmentation. Tác giả nh�
 lại failure **không** cần khớp toạ độ chính xác — thu các state "đại khái giống"
 (ly đổ) là đủ, vì augmentation lo phần tổng quát hoá.
 
-Đây là paper duy nhất trong tập 4 có **cả** kết quả sim đầy đủ **và** kiểm chứng
+Đây là paper duy nhất trong corpus bốn paper ban đầu có **cả** kết quả sim đầy đủ **và** kiểm chứng
 robot thật cho đúng cơ chế được đề xuất.
 
 ## 6. Giới hạn và điểm chưa rõ
 
 - **Không có code.** Với pipeline gồm MimicGen + LoRA trên π0.5 + Gemini-2.5-Pro
-  + Any6D, đây là hệ khó tái lập nhất trong tập 4.
+  + Any6D, đây là hệ khó tái lập nhất trong corpus bốn paper ban đầu.
 - **Reset skill chỉ thành công với object dễ** (xem 5.3). Đóng góp khái niệm mạnh
   hơn nhiều so với kết quả thực nghiệm của phần Reset.
 - **Chi phí MLLM online không được báo cáo.** Không có số latency, tần suất gọi
