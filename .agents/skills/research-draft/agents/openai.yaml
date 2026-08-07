@@ -1,0 +1,4 @@
+interface:
+  display_name: "Research Draft"
+  short_description: "Create a concise paper research outline"
+  default_prompt: "Use $research-draft to create a short Markdown outline of the key questions and report headings for this paper."

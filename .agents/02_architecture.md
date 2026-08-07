@@ -10,10 +10,10 @@
   hành.
 - `third_party/`: code vendor/submodule phục vụ tái lập paper.
 
-Luồng nghiên cứu chuẩn được tách thành ba workflow:
+Luồng nghiên cứu chuẩn được tách thành các workflow:
 
 ```text
-paper/source -> research note -> experiment evidence -> synthesis/report
+paper/source -> research note -> research draft -> experiment evidence -> synthesis/report
 ```
 
 Chi tiết nằm trong [workflows/](workflows/).
@@ -64,4 +64,3 @@ frame, unit và control convention.
   của package gốc vào code vendor nếu tác vụ không yêu cầu sửa vendor.
 - Chưa có đường đọc ngược HDF5/Parquet, writer LeRobot hoặc round-trip; mọi sơ đồ
   có các nhánh đó chỉ là thiết kế.
-

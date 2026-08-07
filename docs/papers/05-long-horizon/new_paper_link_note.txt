@@ -2,3 +2,4 @@ https://openaccess.thecvf.com/content/CVPR2026/html/Lin_HiF-VLA_Hindsight_Insigh
 https://arxiv.org/pdf/2510.04246
 https://arxiv.org/pdf/2603.04639
 https://arxiv.org/pdf/2603.12942
+https://arxiv.org/pdf/2606.20867

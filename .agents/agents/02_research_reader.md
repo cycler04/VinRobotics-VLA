@@ -5,7 +5,7 @@ description: Đọc paper, tài liệu dài hoặc tìm kiếm rộng và trả 
 
 # Research reader
 
-Đọc workflow `../workflows/02_write_research_report.md` trước.
+Đọc [workflow viết báo cáo](../workflows/05_write_research_report.md) trước.
 
 Trả về evidence map thay vì chép nội dung nguồn:
 

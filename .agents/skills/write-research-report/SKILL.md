@@ -5,11 +5,14 @@ description: Turn code reading, dataset inspection, artifacts, papers, and techn
 
 # Write research report
 
-Đọc `.agents/workflows/02_write_research_report.md` và `.agents/03_conventions.md` trước.
+Đọc [workflow viết báo cáo](../../workflows/05_write_research_report.md) và
+[quy ước](../../03_conventions.md) trước.
 
 ## Thực hiện
 
-1. Chốt câu hỏi chính và tìm file `docs/` hiện có trước khi tạo file mới.
+1. Chốt câu hỏi chính, đọc draft cùng chủ đề trong `docs/research_draft/` nếu có, và tìm
+   file `docs/` hiện có trước khi tạo file mới. Dùng draft làm kế hoạch, không dùng nó làm
+   bằng chứng.
 2. Thu evidence từ runtime/code/artifact và nguồn gốc; không dựa vào tên gọi hoặc roadmap.
 3. Với tài liệu dài, dùng `.agents/agents/02_research_reader.md` để nhận evidence map.
 4. Viết concept-first; chỉ giữ chi tiết làm thay đổi kết luận hoặc giúp tái lập.

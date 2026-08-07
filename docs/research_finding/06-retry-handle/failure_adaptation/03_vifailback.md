@@ -1,271 +1,496 @@
-# ViFailback — chẩn đoán failure và sinh visual correction guidance
+# ViFailback — dataset và VLM supervisor cho chẩn đoán/correction failure
 
-## 1. Nguồn và câu hỏi nghiên cứu
+## 1. Nguồn và định vị chính
 
-- Paper: *Diagnose, Correct, and Learn from Manipulation Failures via Visual
-  Symbols*, Xianchao Zeng và cộng sự, CVPR 2026, pp. 42386–42395.
-- [PDF trong repo](../../../papers/06-retry-handle/09_vifailback_visual_symbols.pdf), [CVF Open Access](https://openaccess.thecvf.com/content/CVPR2026/html/Zeng_Diagnose_Correct_and_Learn_from_Manipulation_Failures_via_Visual_Symbols_CVPR_2026_paper.html), [trang dự án](https://x1nyuzhou.github.io/vifailback.github.io/).
-- Phân loại: **failure adaptation**. ViFailback là external VLM supervisor; để
-  recovery thật, visual guidance phải được một VSF policy hoặc PMC controller
-  chuyển thành action.
+- Paper: *Diagnose, Correct, and Learn from Manipulation Failures via Visual Symbols*,
+  Xianchao Zeng và cộng sự, CVPR 2026, pp. 42386–42395.
+- [CVF Open Access](https://openaccess.thecvf.com/content/CVPR2026/html/Zeng_Diagnose_Correct_and_Learn_from_Manipulation_Failures_via_Visual_Symbols_CVPR_2026_paper.html)
+- [Project page](https://x1nyuzhou.github.io/vifailback.github.io/)
+- [Code](https://github.com/x1nyuzhou/ViFailback)
 
-**Câu hỏi:** có thể thu thập failure thật và dùng ký hiệu trực quan để vừa giảm
-chi phí annotation, vừa dạy VLM chẩn đoán và đưa correction đủ grounded cho robot
-thực thi hay không?
+> **Định vị quan trọng:** đây chủ yếu là paper về **real-world failure dataset,
+> VLM benchmark và domain fine-tuning**. ViFailback-8B chỉ là
+> **Qwen3-VL-8B được LoRA fine-tune**, không có kiến trúc VLA mới, action head mới
+> hoặc objective trực tiếp học robot action từ failure trajectory.
 
-![1785922486421](image/03_vifailback/1785922486421.png)
+Câu hỏi nghiên cứu chính là:
 
-## 2. Why — khoảng trống của failure data hiện tại
+> Có thể biến failure video ngoài đời thành supervision đủ chi tiết để một VLM
+> chẩn đoán failure, giải thích nguyên nhân và sinh correction guidance grounded
+> trên ảnh hay không?
 
-VLA học chủ yếu từ success nên không biết “sai ở đâu, vì sao, và phải sửa thế
-nào”. Failure dataset trước thường được sinh programmatically trong simulator,
-tạo sim-to-real gap. Text feedback thuần túy vừa tốn công annotate vừa khó biến
-thành low-level motion vì instruction following của VLA chưa đủ chính xác.
+Phần robot recovery là downstream system integration: ViFailback-8B sinh guidance,
+sau đó một policy/controller riêng phải chuyển guidance thành robot action.
 
-Paper đặt success criteria ở ba tầng:
+![Tổng quan ViFailback: từ failure trajectory thật đến chẩn đoán, visual-symbol guidance và VLA rollout đã correction](image/03_vifailback/1785922486421.png)
 
-1. diagnosis/correction chính xác trên benchmark đóng và mở;
-2. chất lượng symbol generation tăng theo lượng dữ liệu;
-3. supervisor giúp VLA phục hồi trên task robot thật chưa thấy.
+*Hình 1 — Tổng quan ViFailback: dataset/benchmark cung cấp failure supervision;
+ViFailback-8B phát hiện, định vị và sinh code để vẽ correction guidance. Nguồn:
+Figure 1 của paper.*
 
-## 3. Đóng góp
+```mermaid
+flowchart LR
+    R[Real-world robot trajectories] --> D[ViFailback VQA dataset]
+    D --> Q[LoRA fine-tune Qwen3-VL-8B]
+    Q --> V[ViFailback-8B<br/>diagnosis + text/symbol guidance]
 
-1. **ViFailback dataset** gồm failure trajectory thật với diagnosis, textual guidance và visual-symbol guidance được gắn vào keyframe.
-2. **ViFailback-Bench** tách 11 năng lực từ detection/localization tới reasoning và correction, với hai chế độ Lite và Hard.
-3. **ViFailback-8B** sinh cả reasoning lẫn symbol code; hai executor chứng minh guidance có thể chuyển thành recovery action trên robot thật.
+    V --> E{Action executor}
+    E --> S[VSF: π0.5 học follow symbol]
+    E --> P[PMC: controller + GraspNet]
+    S --> A[Robot action]
+    P --> A
+```
+
+## 2. Why — khoảng trống mà paper xử lý
+
+VLA thường được train chủ yếu trên successful demonstrations. Dữ liệu đó dạy
+policy cách hoàn thành task trong nominal state, nhưng không cung cấp supervision
+cho các câu hỏi:
+
+1. failure có xảy ra không;
+2. failure bắt đầu tại frame hoặc subtask nào;
+3. failure thuộc loại gì và nguyên nhân là gì;
+4. cần tránh hoặc sửa failure như thế nào.
+
+Các failure dataset trước thường sinh perturbation trong simulator. Paper cho
+rằng cách này bị giới hạn bởi sim-to-real gap và không đại diện đầy đủ cho failure
+khi policy chạy trên robot thật.
+
+Text-only correction cũng có hai hạn chế:
+
+- tốn công để mô tả chính xác chuyển động không gian;
+- câu như “dịch gripper sang phải một chút” không ground rõ điểm bắt đầu, đích,
+  hướng quay hoặc vùng cần align trên ảnh.
+
+ViFailback giải quyết hai khoảng trống bằng real-world failure trajectories và
+visual symbols được vẽ trực tiếp lên keyframe.
+
+## 3. Bốn artifact cần tách biệt
+
+| Artifact                     | Input → output                                                                 |      Có robot action label trực tiếp? | Vai trò                                   |
+| ---------------------------- | ------------------------------------------------------------------------------- | ---------------------------------------: | ------------------------------------------ |
+| **ViFailback Dataset** | Video/keyframe + task/question → diagnosis, textual guidance hoặc symbol code |                         **Không** | Supervision cho VLM                        |
+| **ViFailback-Bench**   | Failure VQA → score Lite/Hard                                                  |                         **Không** | Đánh giá failure-oriented VLM reasoning |
+| **ViFailback-8B**      | Observation + query → text/structured symbol code                              |                         **Không** | External VLM supervisor                    |
+| **Recovery system**    | VLM guidance → VSF policy hoặc PMC controller → action                       | **Có ở executor/auxiliary data** | Thực thi correction trên robot           |
+
+Điểm dễ nhầm nhất là core ViFailback dataset **không phải VLA action dataset**.
+Nó không cung cấp target dạng:
+
+```text
+[x, y, z, roll, pitch, yaw, gripper]
+```
+
+hoặc action token/chunk tại từng timestep. Low-level output của dataset vẫn là
+ngôn ngữ hoặc visual-symbol serialization, ví dụ:
+
+```json
+{
+  "success_detection": "Failed",
+  "keyframe": 9,
+  "failure_type": "gripper_6d_pose",
+  "low_level_commands": "Move the left gripper right significantly and backward slightly",
+  "visual_symbol": {
+    "type": "straight_arrow",
+    "start_point": [159, 560],
+    "end_point": [339, 442],
+    "color": ["green", "red"]
+  }
+}
+```
+
+JSON trên minh họa contract khái niệm; paper không công bố exact on-disk schema
+trong main PDF.
 
 ## 4. ViFailback Dataset
 
-![1785922509434](image/03_vifailback/1785922509434.png)
+![Pipeline thu thập, annotate và sử dụng ViFailback Dataset](image/03_vifailback/1785922509434.png)
 
-### 4.1 Dataset giải quyết failure nào?
+*Hình 2 — Pipeline tổng thể: thu trajectory thật, annotate visual symbol và VQA,
+tạo ViFailback-Bench, fine-tune ViFailback-8B rồi nối guidance với policy robot.
+Nguồn: Figure 2 của paper.*
 
-**Failure mode được xử lý:** các corpus chỉ chứa successful demonstrations không cung cấp supervision về thời điểm failure bắt đầu, nguyên nhân failure hoặc cách recovery. Trong khi đó, nhiều failure dataset trước đây được tạo bằng cách chèn perturbation trong simulator, nên khả năng phản ánh failure khi triển khai trên robot thật bị giới hạn bởi sim-to-real gap.
+### 4.1 Thu trajectory thật
 
-ViFailback bắt đầu từ các real-world manipulation trajectories và chuyển chúng thành supervision cho ba nhóm năng lực:  **failure diagnosis** , **textual correction guidance** và  **visual-symbol guidance** . Dataset là artifact nền để xây dựng cả ViFailback-Bench và ViFailback-8B.
+**Failure mode được xử lý:** simulated perturbation có thể tạo distribution khác
+failure khi triển khai trên robot thật.
 
-> Nên bỏ cụm “contact, perception error” vì paper không chỉ ra rõ dataset đã bao phủ hoặc gắn nhãn riêng hai loại lỗi này.
+Nhóm tác giả thu **5,202 trajectories** trên ALOHA dual-arm, bao phủ **100 tasks**:
 
----
+- 657 successful trajectories;
+- 4,545 failed trajectories;
+- 4,995 trajectories từ human teleoperation;
+- phần còn lại từ rollout của π0.5 đã fine-tune trên successful teleoperated data.
 
-### 4.2 Thu failure trajectory thật
+![1786001638352](image/03_vifailback/1786001638352.png)
 
-**Failure mode được xử lý:** failure được tạo programmatically trong simulator có thể không phản ánh đúng phân phối failure khi policy được triển khai ngoài đời. Vì vậy, model được huấn luyện chủ yếu trên simulated failure có nguy cơ học các tín hiệu diagnosis và correction không phù hợp với real-world deployment.
+Failure taxonomy gồm bốn nhóm:
 
-Nhóm tác giả thu **5,202 trajectories** trên nền tảng dual-arm ALOHA cho  **100 manipulation tasks** , gồm **657 successful trajectories** và  **4,545 failed trajectories** . Trong đó, **4,995 trajectories** được thu bằng human teleoperation; phần còn lại đến từ rollout của π0.5 đã được finetune trên các successful teleoperated samples.
+1. **Task planning:** chọn sai object/location, sai thứ tự hoặc bỏ sót subtask.
+2. **Gripper 6D-pose:** gripper sai position hoặc orientation.
+3. **Gripper state:** open/close sai hoặc chưa đủ.
+4. **Human intervention:** external disturbance ngăn task tiếp tục.
 
-Failure được tổ chức thành bốn nhóm:
+Dữ liệu thật giảm phụ thuộc vào simulated failure, nhưng bằng chứng chỉ đến từ
+một robot family và taxonomy curated. Paper chưa kiểm tra cross-embodiment
+transfer.
 
-* task planning;
-* gripper 6D-pose;
-* gripper state;
-* human intervention.
+### 4.2 Visual-symbol annotation
 
-Taxonomy này đồng thời được dùng cho các task diagnosis trong dataset và benchmark.
+**Failure mode được xử lý:** low-level correction bằng text khó ground chính xác
+trên ảnh và high-level annotation thủ công tốn thời gian.
 
-Dữ liệu thật giúp giảm phụ thuộc vào simulated failure, nhưng phạm vi đánh giá vẫn giới hạn ở một robot platform và bốn nhóm failure được thiết kế trước. Paper chưa đánh giá trực tiếp khả năng transfer của taxonomy hoặc visual-symbol interface sang embodiment khác.
+Paper định nghĩa bảy symbol:
 
-> Thay “giảm sim-to-real gap” bằng “giảm phụ thuộc vào simulated failure” sẽ chính xác hơn. Paper chỉ chứng minh hiệu quả trên cùng ALOHA platform, chưa chứng minh cross-embodiment generalization.
+1. colored straight arrow — translation;
+2. semi-circular arrow — rotation;
+3. dual crosshairs — alignment giữa hai target;
+4. single crosshair — target object/region;
+5. ON/OFF label — gripper state;
+6. prohibition icon — stop;
+7. rewind icon — quay lại trạng thái trước.
 
----
+Colored arrow dùng màu để mã hóa trục chuyển động:
 
-### 4.3 Visual-symbol annotation
+- red: forward/backward;
+- green: left/right;
+- blue: up/down.
 
-**Failure mode được xử lý:** low-level correction chỉ biểu diễn bằng ngôn ngữ có thể mơ hồ về target position, hướng dịch chuyển, hướng xoay và trạng thái mong muốn của gripper. Việc viết thủ công các mô tả failure reason và high-level correction cũng tốn chi phí annotation.
+Pipeline lưu symbol category và geometry như start point, end point, center hoặc
+direction. Vì vậy VLM được dạy sinh **drawing code**, không chỉ mô tả bằng text.
 
-ViFailback định nghĩa bảy visual symbols:
+Annotation có ba stage:
 
-1. colored straight arrow cho translation;
-2. semi-circular arrow cho rotation;
-3. dual crosshairs cho alignment;
-4. single crosshair cho target object hoặc region;
-5. ON/OFF label cho gripper state;
-6. prohibition icon cho lệnh dừng;
-7. rewind icon cho việc quay lại trạng thái trước.
+1. annotator chọn detection, keyframe, subtask và failure type bằng UI;
+   Qwen2.5-Max hỗ trợ decomposition task thành subtasks;
+2. annotator chọn correction category và vẽ symbol lên keyframe;
+3. Qwen3-VL-235B sinh failure reason/high-level guidance; con người kiểm tra và
+   chỉnh sửa.
 
-Các symbol không chỉ được rasterize lên ảnh; pipeline còn lưu các thành phần có cấu trúc như symbol category, start point, end point và direction để VLM có thể học sinh drawing code.
+Paper không báo text-only annotation baseline, inter-annotator agreement hoặc
+breakdown chi phí kiểm định. Do đó claim “high-efficiency annotation” hợp lý về
+cơ chế nhưng chưa được đối chứng đầy đủ.
 
-Annotation pipeline gồm ba stage:
+<video controls width="720">
+  <source src="image/03_vifailback/Task1.mp4" type="video/mp4">
+</video>
 
-1. annotator dùng UI để chọn failure detection, keyframe, subtask và failure type; task được Qwen2.5-Max hỗ trợ phân rã thành subtasks;
-2. annotator chọn correction category và vẽ visual symbols trực tiếp lên keyframe;
-3. Qwen3-VL-235B sinh failure reason và high-level guidance từ các annotation đã có, sau đó con người kiểm tra và chỉnh sửa.
+### 4.3 Data structure
 
-Pipeline tạo ra **58,128 VQA pairs** từ  **5,202 trajectories** . Accuracy của task sinh visual-symbol code tăng theo quy mô dữ liệu và đạt **38.73%** với full training split; tuy nhiên đây vẫn là một trong các task khó nhất. Paper không báo baseline về thời gian annotation hoàn toàn bằng text, inter-annotator agreement hoặc chi phí kiểm định, nên claim về annotation efficiency chưa được đánh giá đầy đủ bằng đối chứng trực tiếp.
+ViFailback gồm **58,128 VQA pairs** gắn với **5,202 trajectories**. Một trajectory
+có thể sinh nhiều pair; không nên hiểu một sample duy nhất chứa toàn bộ field.
 
----
+```mermaid
+flowchart TD
+    T[One trajectory<br/>video + task instruction] --> Q{Generate multiple VQA pairs}
 
-### 4.4 Nội dung và quy mô dataset
+    Q --> D1[Failure detection]
+    Q --> D2[Keyframe localization]
+    Q --> D3[Subtask localization]
+    Q --> D4[Failure type]
+    Q --> D5[Failure reason]
 
-ViFailback gồm **5,202 real-world trajectories** và  **58,128 VQA pairs** . Không nên hiểu rằng mỗi VQA sample chứa toàn bộ annotation fields. Thay vào đó,  **một trajectory có thể sinh nhiều VQA pairs** , mỗi pair kiểm tra một thành phần cụ thể, chẳng hạn:
+    Q --> G1[Low-level avoidance]
+    Q --> G2[Low-level correction]
+    Q --> G3[High-level avoidance]
+    Q --> G4[High-level correction]
+    Q --> G5[Visual-symbol drawing code]
+```
 
-* failure detection;
-* failure keyframe localization;
-* failure subtask localization;
-* failure type;
-* failure reason;
-* low-level avoidance hoặc correction;
-* high-level avoidance hoặc correction;
-* visual-symbol generation.
+Core dataset output là diagnosis/guidance target cho VLM. Paper thừa nhận action
+distribution trong failure trajectories còn chưa được khai thác và để lại cho
+future work (Discussion, p.8).
 
-Do đó, giá trị chính của dataset nằm ở việc liên kết observation theo thời gian với diagnosis và corrective guidance được ground trên keyframe, thay vì chỉ cung cấp video kèm success/failure label. ViFailback-Bench được thiết kế với tổng cộng 11 dạng VQA task, gồm closed-ended Lite và open-ended Hard.
+### 4.4 Split và threat
 
-Training split gồm  **4,702 trajectories thuộc 95 tasks** ; benchmark sử dụng  **500 trajectories thuộc 22 tasks** .
+Training split dùng:
 
-Dataset cũng chỉ được thu trên ALOHA dual-arm. Transfer sang robot embodiment, camera configuration hoặc action space khác chưa được paper kiểm chứng
+- **4,702 trajectories**;
+- **95 tasks**;
+- **52,418 VQA pairs**.
+
+Benchmark dùng:
+
+- **500 trajectories**;
+- **22 tasks**.
+
+Nếu 95 train tasks và 22 benchmark tasks đều là subset của cùng tổng 100 tasks,
+thì intersection tối thiểu là:
+
+```text
+95 + 22 - 100 = 17 tasks
+```
+
+Do đó split **không thể hoàn toàn task-disjoint** theo các con số paper công bố.
+Benchmark chủ yếu đo held-out trajectory/configuration trong task families có
+overlap, không phải strict unseen-task generalization. Ba robot tasks ở downstream
+recovery experiment mới được paper nói rõ là unseen đối với ViFailback dataset.
 
 ## 5. ViFailback-Bench
 
-### 5.1 Benchmark giải quyết failure nào?
+### 5.1 Benchmark đo gì?
 
-ViFailback-Bench benchmark khả năng reasoning với action failure của mô hình. 
+ViFailback-Bench đo **failure-oriented embodied reasoning** của VLM:
 
-Mỗi trajectory được triển khai thành 11 VQA task: failure detection, keyframe và
-subtask localization, bốn-way failure type, failure reason, low/high-level
-avoidance, low/high-level correction và symbol code. ViFailback-Bench Lite dùng
-câu hỏi closed-ended để đo năng lực lõi; Hard yêu cầu open-ended reasoning/CoT.
+```text
+observe rollout
+→ detect failure
+→ localize keyframe/subtask
+→ identify type/reason
+→ propose avoidance or correction
+```
 
-Benchmark có 500 trajectory và 22 task. Lite dùng exact accuracy. Hard dùng
-GPT-4o judge dựa trên semantic similarity, completeness và functional
-equivalence.
+Nó không đánh giá robot action generation trực tiếp và cũng không chứng minh
+internal chain-of-thought là causally faithful.
 
-![1785922569146](image/03_vifailback/1785922569146.png)
+![Các task diagnosis và correction trong ViFailback-Bench Lite và Hard](image/03_vifailback/1785922569146.png)
 
-### 5.2 ViFailback-Bench Lite
+*Hình 3 — Một trajectory được chuyển thành các câu hỏi Lite dạng closed-ended và
+Hard dạng open-ended về diagnosis, avoidance và correction. Nguồn: Figure 3 của
+paper.*
 
-Lite dùng closed-ended questions để đo sáu năng lực lõi: **detection, keyframe và
-subtask localization, failure type, low-level avoidance và low-level correction.**
-ViFailback-8B đạt average `93.70`, trong khi baseline mạnh nhất Gemini-2.5-Pro
-đạt `54.64`. Hai kết quả quan trọng nhất đối với recovery là keyframe/subtask
-localization `92.58/93.48` và low-level correction `95.93` (Table 2, p.7).
+### 5.2 Lite
 
-![1785922636512](image/03_vifailback/1785922636512.png)
+Lite có sáu closed-ended VQA tasks:
 
-### 5.3 ViFailback-Bench Hard
+1. failure detection;
+2. failure keyframe localization;
+3. failure subtask localization;
+4. failure type identification;
+5. low-level avoidance;
+6. low-level correction.
 
-Hard dùng open-ended answers/CoT cho **low-level avoidance, low-level correction,
-failure reason và high-level guidance**. ViFailback-8B đạt average `72.64`; GPT-4o
-là baseline kế tiếp với `40.00`. Model mạnh ở failure reason `83.97` và high-level
-avoidance/correction `85.36/81.79`, nhưng low-level avoidance CoT chỉ `47.95`
-(Table 3, p.7).
+Metric là exact accuracy. Đây chủ yếu là recognition, temporal/spatial grounding
+và structured diagnosis hơn là open-ended reasoning.
 
-![1785922648622](image/03_vifailback/1785922648622.png)
+ViFailback-8B đạt average **93.70%**; baseline mạnh nhất trong Table 2 là
+Gemini-2.5-Pro với **54.64%**.
 
-### 5.4 Benchmark contract và threat
+![Kết quả ViFailback-Bench Lite theo sáu tác vụ](image/03_vifailback/1785922636512.png)
 
-Lite dùng exact accuracy. Hard dùng GPT-4o judge dựa trên semantic similarity,
-completeness và functional equivalence. Paper không báo agreement giữa GPT-4o
-và human judge. Quan trọng hơn, benchmark không được chứng minh task-disjoint:
-95 training task và 22 benchmark task cùng lấy từ tổng 100 task. Vì vậy kết quả
-đo khả năng trên held-out trajectories tốt hơn là generalization sang task mới.
+*Bảng 2 — Accuracy (%) trên sáu task Lite. ViFailback-8B đạt average 93.70%.
+Nguồn: Table 2 của paper.*
 
-## 6. ViFailback-8B Model
+### 5.3 Hard
 
-### 6.1 Model giải quyết failure nào?
+Hard có năm open-ended tasks:
 
-**Failure mode được xử lý:** general-purpose VLM nhận biết object và instruction
-nhưng chưa được dạy nối temporal evidence của failure với keyframe, nguyên nhân
-và correction grounded trên ảnh.
+1. low-level avoidance với multi-step/CoT output;
+2. low-level correction với multi-step/CoT output;
+3. failure reason;
+4. high-level avoidance;
+5. high-level correction.
 
-ViFailback-8B khởi tạo từ Qwen3-VL-8B và được LoRA để trả lời cả closed-ended
-diagnosis, open-ended reasoning và visual-symbol code. Đây là external supervisor,
-không phải VLA trực tiếp sinh low-level robot action.
+Hard yêu cầu model nối detection/localization với guidance. Output được GPT-4o
+judge theo:
 
-### 6.2 Training corpus và objective
+- semantic similarity;
+- content completeness;
+- functional equivalence.
 
-Training split gồm 52,418 VQA từ 4,702 trajectory và 95 task. Cùng một supervised
-fine-tuning objective học 11 target type: diagnosis/localization, reasoning,
-low/high-level guidance và symbol serialization. Các subset 1,200, 2,400, 3,600
-và 4,702 trajectory được dùng để đo data scaling.
+ViFailback-8B đạt average **72.64%**; GPT-4o baseline đạt **40.00%**.
 
-Target provenance là hybrid: Qwen2.5-Max hỗ trợ task decomposition,
-Qwen3-VL-235B sinh high-level description, rồi annotator kiểm tra và sửa. Model
-được LoRA trong một epoch; paper không có RL stage hoặc loss trực tiếp tối ưu
-robot task success.
+![Kết quả ViFailback-Bench Hard theo năm tác vụ](image/03_vifailback/1785922648622.png)
 
-### 6.3 Training detail còn thiếu
+*Bảng 3 — Accuracy (%) trên năm task Hard. ViFailback-8B đạt average 72.64%.
+Nguồn: Table 3 của paper.*
 
-Main PDF không báo đầy đủ LoRA rank, optimizer, learning rate, batch size hoặc
-compute. Vì vậy có thể tái dựng data contract và objective, nhưng chi phí/cấu
-hình training chính xác vẫn là **Unknown**. Kết quả benchmark chứng minh domain
-finetuning hữu ích, không phải zero-shot superiority của architecture.
+Threat chính:
 
-## 7. Failure Recovery System
+- GPT-4o judge không có human-agreement study;
+- score đo chất lượng final answer, không trực tiếp kiểm tra reasoning trace;
+- train/benchmark task overlap làm suy yếu claim generalization.
 
-### 7.1 Từ guidance tới recovery action
+### 5.4 Visual-symbol generation không nên gộp nhầm vào 11 benchmark tasks
 
-**Failure mode được xử lý:** textual diagnosis đúng vẫn không đủ để robot thực
-thi low-level correction; VLM không trực tiếp điều khiển actuator.
+Paper dùng Figure 4 để đánh giá thêm khả năng sinh visual-symbol code khi tăng
+training data và báo accuracy **38.73%** ở full subset.
 
-Paper thử hai cầu nối có contract khác nhau.
+Tuy nhiên, 11 task của ViFailback-Bench được cấu thành bởi **6 Lite + 5 Hard**.
+Visual-symbol code generation là training/evaluation capability bổ sung, không
+nên liệt kê như task thứ 12 trong benchmark.
 
-### 7.2 Visual Symbols-Following
+## 6. ViFailback-8B
 
-VSF overlay symbol lên failure keyframe rồi finetune π0.5 để policy đi theo cue.
-Nhánh này học mapping từ `observation + visual prompt` sang action và cần một số
-episode symbol-following cho embodiment đích.
+### 6.1 Kiến trúc
 
-### 7.3 Point-based Motion Control
+ViFailback-8B là:
 
-PMC không finetune VLA end-to-end. Nó parse target point từ symbol, kết hợp
-GraspNet pose và dùng controller có sẵn để di chuyển gripper. Nhánh này tách
-reasoning khỏi motion execution, nhưng phụ thuộc detector, pose estimator và
-controller cổ điển.
+```text
+Qwen3-VL-8B + LoRA fine-tuning on ViFailback VQA
+```
 
-### 7.4 Đánh giá recovery trên robot thật
+Paper không mô tả:
 
-Trên ba unseen real-world task, baseline có symbol đạt `52.4%`, VSF đạt `73.0%`;
-baseline PMC đạt `50.8%`, ViFailback + PMC đạt `74.6%` (Table 4, p.8), tương ứng
-+20.6 và +23.8 điểm phần trăm. Đây là **system-level evidence**: vì cả correction
-module/executor cùng thay đổi, phép đo chưa cô lập visual symbol tốt hơn text bao
-nhiêu. Paper cũng chưa dùng action distribution vốn có trong failure trajectory
-để train VLA trực tiếp.
+- backbone mới;
+- attention block mới;
+- action head;
+- diffusion/flow action decoder;
+- robot action tokenizer;
+- RL objective;
+- direct action loss.
 
-![1785922668366](image/03_vifailback/1785922668366.png)
+Do đó improvement đến từ **domain-specific supervision**, không phải một kiến
+trúc VLM/VLA mới.
 
-## 8. Claim → evidence
+### 6.2 Training
 
-| Claim                                            | Evidence được báo cáo                                                                                               | Threat                                                                        |
-| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------- |
-| Fine-grained failure supervision cải thiện VLM | Overall`(93.70 + 72.64)/2 = 83.17`; Gemini-2.5-Pro `44.54`, GPT-4o `44.47` (Table 1)                               | Model được train đúng domain; không phải zero-shot model comparison    |
-| Localization và correction cùng cải thiện    | Lite: keyframe`92.58`, subtask `93.48`, low-level correction `95.93` (Table 2)                                     | Closed-ended score có thể dễ hơn deployment mở                           |
-| Open-ended reasoning tốt hơn baseline          | Hard: reason`83.97`, high-level avoidance/correction `85.36/81.79`; low-level avoidance CoT chỉ `47.95` (Table 3) | GPT-4o judge và không có reliability study                                 |
-| Guidance giúp recovery robot thật              | VSF +20.6 pp; PMC +23.8 pp (Table 4)                                                                                     | Thay đổi cả correction module; không cô lập symbol-vs-text contribution |
+- Base model: Qwen3-VL-8B.
+- Method: LoRA.
+- Duration: 1 epoch.
+- Data: 52,418 VQA pairs từ 4,702 trajectories.
+- Target: closed-ended diagnosis, open-ended reason/guidance và visual-symbol code.
 
-Train có 95 task trong tổng 100, còn benchmark có 22 task, nên benchmark gần như
-chắc chắn có **task overlap** dù trajectory split có thể riêng. Chỉ downstream
-robot experiment được paper nói rõ là unseen-task.
+Main paper không báo đầy đủ LoRA rank, optimizer, learning rate, batch size hoặc
+compute. Exact training recipe vì vậy vẫn **Unknown**.
 
-## 9. Giới hạn và Unknown
+### 6.3 Output contract
 
-- Paper mới khai thác video supervision; action distribution của failure
-  trajectory chưa được dùng và được để lại cho future work (p.8).
-- Không báo latency/trigger interval, class balance, symbol-coordinate error,
-  annotation cost breakdown hay annotator agreement.
-- Không có confidence interval/significance cho 21 trial/task.
-- Dataset/license/download format không nằm trong main PDF; cần xác minh ở project
-  page trước khi đưa vào pipeline.
-- Framework đưa ra guidance, không tự chứng minh VLM có thể trực tiếp sinh
-  low-level recovery action.
+ViFailback-8B sinh:
 
-## 10. Liên hệ với workspace
+- failure detection/localization;
+- failure type và reason;
+- low/high-level avoidance/correction text;
+- code để render **visual symbols**.
 
-**Inferred:** [`src/local_video_server.py`](../../../../src/local_video_server.py)
-đã có video range request/scrubbing, phù hợp làm backend cho annotation UI. Sidecar
-có thể chứa symbol type/color/start/end/center/arm cùng `failure_keyframe`,
-`failure_subtask`, `failure_type`, guidance và VQA provenance.
+Nó **không trực tiếp xuất actuator command**. Vì vậy nên gọi model là:
 
-Đây mới là khả năng tái sử dụng hạ tầng, không phải capability hiện có: workspace
-chưa có ALOHA failure data, symbol schema/renderer, VQA evaluator hay robot
-correction executor.
+> external failure-diagnosis and correction-guidance VLM
 
-## 11. Thử nghiệm tiếp theo
+không nên gọi là:
 
-1. Đo annotation time và inter-annotator agreement giữa text-only và symbol UI.
-2. Tách ba executor input: text-only, point-only, full visual symbol trên cùng
-   controller và trial budget.
-3. Đánh giá task-disjoint, embodiment-disjoint và human-vs-GPT judge agreement;
-   đây là ba kiểm tra có khả năng làm suy yếu claim generalization nhất.
+> end-to-end self-correcting VLA.
 
-**Mức tin cậy:** cao cho dataset/task definition và reported tables; trung bình
-cho cross-task/general recovery claim.
+## 7. Từ VLM guidance tới robot action
+
+### 7.1 Online workflow
+
+Trong deployment:
+
+1. π0.5 chạy task bình thường;
+2. ViFailback-8B quan sát head-camera stream theo một interval;
+3. nếu phát hiện failure, model sinh diagnosis, textual guidance và symbol code;
+4. symbol được overlay lên observation;
+5. VSF policy hoặc PMC controller chuyển guidance thành robot motion.
+
+Điểm quan trọng là recovery phụ thuộc vào **hai hệ**:
+
+```text
+ViFailback-8B: reasoning/guidance
+executor: action generation/control
+```
+
+![1786002368486](image/03_vifailback/1786002368486.png)
+
+### 7.2 Visual Symbols-Following (VSF)
+
+Nhóm tác giả xây dựng **auxiliary visual-symbol-following dataset** bằng cách thu
+low-level motion trajectories, gắn symbol và fine-tune π0.5 cùng task-specific
+expert demonstrations.
+
+**Visual Symbols-Following Dataset (VSF)** là một bộ dữ liệu phụ do nhóm tác giả tự thu thập, gồm các low-level motion của robot, chẳng hạn “di chuyển gripper trái sang trái”, sau đó được gắn thêm các ký hiệu trực quan tương ứng trên ảnh. Dữ liệu này được trộn với các demonstration theo từng task để fine-tune π0.5, giúp policy học trực tiếp ánh xạ từ ảnh có visual symbol sang action phục hồi. Paper không công bố rõ quy mô, schema, action representation hay tỉ lệ trộn của bộ dữ liệu này.
+
+Auxiliary dataset này có robot trajectory/action supervision, nhưng nó **khác**
+core ViFailback dataset 58,128 VQA pairs.
+
+VSF học mapping:
+
+```text
+observation + symbol overlay + text guidance → robot action
+```
+
+### 7.3 Point-based Motion Control (PMC)
+
+PMC không yêu cầu π0.5 học follow symbol end-to-end. Controller đọc target point
+từ symbol rồi điều khiển end-effector. Khi cần grasp, hệ dùng GraspNet để ước
+lượng grasp pose.
+
+PMC tách reasoning khỏi control nhưng phụ thuộc thêm perception/controller module.
+
+## 8. Kết quả robot thật
+
+Ba task downstream đều unseen đối với ViFailback dataset; mỗi task chạy 21 trials.
+
+| Setup                                       | Average success |
+| ------------------------------------------- | --------------: |
+| π0.5 base + symbol data, không correction |           52.4% |
+| ViFailback + VSF                            |           73.0% |
+| π0.5 base, không correction               |           50.8% |
+| ViFailback + PMC                            |           74.6% |
+
+![Tỷ lệ thành công của VSF và PMC trên ba tác vụ robot thật](image/03_vifailback/1785922668366.png)
+
+*Bảng 4 — Kết quả recovery trên ba task robot thật, mỗi task có 21 trials; phần
+dưới minh họa failure keyframe với visual prompt và trạng thái sau correction.
+Nguồn: Table 4 của paper.*
+
+Gain được báo cáo:
+
+- VSF: **+20.6 percentage points**;
+- PMC: **+23.8 percentage points**.
+
+![1786002310774](image/03_vifailback/1786002310774.png)
+
+Đây là **system-level evidence**. Nó chứng minh ViFailback guidance có thể hữu ích
+khi được nối với executor, nhưng chưa cô lập:
+
+- visual symbol tốt hơn text-only bao nhiêu;
+- diagnosis model đóng góp bao nhiêu so với executor;
+- correction có generalize sang embodiment khác không;
+- latency có đáp ứng control loop thực tế không.
+
+## 9. Paper thực sự “learn from failure” ở đâu?
+
+Tên paper có thể tạo cảm giác policy học trực tiếp từ failed robot actions. Thực tế có ba mức học khác nhau:
+
+1. **Core contribution:** VLM học từ failure video/VQA để diagnosis và guidance.
+2. **Optional VSF branch:** π0.5 học follow visual symbols từ auxiliary motion trajectories.
+3. **Không có:** direct policy training từ action distribution của core failed
+   trajectories.
+
+Chính paper nói action distribution trong failed trajectories là nguồn thông tin
+chưa được khai thác. Vì vậy claim chính xác hơn là:
+
+> ViFailback dạy VLM học cách **phân tích và hướng dẫn sửa failure**; robot policy
+> chỉ học correction action trong auxiliary VSF setup hoặc được thay bằng PMC.
+
+## 10. Claim → evidence
+
+| Claim                                                    | Evidence                                              | Cách diễn giải đúng                                 |
+| -------------------------------------------------------- | ----------------------------------------------------- | -------------------------------------------------------- |
+| Real failure supervision cải thiện VLM                 | ViFailback-8B vượt các general VLM trên Lite/Hard | Domain fine-tuning gain, không phải architecture gain  |
+| Model có failure reasoning tốt hơn                    | Hard average 72.64%, reason/high-level guidance mạnh | Final-answer reasoning quality dưới GPT-4o judge       |
+| Symbol generation scale theo data                        | đạt 38.73% ở full subset                           | Khả năng còn khó; chưa có geometry-specific metric |
+| Guidance tăng robot success                             | 52.4→73.0 và 50.8→74.6                             | System-level recovery với VSF/PMC                       |
+| Dataset giúp policy học trực tiếp từ failed actions | Không có evidence                                   | Core dataset không chứa direct action targets          |
+
+## 11. Giới hạn và Unknown
+
+- Chỉ một embodiment: ALOHA dual-arm.
+- Bốn failure categories được curated trước.
+- Train và benchmark không task-disjoint theo số task công bố.
+- Hard dùng GPT-4o judge nhưng không báo human agreement.
+- Không báo latency/trigger interval end-to-end.
+- Không báo annotation text-only baseline hoặc inter-annotator agreement.
+- Không báo confidence interval/significance cho 21 trials/task.
+- Main PDF thiếu nhiều LoRA hyperparameters.
+- Core dataset chưa dùng action distribution của failure trajectories.
+- Recovery experiment thay cả supervisor/guidance và executor, nên chưa cô lập
+  contribution của từng thành phần.
+
+## 12. Kết luận
+
+ViFailback không phải một VLA architecture mới. Contribution chính là:
+
+```text
+real failure trajectories
++ visual-symbol annotation
++ failure-oriented VQA benchmark
++ LoRA-fine-tuned Qwen3-VL-8B supervisor
++ downstream VSF/PMC recovery demonstration
+```
+
+Cách phân loại chính xác:
+
+> **Real-world robot failure dataset + VLM benchmark/fine-tuning paper, có
+> downstream integration với VLA/controller để thực hiện recovery.**

@@ -5,8 +5,8 @@ description: Research questions with live web search and online sources, verify 
 
 # Write online research report
 
-Đọc `.agents/workflows/03_write_online_research_report.md` và `.agents/03_conventions.md`
-trước.
+Đọc [workflow nghiên cứu online](../../workflows/06_write_online_research_report.md) và
+[quy ước](../../03_conventions.md) trước.
 
 ## Thực hiện
 
