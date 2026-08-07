@@ -33,6 +33,8 @@ rộng, thiếu kiểm tra sớm, và fusion không tôn trọng semantics khác
 và gripper. Claim được xem là có căn cứ nếu supervisor/fusion tăng task success,
 chịu motion disturbance tốt hơn, và overhead chỉ xuất hiện thưa tại keyframe.
 
+![1786069423480](image/02_fpc_vla/1786069423480.png)
+
 ## 3. Đóng góp
 
 1. Một data engine biến trajectory RLDS có sẵn thành correction QA mà không cần
@@ -43,6 +45,8 @@ chịu motion disturbance tốt hơn, và overhead chỉ xuất hiện thưa t�
    khi dự đoán có nguy cơ thất bại.
 
 ## 4. Method
+
+![1786069512790](image/02_fpc_vla/1786069512790.png)
 
 ### 4.1 Tổng quan luồng xử lý
 
@@ -146,13 +150,17 @@ không trực tiếp tối ưu closed-loop recovery.
 
 ## 6. Claim → evidence
 
-| Protocol | Kết quả được báo cáo | Claim được kiểm tra |
-|---|---|---|
-| SIMPLER, WidowX | grasp/task `71.9/64.6`; CogACT task `51.8` (Table 3, p.12) | transfer sang embodiment và policy robustness |
-| SIMPLER, Google Robot | Visual Matching `78.0`, Variant Aggregation `65.8`; CogACT `74.8/61.3` (Table 4, p.12) | generalization trong simulator |
-| LIBERO, Franka | average `86.9`, Long `82.2`; ThinkAct `84.4/70.9` (Table 5, p.12) | task success và long horizon |
-| Xiaomi + ALOHA thật | grasp/task `92.8/86.0`; CogACT `86.0/78.4`, 50 trial/task (Table 6, p.14) | khả năng triển khai thật |
-| Motion disturbance `[0.01, 0.1]` | bỏ supervisor `50.8`, full `66.1`; clean full `82.1` (Table 7, p.16) | contribution của supervisor dưới perturbation |
+| Protocol                          | Kết quả được báo cáo                                                                 | Claim được kiểm tra                          |
+| --------------------------------- | ------------------------------------------------------------------------------------------- | ------------------------------------------------ |
+| SIMPLER, WidowX                   | grasp/task`71.9/64.6`; CogACT task `51.8` (Table 3, p.12)                               | transfer sang embodiment và policy robustness   |
+| SIMPLER, Google Robot             | Visual Matching`78.0`, Variant Aggregation `65.8`; CogACT `74.8/61.3` (Table 4, p.12) | generalization trong simulator                   |
+| LIBERO, Franka                    | average`86.9`, Long `82.2`; ThinkAct `84.4/70.9` (Table 5, p.12)                      | task success và long horizon                    |
+| Xiaomi + ALOHA thật              | grasp/task`92.8/86.0`; CogACT `86.0/78.4`, 50 trial/task (Table 6, p.14)                | khả năng triển khai thật                     |
+| Motion disturbance`[0.01, 0.1]` | bỏ supervisor`50.8`, full `66.1`; clean full `82.1` (Table 7, p.16)                  | contribution của supervisor dưới perturbation |
+
+![1786079274152](image/02_fpc_vla/1786079274152.png)
+
+![1786079287875](image/02_fpc_vla/1786079287875.png)
 
 Đây đều là **reported results**, chưa được tái lập trong workspace. Claim
 “zero-shot” cần đọc thận trọng: primary VLA đã pretrain trên LIBERO và dữ liệu
