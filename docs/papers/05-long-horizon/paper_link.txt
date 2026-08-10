@@ -1,6 +1,6 @@
 # Long-horizon manipulation in VLA — retained paper index
 
-**Scope (27 July 2026):** this directory intentionally contains the seven primary
+**Scope (10 August 2026):** this directory intentionally contains the eight primary
 PDFs below. Venue/status is recorded from the corresponding retained report or
 PDF; citation counts are omitted because they change over time.
 
@@ -13,6 +13,7 @@ PDF; citation counts are omitted because they change over time.
 | 5 | Causal World Modeling for Robot Control (LingBot-VA) | [2601.21998](https://arxiv.org/abs/2601.21998) | `05_lingbot_va_causal_world_modeling.pdf` | Venue not verified in the retained PDF |
 | 6 | ACoT-VLA: Action Chain-of-Thought for Vision-Language-Action Models | [2601.11404](https://arxiv.org/abs/2601.11404) | `06_acot_vla_action_chain_of_thought.pdf` | CVPR 2026 |
 | 7 | SeedPolicy: Horizon Scaling via Self-Evolving Diffusion Policy for Robot Manipulation | [2603.05117](https://arxiv.org/abs/2603.05117) | `07_seedpolicy_self_evolving_diffusion.pdf` | Preprint |
+| 8 | ReMem-VLA: Empowering Vision-Language-Action Model with Memory via Dual-Level Recurrent Queries | [2603.12942v1](https://arxiv.org/abs/2603.12942v1) | `08_remem_vla_dual_level_recurrent_queries.pdf` | arXiv preprint v1 |
 
-The seven Markdown analyses are indexed in
+The eight Markdown analyses are indexed in
 [`docs/research_finding/05-long-horizon/01_tong_quan.md`](../../research_finding/05-long-horizon/01_tong_quan.md).
