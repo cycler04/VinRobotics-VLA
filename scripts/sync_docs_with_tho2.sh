@@ -4,7 +4,7 @@
 set -euo pipefail
 
 readonly REMOTE_HOST="vinrobotics"
-readonly REMOTE_ROOT="/home/tho2/Dung_Workspace/VinRobotics"
+readonly REMOTE_ROOT="/home/tho2/Dung_Workspace"
 readonly LOCAL_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 usage() {
@@ -62,6 +62,7 @@ while (($#)); do
 done
 
 rsync_options=(-a --itemize-changes --protect-args)
+rsync_options+=(--exclude='/_archive/')
 if ! "$apply"; then
     rsync_options+=(--dry-run)
 fi

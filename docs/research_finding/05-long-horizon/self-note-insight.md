@@ -1,0 +1,4 @@
+- Long-Horizon method focus on fine-tuned a pre-trained VLA policy. These paper usually involve making a Memory Module to make memory token from historical data for VLA input:
+  - HAMLET: [www.alphaxiv.org/pdf/2510.00695v3](https://www.alphaxiv.org/pdf/2510.00695v3)
+  - MAP-VLA: [www.alphaxiv.org/pdf/2511.09516v1](https://www.alphaxiv.org/pdf/2511.09516v1)
+  - NativeMEM: [arxiv.org/pdf/2607.06678](https://arxiv.org/pdf/2607.06678)
