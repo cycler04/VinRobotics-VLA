@@ -1,0 +1,20 @@
+# Retained long-horizon papers with public source code
+
+This is a reproducibility index, not a performance ranking. Repository availability
+does not establish that full training is practical in this workspace.
+
+1. LingBot-VA — paper: https://arxiv.org/abs/2601.21998
+   Code: https://github.com/robbyant/lingbot-va
+   Checkpoint: https://huggingface.co/robbyant/lingbot-va
+2. ACoT-VLA — paper: https://arxiv.org/abs/2601.11404
+   Code: https://github.com/AgibotTech/ACoT-VLA
+3. MemoryVLA — paper: https://arxiv.org/abs/2508.19236
+   Project: https://shihao1895.github.io/MemoryVLA/
+   Code: https://github.com/shihao1895/MemoryVLA
+4. Seer — paper: https://arxiv.org/abs/2412.15109
+   Code: https://github.com/OpenRobotLab/Seer/
+5. SeedPolicy — paper: https://arxiv.org/abs/2603.05117
+   Code: https://github.com/Youqiang-Gui/SeedPolicy
+
+Details on scope, checkpoints and practical constraints are in
+[sota_co_code.md](sota_co_code.md).

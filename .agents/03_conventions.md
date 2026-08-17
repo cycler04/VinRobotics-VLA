@@ -4,8 +4,9 @@
 
 - `.agents/` là nguồn sự thật duy nhất cho knowledge, memory, plan, workflow và
   adapter skill của workspace.
-- Chỉ file trong cùng một cấp được đánh số `01_`, `02_`, ...; thư mục không đánh
-  số. Nếu chèn file giữa chuỗi, đánh số lại để thứ tự đọc liên tục.
+- File hạ tầng trong `.agents/` và `.agents/workflows/` giữ thứ tự bằng số `01_`, `02_`,
+  ... Các file báo cáo nghiên cứu (trong `docs/`) đặt tên mô tả dạng `snake_case`,
+  không đánh số `01_`, `02_`, ... Thư mục không đánh số.
 - Một sự thật chỉ có một nơi sở hữu. File khác liên kết tới nơi đó thay vì chép.
 - Tài liệu nghiên cứu viết tiếng Việt rõ ràng; giữ nguyên thuật ngữ tiếng Anh khi
   dịch làm mất nghĩa. Code, identifier và docstring dùng tiếng Anh.

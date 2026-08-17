@@ -11,7 +11,7 @@ description: Research questions with live web search and online sources, verify 
 ## Thực hiện
 
 1. Chốt câu hỏi, phạm vi, độ mới cần thiết và file đích; tìm báo cáo hiện có trước khi tạo
-   file mới.
+   file mới (dùng tên file mô tả dạng `snake_case`, không đánh số).
 2. Dùng web search để khám phá nguồn, sau đó mở và đọc trang nguồn thật. Không dùng snippet
    hoặc trang kết quả tìm kiếm làm bằng chứng.
 3. Ưu tiên paper, standard, official documentation, repository và công bố gốc. Dùng nguồn

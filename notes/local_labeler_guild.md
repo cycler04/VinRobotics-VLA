@@ -1,4 +1,6 @@
-Online login link:  [http://100.89.98.89:7861/login](http://100.89.98.89:7861/login "http://100.89.98.89:7861/login")
+Online login links:
+- EgoDex QA Editor: [http://100.89.98.89:7861/login](http://100.89.98.89:7861/login) (command: `open_local`)
+- EgoVerse Reviewer: [http://100.89.98.89:7871/reviewer](http://100.89.98.89:7871/reviewer) (command: `open_cut`)
 
 # Play QA videos from your laptop (slow-internet mode)
 

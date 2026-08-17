@@ -12,7 +12,7 @@ Các report đều viết bằng Tiếng Việt, dù prompt là Tiếng Anh
 - Xác định mốc thời gian, địa lý, version và loại nguồn cần thiết. Với chủ đề dễ thay đổi,
   luôn dùng web search hiện tại và ghi ngày truy cập.
 - Tôn trọng file/thư mục người dùng chỉ định. Nếu chưa chỉ định, tìm trong `docs/` và cập
-  nhật báo cáo đúng chủ đề thay vì tạo bản trùng; dùng `notes/` cho danh sách nguồn thô.
+  nhật báo cáo đúng chủ đề thay vì tạo bản trùng (dùng tên file mô tả dạng `snake_case`, không đánh số); dùng `notes/` cho danh sách nguồn thô.
 - Mặc định dùng một file cho một câu hỏi gắn kết. Tách nhiều file khi các nhánh có thể đọc
   độc lập hoặc evidence/source appendix làm lu mờ kết luận. Khi tách, tạo file overview làm
   điểm vào và link tương đối tới từng file con.

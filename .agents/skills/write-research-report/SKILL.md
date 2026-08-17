@@ -11,7 +11,7 @@ description: Turn code reading, dataset inspection, artifacts, papers, and techn
 ## Thực hiện
 
 1. Chốt câu hỏi chính, đọc draft cùng chủ đề trong `docs/research_draft/` nếu có, và tìm
-   file `docs/` hiện có trước khi tạo file mới. Dùng draft làm kế hoạch, không dùng nó làm
+   file `docs/` hiện có trước khi tạo file mới (sử dụng tên file mô tả dạng `snake_case`, không đánh số). Dùng draft làm kế hoạch, không dùng nó làm
    bằng chứng.
 2. Thu evidence từ runtime/code/artifact và nguồn gốc; không dựa vào tên gọi hoặc roadmap.
 3. Với tài liệu dài, dùng `.agents/agents/02_research_reader.md` để nhận evidence map.

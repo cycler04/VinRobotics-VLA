@@ -1,0 +1,5 @@
+# Paper index
+
+Nguồn chuẩn cho danh sách PDF, arXiv và trạng thái là
+[docs/papers/retry-handle/paper_link.txt](../../papers/retry-handle/paper_link.txt).
+Không lặp lại metadata tại đây để tránh hai chỉ mục lệch nhau.

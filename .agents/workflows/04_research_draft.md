@@ -10,7 +10,7 @@ Viết bằng tiếng Việt, giữ thuật ngữ English khi cần. Mặc đị
 ## 1. Xác định file và câu hỏi chính
 
 - Lưu trong `docs/research_draft/`, theo cùng cấu trúc thư mục với
-  `docs/research_finding/`.
+  `docs/research_finding/`. Đặt tên file mô tả dạng `snake_case`, không dùng tiền tố đánh số (ví dụ: `vifailback.md`).
 - Ghi paper/source, một câu hỏi nghiên cứu và phạm vi chính trong vài dòng.
 - Cập nhật draft cùng chủ đề nếu đã tồn tại; không tạo bản trùng.
 

@@ -1,0 +1,5 @@
+# Paper index
+
+Nguồn chuẩn cho danh sách PDF, arXiv và trạng thái là
+[docs/papers/long-horizon/paper_link.txt](../../papers/long-horizon/paper_link.txt).
+Không lặp lại metadata tại đây để tránh hai chỉ mục lệch nhau.

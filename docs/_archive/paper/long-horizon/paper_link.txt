@@ -1,0 +1,19 @@
+# Long-horizon manipulation in VLA — retained paper index
+
+**Scope (10 August 2026):** this directory intentionally contains the eight primary
+PDFs below. Venue/status is recorded from the corresponding retained report or
+PDF; citation counts are omitted because they change over time.
+
+| # | Paper | arXiv | Local PDF | Status |
+|---|---|---|---|---|
+| 1 | π0.5: A Vision-Language-Action Model with Open-World Generalization | [2504.16054](https://arxiv.org/abs/2504.16054) | `pi0_5_open_world_generalization.pdf` | CoRL 2025 (Oral) |
+| 2 | Hi Robot: Open-Ended Instruction Following with Hierarchical Vision-Language-Action Models | [2502.19417](https://arxiv.org/abs/2502.19417) | `hi_robot_hierarchical_vla.pdf` | ICML 2025 |
+| 3 | Predictive Inverse Dynamics Models Are Scalable Learners for Robotic Manipulation (Seer) | [2412.15109](https://arxiv.org/abs/2412.15109) | `seer_predictive_inverse_dynamics.pdf` | ICLR 2025 |
+| 4 | MemoryVLA: Perceptual-Cognitive Memory in Vision-Language-Action Models for Robotic Manipulation | [2508.19236](https://arxiv.org/abs/2508.19236) | `memoryvla_perceptual_cognitive_memory.pdf` | ICLR 2026 |
+| 5 | Causal World Modeling for Robot Control (LingBot-VA) | [2601.21998](https://arxiv.org/abs/2601.21998) | `lingbot_va_causal_world_modeling.pdf` | Venue not verified in the retained PDF |
+| 6 | ACoT-VLA: Action Chain-of-Thought for Vision-Language-Action Models | [2601.11404](https://arxiv.org/abs/2601.11404) | `acot_vla_action_chain_of_thought.pdf` | CVPR 2026 |
+| 7 | SeedPolicy: Horizon Scaling via Self-Evolving Diffusion Policy for Robot Manipulation | [2603.05117](https://arxiv.org/abs/2603.05117) | `seedpolicy_self_evolving_diffusion.pdf` | Preprint |
+| 8 | ReMem-VLA: Empowering Vision-Language-Action Model with Memory via Dual-Level Recurrent Queries | [2603.12942v1](https://arxiv.org/abs/2603.12942v1) | `remem_vla_dual_level_recurrent_queries.pdf` | arXiv preprint v1 |
+
+The eight Markdown analyses are indexed in
+[`docs/research_finding/long-horizon/tong_quan.md`](../../research_finding/long-horizon/tong_quan.md).

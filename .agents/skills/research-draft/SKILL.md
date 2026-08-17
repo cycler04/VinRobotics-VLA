@@ -7,7 +7,7 @@ description: Create a short Markdown research outline before a full paper report
 
 Read [the research-draft workflow](../../workflows/04_research_draft.md) and
 [the conventions](../../03_conventions.md), then create or update the matching
-`.md` file under `docs/research_draft/`.
+`.md` file under `docs/research_draft/` (use descriptive `snake_case` filenames without number indexing).
 
 Keep the draft short: normally at most 600 words or 80 lines. Select 3–5 key
 points and no more than five prioritized questions. Include only the evidence

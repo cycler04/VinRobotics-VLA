@@ -1,17 +1,19 @@
-"""Serve a local copy of episode videos to the Caption QA editor.
+"""Serve a local copy of episode videos to the Caption QA editor (EgoVerse).
 
-Run this on your OWN laptop (B or C) after downloading videos with
-``download_videos.py``. The editor (served from the shared server on laptop A)
-can then be told to load video bytes from here — ``http://localhost:8090`` — so
-playback/seeking comes off your local disk instead of streaming over slow wifi.
-Everything else (assignments, SRT text, saving) still talks to laptop A.
+Run this on your OWN laptop after downloading videos. The reviewer (served from
+the shared server at http://100.89.98.89:7871/reviewer) can then be told to
+load video bytes from here — ``http://localhost:8090`` — so playback/seeking
+comes off your local disk instead of streaming over slow wifi. Everything else
+(assignments, SRT text, saving) still talks to laptop A.
 
 It maps ``GET /video/<video_id>`` to ``<root>/<video_id>.mp4`` and supports HTTP
 range requests, so scrubbing in the editor works. Pure standard library — no
 pip installs needed.
 
-    python scripts/local_video_server.py ~/caption_videos          # port 8090
-    python scripts/local_video_server.py ~/caption_videos --port 9000
+    # Simplest: use the global command:
+    open_cut
+    # Or point it at a folder explicitly:
+    python3 src/local_video_server_verse.py dataset/EgoVerse_Label/26ai.dungnn_assigned_videos_batch1of1 --port 8090
 
 Bound to localhost only (just your machine can reach it). Stop with Ctrl+C.
 """
@@ -196,7 +198,13 @@ class DualStackHTTPServer(ThreadingHTTPServer):
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("video_root", help="Folder holding downloaded <video_id>.mp4 files")
+    parser.add_argument(
+        "video_root",
+        nargs="?",
+        default=str(Path(__file__).resolve().parent),
+        help="Folder holding downloaded <video_id>.mp4 files "
+        "(default: the folder this script sits in)",
+    )
     parser.add_argument("--port", type=int, default=8090, help="Port to listen on (default 8090)")
     parser.add_argument(
         "--host",

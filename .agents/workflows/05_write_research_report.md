@@ -10,7 +10,7 @@ Các report đều viết bằng Tiếng Việt, dù prompt là Tiếng Anh
 - Viết một câu hỏi chính và phạm vi không làm.
 - Nếu có draft cùng chủ đề trong `docs/research_draft/`, dùng nó làm bản đồ câu hỏi và
   outline; kiểm lại mọi finding bằng nguồn gốc vì draft không phải bằng chứng độc lập.
-- Tìm báo cáo hiện có trong `docs/`; cập nhật file đúng chủ đề thay vì tạo bản trùng.
+- Tìm báo cáo hiện có trong `docs/`; cập nhật file đúng chủ đề thay vì tạo bản trùng. Đặt tên file mô tả dạng `snake_case`, không dùng tiền tố đánh số (ví dụ: `memoryvla.md`).
 - Dùng `notes/` cho nguồn/quan sát thô. Dùng `docs/` cho kết quả đã tổng hợp.
 - Không đưa domain knowledge vào `.agents/memory/`; memory chỉ giữ preference/correction.
 

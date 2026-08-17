@@ -1,0 +1,3 @@
+VIPA-VLA: https://www.alphaxiv.org/pdf/2512.13080v1
+DepthVLA: https://www.alphaxiv.org/pdf/2510.13375v1
+SpatialVLA: https://arxiv.org/pdf/2501.15830

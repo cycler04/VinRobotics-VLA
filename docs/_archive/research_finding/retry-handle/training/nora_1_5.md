@@ -1,0 +1,368 @@
+# NORA-1.5 — flow-matching action expert + DPO với reward từ world model
+
+## 1. Nguồn
+
+- Tiêu đề: *NORA-1.5: A Vision-Language-Action Model Trained using World Model-
+  and Action-based Preference Rewards*
+- Tác giả: Chia-Yu Hung, Navonil Majumder, Haoyuan Deng, Liu Renhang, Yankang Ang,
+  Ziwei Wang, Soujanya Poria (Nanyang Technological University); Amir Zadeh,
+  Chuan Li (Lambda Labs); Dorien Herremans (Singapore University of Technology
+  and Design)
+- Venue: **arXiv preprint** 2511.14659v1, 18 Nov 2025 — paper không ghi venue nào
+  khác.
+- PDF trong repo: [docs/papers/retry-handle/nora_1_5_world_model_preference_rewards.pdf](../../../papers/retry-handle/nora_1_5_world_model_preference_rewards.pdf)
+- Nguồn: https://arxiv.org/abs/2511.14659
+- Code: **Verified** (HTTP 200, kiểm tra 03 Aug 2026) —
+  [GitHub](https://github.com/declare-lab/nora-1.5),
+  [trang dự án](https://declare-lab.github.io/nora-1.5),
+  [Hugging Face](https://huggingface.co/declare-lab/nora-1.5). Đây là paper có
+  artifact công khai đầy đủ nhất trong corpus 06.
+- Phân loại: **training** (cơ chế: preference post-training bằng DPO) — can
+  thiệp ở tầng *hậu huấn luyện offline*, không có bộ phận nào chạy lúc deploy
+  ngoài chính policy.
+
+⚠️ **NORA-1.5 không phải hệ retry.** Nó không phát hiện lỗi, không quay lui, không có monitor lúc chạy. Nó nằm trong corpus này vì cùng mục tiêu *độ tin cậy* và vì luận điểm ngược đáng chú ý ở §2: paper nêu thẳng rằng reward kiểu
+khoảng-cách-tới-demo "**có thể dẫn tới phục hồi lỗi kém và làm policy sụp đổ ở
+trạng thái off-distribution**" — tức nó chẩn đoán đúng vấn đề mà
+[FLARE](../failure_adaptation/flare.md) và
+[FailSafe](../failure_adaptation/failsafe.md) tấn công, rồi chọn giải bằng
+reward mục tiêu thay vì bằng dữ liệu recovery.
+
+## 2. Câu hỏi nghiên cứu
+
+VLA hiện được huấn luyện gần như hoàn toàn bằng imitation learning trên demo chuyên gia, rồi SFT trên dữ liệu của embodiment đích. 
+
+Hệ quả: model **kế thừa trần chất lượng của demo** và không có cơ chế tự vượt lên. Post-training bằng RL đã nâng LLM lên mức "System-II", nhưng chuyển sang VLA vướng một câu hỏi cụ thể:
+
+> **Lấy tín hiệu reward ở đâu, khi không có simulator chính xác cho embodiment đích và không đủ thời gian robot thật?**
+
+Ba lối đi có sẵn đều hỏng ở đâu đó:
+
+| Lối                                                 | Vì sao hỏng                                                                                                                                                                                          |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Chạy rollout thật/sim rồi gắn reward thủ công  | Cần simulator chính xác theo từng embodiment hoặc hạ tầng robot lớn; đắt, chậm, không scale                                                                                                |
+| Value function học từ reward thưa mức trajectory | Credit assignment trải cả trajectory, exploration nông                                                                                                                                              |
+| Khoảng cách tới ground-truth action               | Kế thừa giới hạn của demo; khi nhiều trajectory cùng đúng thì ép về một đường, tạo local optimum,**và không có hướng dẫn nào khi policy đã lệch khỏi manifold demo** |
+
+Đóng góp của paper là trả lời bằng **world model làm reward estimator offline**, cộng một heuristic để chống nhiễu của chính world model đó.
+
+## 3. Đóng góp
+
+1. **NORA-1.5**: ghép flow-matching action expert (~400M tham số) vào VLA autoregressive NORA (3B), train chung trên Open X-Embodiment. Riêng thay đổi kiến trúc này đã tạo phần lớn mức tăng.
+2. **Bộ reward proxy ba thành phần**: WM-guided endgoal reward, WM-guided subgoal reward, và ground-truth-action reward (GTA); kèm cách tổ hợp có trọng số.
+3. **Phân tích kiến trúc**: chỉ ra lợi ích hai chiều giữa expert và backbone, và
+   một hành vi phụ thuộc chế độ dữ liệu (flow-matching thua ở low-data).
+4. **Quy trình post-training scale theo compute**, không theo giờ robot: rollout tổng hợp sinh hàng loạt rồi chấm bằng evaluator học được.
+
+## 4. Method
+
+### 4.1 Kiến trúc
+
+Backbone **NORA** [Hung et al. 2025] — 3B, là Qwen-2.5-VL-3B finetune trên Open
+X-Embodiment để sinh action token, dùng tokenizer **FAST+**. NORA-1.5 khởi tạo từ
+biến thể **NORA-Long**.
+
+Thêm **action expert** $\mathcal{A}$ — head flow-matching hồi quy trực tiếp chuỗi
+action trong horizon $N$:
+
+$$
+K_{VL,t}, V_{VL,t} = VL_\theta(o_t, I), \qquad a_{t:t+N} = \mathcal{A}_\theta(K_{VL,t}, V_{VL,t})
+$$
+
+- $N = 5$, đúng bằng horizon của NORA-Long.
+- Expert là mạng transformer xếp chồng, **kiến trúc giống hệt NORA**. Ở mỗi lớp
+  $l$, key/value của expert là **nối** KV của backbone với KV chiếu từ chính nó:
+  $x^{(l+1)} = Tr^{(l)}(Q = W_Q x^{(l)},\; K = K_{VL}^{(l)} \oplus W_K x^{(l)},\; V = V_{VL}^{(l)} \oplus W_V x^{(l)})$,
+  với $x^{(0)} = a^\tau$. Đây là ghép **layer-wise self-attention**, không phải
+  cross-attention lên một embedding tổng hợp.
+- **Chi tiết quan trọng:** expert **chỉ được attend vào embedding của instruction và ảnh**, không attend embedding của FAST token — để biểu diễn action dạng token không rò sang expert. Nếu bỏ ràng buộc này, hai head sẽ học chồng nhau.
+- Kích thước: expert ~400M → tổng NORA-1.5 ≈ 3.3B.
+
+**Flow matching.** Chuỗi action nhiễu $a^\tau_{t:t+N} = (1-\tau) a_{t:t+N} + \tau a_0$ với $a_0 \sim \mathcal{N}(0,1)$, $\tau$ là timestep flow. Expert hồi quy velocity
+$v = a_0 - a_{t:t+N}$:
+
+$$
+\mathcal{L}_{FM} = \mathbb{E}\,\lVert \mathcal{A}(a^\tau_{t:t+N}, K_{VL,t}, V_{VL,t}) - v \rVert^2
+$$
+
+**Vì sao ghép lại có lợi (giải thích của tác giả).** Expert dùng biểu diễn giàu
+của VLA (quan sát, instruction, kế hoạch tổng thể); ngược lại VLA nhận gradient từ
+expert nên bị ép **lập kế hoạch cả trajectory mạch lạc** thay vì chỉ token kế
+tiếp. Đây là điểm đối lập trực tiếp với π0.5, nơi flow matching được giới thiệu
+chủ yếu để tăng tốc inference chứ không phải tăng performance.
+
+### 4.2 World model làm reward
+
+World model $W$ dựa trên **V-JEPA-2-AC** (1.3B). V-JEPA2 ($\mathcal{J}$) mã hoá ảnh; một predictor transformer $P_\theta$ nhận embedding quan sát hiện tại và chuỗi action, hồi quy embedding quan sát tương lai:
+
+$$
+\mathcal{J}(o_{t+N}) = W_\theta(o_t, a_{t:t+N}) := P_\theta(\mathcal{J}(o_t), a_{t:t+N})
+$$
+
+Ba reward:
+
+$$
+R_g(a_{t:t+N}, o_t) := -\lVert \mathcal{J}(o_g) - W_\theta(o_t, a_{t:t+N}) \rVert_1, \quad g \in \{\text{endgoal}, \text{subgoal-}t\}
+$$
+
+$$
+R_a(a_{t:t+N}) := -\lVert a^*_{t:t+N} - a_{t:t+N} \rVert_1
+$$
+
+$$
+R_{tot} = R_g + 0.5\,R_a
+$$
+
+- **WM (endgoal)**: so ảnh mục tiêu cuối. Hướng dài hạn.
+- **WM (subgoal)**: ảnh subgoal tại $t$ lấy là **frame $o_{t+N}$ có sẵn trong
+  demo**. Hướng ngắn hạn, ít phụ thuộc mô hình hoá dài hạn.
+- **GTA** ($R_a$): khoảng cách $L_1$ tới action chuẩn. Vai trò là **neo ổn định**,
+  chống nhiễu của world model — nên chỉ được nửa trọng số.
+
+Hai thành phần cố ý bù trừ nhau: goal reward chấp nhận nhiều trajectory hợp lệ
+nhưng nhiễu (V-JEPA-2-AC được adapt trên ít dữ liệu); GTA sạch nhưng ép về một
+đường demo duy nhất.
+
+Reward là **dense, theo từng bước** — chấm điểm so sánh cho tập candidate
+$\{a^{(1)}_{t:t+N}, \dots, a^{(N)}_{t:t+N}\}$ tại mỗi timestep. Tác giả lập luận
+đây là lý do nó thăm dò sâu hơn value function học từ reward mức trajectory:
+credit được gán đúng vào một bước, không trải đều cả episode.
+
+### 4.3 Preference dataset và DPO
+
+Sample nhiều rollout từ chính policy $VLA := \mathcal{A}_\theta \circ VL_\theta$,
+xếp hạng bằng $R$, ghép thành cặp $(a^W_{t:t+N}, a^L_{t:t+N})$ với
+$R(a^W, \cdot) > R(a^L, \cdot)$. Có hai tập: $D_{goal}$ và $D_{act}$.
+
+**DPO cho head flow-matching** không dùng likelihood (flow matching không có
+likelihood tính được), mà thay log-prob bằng **hiệu của flow-matching loss** giữa
+policy và reference:
+
+$$
+\mathcal{L}_{\text{DPO-FM}} = -\mathbb{E}\Big[\log \sigma\big(-\beta(\underbrace{\lVert \mathcal{A}(a^W;\theta) - v^W \rVert^2}_{\text{winning}} - \underbrace{\lVert \mathcal{A}(a^L;\theta) - v^L \rVert^2}_{\text{losing}} - \underbrace{\lVert \mathcal{A}(a^W;\theta_r) - v^W \rVert^2}_{\text{winning ref}} + \underbrace{\lVert \mathcal{A}(a^L;\theta_r) - v^L \rVert^2}_{\text{losing ref}})\big)\Big]
+$$
+
+Đây chính là lý do paper chọn DPO thay vì RL cổ điển: **preference-based objective
+tương thích với action head dạng flow-matching/diffusion vốn không có likelihood
+hiệu chỉnh được**. Với head FAST+ (autoregressive) thì dùng DPO chuẩn của Rafailov
+et al.; biến thể đó ghi hậu tố **`-FAST`**.
+
+DPO chỉ chạy **sau** khi đã SFT trên dữ liệu của embodiment đích.
+
+### 4.4 Huấn luyện
+
+Hai giai đoạn:
+
+**i. Action-expert training.** Expert khởi tạo ngẫu nhiên, train chung với tham số
+backbone bằng loss kết hợp:
+
+$$
+\mathcal{L} = \mathcal{L}_{CE} + \alpha \mathcal{L}_{FM}, \qquad \alpha = 10
+$$
+
+$\mathcal{L}_{CE}$ trên FAST+ token của NORA, $\mathcal{L}_{FM}$ trên output
+expert. Trọng số $\alpha=10$ nghiêng hẳn về nhánh flow-matching.
+
+**ii. Reward-guided post-training.** DPO trên preference dataset đã dựng.
+
+**Cấu hình cụ thể.** Cùng subset OXE như NORA-Long. NORA-Long trước đó: 900k
+gradient step, global batch 256. Sau khi thêm expert: **150k step nữa, global
+batch 512, lr tối đa 5e-5, warmup tuyến tính 5000 step, cosine decay về 0**. Một
+node H100, 5 ngày, **≈960 giờ H100**.
+
+## 5. Claim → Evidence
+
+### 5.1 SimplerEnv (Tab. 1)
+
+| Model                    | VM Avg          | VA Avg          |
+| ------------------------ | --------------- | --------------- |
+| π0 (fine-tuned)         | 58.7%           | 54.8%           |
+| π0-FAST (fine-tuned)    | 61.9%           | 59.0%           |
+| Magma                    | 68.4%           | 62.6%           |
+| SpatialVLA (fine-tuned)  | 73.7%           | 67.5%           |
+| MolmoAct (fine-tuned)    | 71.6%           | 72.1%           |
+| NORA-Long (zero-shot)    | 60.3%           | 42.0%           |
+| NORA-1.5 (zero-shot)     | 76.9%           | 59.7%           |
+| NORA-1.5 (fine-tuned)    | 77.9%           | 70.7%           |
+| **NORA-1.5 (DPO)** | **82.8%** | **71.9%** |
+
+Đọc kỹ hơn hai con số:
+
+- **Zero-shot NORA-1.5 (76.9 VM) đã vượt mọi baseline fine-tuned.** Đây là bằng
+  chứng mạnh nhất cho phần *kiến trúc*, không phải phần DPO.
+- **VA gần như bão hoà**: từ SFT 70.7 lên DPO 71.9, chỉ +1.2; MolmoAct vẫn nhỉnh
+  hơn (72.1). Lợi thế của MolmoAct nằm gần hết ở drawer open/close; ngược lại nó
+  kém hẳn ở pick coke và move near. Kết luận "NORA-1.5 robust hơn trên nhiều task"
+  là hợp lý, nhưng "tốt nhất VA" thì không.
+- Task **open/close drawer là điểm yếu hệ thống** của NORA-1.5 (41–66% so với
+  Magma 83.7%). Giải thích của tác giả: action kéo/đẩy hiếm trong OXE — họ có
+  kiểm chứng bằng keyword search trên mô tả task của OXE.
+
+### 5.2 LIBERO (Tab. 2)
+
+| Baseline                 | Spatial | Object          | Goal  | Long  | Avg             |
+| ------------------------ | ------- | --------------- | ----- | ----- | --------------- |
+| CoT-VLA                  | 87.5%   | 91.6%           | 87.6% | 69.0% | 83.9%           |
+| ThinkAct                 | 88.3%   | 91.4%           | 87.1% | 70.9% | 84.4%           |
+| MolmoAct-7B-D            | 87.0%   | 95.4%           | 87.6% | 77.2% | 86.6%           |
+| π0-FAST                 | 96.4%   | 96.8%           | 88.6% | 60.2% | 85.5%           |
+| π0                      | 96.8%   | 98.8%           | 95.8% | 85.2% | 94.2%           |
+| NORA                     | 85.6%   | 89.4%           | 80.0% | 63.0% | 79.5%           |
+| NORA-Long                | 92.2%   | 95.4%           | 89.4% | 74.6% | 87.9%           |
+| NORA-1.5                 | 97.3%   | 96.4%           | 94.5% | 89.6% | 94.5%           |
+| **NORA-1.5 (DPO)** | 98.0%   | 96.0%           | 95.4% | 90.5% | **95.0%** |
+| Δ từ DPO               | +0.7    | **−0.4** | +0.9  | +1.0  | +0.6            |
+
+**Đây là bảng cho thấy rõ nhất DPO đóng góp ít.** Toàn bộ khoảng cách so với π0
+(94.2 → 94.5) đã có **trước** DPO; DPO chỉ thêm 0.6 điểm và **âm trên
+LIBERO-Object**. Giải thích của tác giả: LIBERO-Object ít biến thiên (kích thước
+object hẹp, bố trí và mục tiêu cố định) nên trần đã sát.
+
+So với NORA-Long (87.9) thì NORA-1.5 (94.5) là **+6.6 chỉ từ action expert** —
+gấp mười lần đóng góp của DPO.
+
+### 5.3 Robot thật Galaxea A1 (Tab. 3, 9 task, 10 trial/task)
+
+|                                | Part. Succ.↑    | Dist.↓ | Succ.↑          |
+| ------------------------------ | ---------------- | ------- | ---------------- |
+| π0 (3.3B)                     | 44.44%           | 68.33%  | 25.55%           |
+| NORA (3B)                      | 73.3%            | 13.3%   | 58.88%           |
+| **NORA-1.5-FAST (3.3B)** | **78.88%** | 15.00%  | **71.11%** |
+
+Embodiment này **cố ý không có trong pretraining OXE**; finetune từ 1000 episode
+pick-and-place teleop, 9 task, vị trí object ngẫu nhiên. Ba nhóm task: seen;
+unseen object + seen distractor; unseen instruction + seen distractor.
+
+Con số "+45.56 điểm so với π0" trong khảo sát cũ là **đúng nhưng gây hiểu nhầm**:
+π0 sập ở nhóm có distractor (0% success ở τ4–τ6, Dist. 90–100%), tức nó gần như
+luôn gắp nhầm vật gây nhiễu. So với baseline hợp lý hơn là NORA thì mức tăng là
+**+12.2 điểm** (58.88 → 71.11) — và phần lớn cũng lại là kiến trúc, không phải
+DPO.
+
+**Lưu ý:** trên robot thật, biến thể tốt nhất là **NORA-1.5-FAST** (nhánh
+autoregressive), không phải nhánh flow-matching. Xem §6.
+
+### 5.4 Tác động của DPO trên robot thật (Tab. 5, 13 task)
+
+| Reward                          | Part. Succ.↑   | Dist.↓         | Succ.↑         |
+| ------------------------------- | --------------- | --------------- | --------------- |
+| NORA-1.5-FAST (SFT)             | 72.30           | 16.00           | 56.92           |
+| **w/ WM (subgoal) + GTA** | **83.84** | **12.00** | **70.00** |
+| w/ WM (endgoal) + GTA           | 73.07           | 10.00           | 61.53           |
+| w/ GTA                          | 73.84           | 13.00           | 57.69           |
+
+Trên riêng nhóm **unseen**: 65.00 → 80.00 part-succ, 46.00 → 62.00 succ
+(**+16.08**).
+
+Đây là **bằng chứng mạnh nhất của paper cho phần DPO**, và nó chỉ xuất hiện ở
+môi trường thật:
+
+- Mức tăng ở sim là 0.6–4.9 điểm; ở robot thật là **+13.08** tổng và **+16.08**
+  trên task chưa thấy.
+- **GTA đơn lẻ gần như vô dụng trên robot thật** (+0.77). Tác giả kết luận: ngoài
+  đời nhiều trajectory cùng hoàn thành được task, nên ép theo một đường được gán
+  nhãn chỉ thêm nhiễu.
+- Cơ chế cải thiện được đo cụ thể: chính xác gắp đúng object **+11%**, gắp nhầm
+  distractor **−4%**, và số action chunk trung bình để gắp giảm từ **9.7 xuống
+  7.0**. Trajectory gripper hết zig-zag và hết "fixation".
+
+### 5.5 Ablation reward (Tab. 4 SimplerEnv, Tab. 6 LIBERO)
+
+| Reward             | VM Avg          | VA Avg          | LIBERO Avg |
+| ------------------ | --------------- | --------------- | ---------- |
+| SFT (no reward)    | 77.9%           | 70.7%           | 94.5%      |
+| WM (endgoal)       | 76.4%           | 72.5%           | 95.0%      |
+| WM (subgoal)       | 78.7%           | 72.2%           | —         |
+| GTA                | 81.2%           | 72.5%           | 94.9%      |
+| WM (endgoal) + GTA | **82.8%** | 71.9%           | 94.8%      |
+| WM (subgoal) + GTA | 79.0%           | **73.0%** | —         |
+
+Kết luận rút được:
+
+1. **Không reward nào thắng ở mọi setting.** WM(endgoal)+GTA tốt nhất ở VM;
+   WM(subgoal)+GTA tốt nhất ở VA và ở robot thật; WM(endgoal) *tụt dưới SFT* ở VM.
+2. **Endgoal reward nhiễu hơn subgoal**, đúng như dự đoán: dự đoán dài hạn của
+   V-JEPA-2-AC yếu. WM(subgoal) hơn WM(endgoal) 1.7 điểm tổng thể, và hơn 4.8
+   điểm riêng task move near.
+3. **Reward thuần goal bỏ qua ràng buộc an toàn ngầm.** Task "Move Near" của
+   SimplerEnv yêu cầu tránh vật cản; WM(endgoal) làm performance task này *giảm*
+   ở cả VM lẫn VA. Đây là ví dụ sạch của reward hacking mức nhẹ.
+4. Trên LIBERO mọi biến thể đều nằm trong khoảng 94.8–95.0 — **không phân biệt
+   được**, vì SFT đã quá mạnh.
+
+## 6. Giới hạn và điểm chưa rõ
+
+- **Không phải hệ retry.** Không phát hiện lỗi, không phục hồi, không có gì chạy
+  lúc deploy. Nếu mục tiêu là xử lý failure đã xảy ra, paper này không cung cấp
+  cơ chế.
+- **Flow-matching thua autoregressive ở low-data.** Trên Galaxea A1 (50K frame),
+  nhánh flow-matching **kém hơn** decode autoregressive — ngược hẳn SimplerEnv
+  (4M frame) và LIBERO. Tác giả quy cho việc expert của họ không có pretraining
+  flow-matching quy mô lớn như π0. **Đây là cảnh báo trực tiếp cho bất kỳ ai định
+  dùng NORA-1.5 trên dataset nhỏ.**
+- **Đóng góp bị gán sai chỗ nếu đọc lướt.** Tên paper và abstract nhấn mạnh
+  reward và DPO, nhưng phần lớn mức tăng ở benchmark sim đến từ **action expert**:
+  LIBERO +6.6 (kiến trúc) so với +0.6 (DPO). Chỉ ở robot thật DPO mới thực sự
+  đáng kể (+13.08).
+- **World model được huấn luyện trên ít dữ liệu và nhiễu.** Chính tác giả viết
+  "the trained world model could be a source of noise this approach". Toàn bộ vai
+  trò của GTA là bù cho khiếm khuyết này. **Unknown:** chất lượng world model tốt
+  tới đâu thì bỏ được GTA.
+- **Không có ablation nào về chính world model** — không đo độ chính xác dự đoán
+  của V-JEPA-2-AC, không thử world model khác, không đo tương quan giữa reward
+  proxy và success thật.
+- **Chọn reward là siêu tham số theo môi trường, không có quy tắc.** Ba biến thể
+  thắng ở ba setting khác nhau (§5.5). Paper không đưa cách chọn trước.
+- **Đánh giá robot thật hẹp.** Một cánh tay Galaxea A1, chỉ pick-and-place,
+  10 trial/task, không có nhiễu loạn cố ý hay task contact-rich.
+- **Bảng có lỗi trình bày.** Tab. 5 ghi "(Improvement)" cho cột GTA là 0.77 nhưng
+  trong bảng Average lại là 73.84 so với 72.30 = 1.54; các dòng improvement không
+  khớp nhau hoàn toàn. Không ảnh hưởng kết luận định tính.
+- **Unknown:** chi phí sinh preference dataset (bao nhiêu rollout mỗi observation,
+  bao nhiêu cặp, bao nhiêu giờ GPU cho riêng giai đoạn DPO). Paper chỉ báo cáo
+  960 giờ H100 cho giai đoạn action-expert.
+
+## 7. Liên hệ với workspace
+
+- **Đây là paper dễ tái lập nhất trong corpus 06.** Có code, có checkpoint trên
+  Hugging Face, backbone chỉ 3.3B — vừa một node. Ba paper còn lại đều thiếu ít
+  nhất một mảnh (FLARE không có gì, FailSafe chỉ có trang dự án).
+- **Cơ chế reward chạy hoàn toàn offline.** Không cần simulator, không cần robot,
+  không cần rollout môi trường — chỉ cần dataset có ảnh và action. Đây là điểm
+  khác biệt lớn nhất so với [SC-VLA](../training/sc_vla.md) (cần
+  0.5–3 triệu bước môi trường) và [RoboMonkey](../action_generation/robomonkey.md)
+  (cần verifier 7B chạy lúc deploy).
+- **GTA reward tính được ngay từ dữ liệu hiện có.** $-\lVert a^* - a \rVert_1$
+  chỉ cần cặp (action sinh ra, action chuẩn) — schema v0.1 đã đủ, giống kết luận
+  ở [tong_quan.md](../tong_quan.md) §7 cho RoboMonkey.
+- **WM (subgoal) reward cũng chỉ cần frame $o_{t+N}$** — nghĩa là **không cần
+  trường schema mới nào**, chỉ cần truy cập frame tương lai trong cùng episode.
+  Cùng với nhãn SPI của SC-VLA, đây là can thiệp thứ hai mà dữ liệu hiện tại đã đủ.
+- **Cảnh báo cho `vla-data-tools`:** phần đắt không phải schema mà là **inference
+  V-JEPA2 trên toàn dataset** để có embedding. Cần ước lượng dung lượng trước —
+  embedding ViT-g cho mỗi frame không nhỏ.
+
+## 8. Thử nghiệm tiếp theo
+
+Xếp theo chi phí tăng dần:
+
+1. **Planned — đo tương quan reward proxy với success.** Trước khi train gì, lấy
+   một policy có sẵn, sinh $k$ action mỗi observation, tính $R_a$ (GTA) và xếp
+   hạng, rồi đối chiếu với kết quả thật. Nếu tương quan yếu thì toàn bộ tiền đề
+   preference của paper không áp dụng cho dữ liệu này. Rẻ nhất, không cần world
+   model.
+2. **Planned — dựng preference dataset chỉ bằng GTA.** Không cần V-JEPA2. Đủ để
+   kiểm tra pipeline DPO-FM có chạy không. Lưu ý kết quả của paper: GTA đơn lẻ
+   gần vô dụng trên robot thật (+0.77), nên đây là bước *kiểm tra hạ tầng*, không
+   phải bước kỳ vọng cải thiện.
+3. **Planned — thêm WM (subgoal) reward.** Cần chạy V-JEPA2 sinh embedding. Đây
+   là biến thể thắng ở robot thật, nên là cấu hình đáng thử nhất nếu mục tiêu là
+   deploy thật.
+4. **Planned — kiểm tra ngưỡng low-data.** Paper cho đúng hai điểm dữ liệu: 50K
+   frame (flow-matching thua) và 4M frame (flow-matching thắng). Quét vài mức ở
+   giữa trên dataset local để biết ngưỡng thật nằm đâu — quyết định trực tiếp việc
+   chọn nhánh FAST hay nhánh flow-matching.
+5. **Planned — dùng NORA-1.5 làm base policy cho các thí nghiệm retry.** Vì nó có
+   code và checkpoint công khai, nó là ứng viên tự nhiên làm policy nền để thử
+   perturbation & bridging của [FLARE](../failure_adaptation/flare.md) hoặc
+   verifier của RoboMonkey — thay vì phải tự train một baseline.
