@@ -1,0 +1,44 @@
+Nói về kết quả training:
+
+Reflect bản thân:
+- các tuần đầu rất mơ hồ, vì không có kinh nghiệm nhiều về paper. 
+Em cần keep up với SOTA, nhưng khi vừa mới vào lĩnh vực VLA thì không biết
+các model SOTA hiện tại là nhưng gì, nên không biết dựa vào tiêu chuẩn nào để đoc
+
+Nên em hay tìm các paper gọi là nghe hay nhưng hoàn toàn không cần thiết cho team
+VD: HI-Robot. 
+
+Do đó dẫn đến các tuần present đầu tiên rất lúng cúng, paper chọn thì không đủ uy tín
+như Robo-Monkey. Và cách trình bày em rất thiếu thốn, em lướt qua các novety của
+1 paper nhưng không cố hiều tại sao, dẫn đến phần kết luận của em rất tệ, khi mà
+em đưa ra các nhận xét chung chung.
+
+Em cũng học được cách trình bày 1 paper cần rõ thế nào, đầu tiên ta cần tìm hiểu
+cái Why, tại sao họ làm như vậy trước, như con ReMemVLA. Khi đó khi đi vào các
+method, ta có thể hiểu được rõ hơn ngta mong muốn inprove được gì, nó có mới không,
+từ các method đó và các inprovement có được chứng minh đúng cách không từ các benchmark. Từ các thông
+tin này ta cũng có thể nhận ra các limitation của paper ngta là gì.
+
+Khi hiểu để đọc phần why của các paper, em nhận ra là đa số các paper đều cố giải quyết 1 vấn
+đề nào đó. VD: Memory -> non-markov , Failure -> success dataset. 
+
+Em thấy research và báo cáo về ReMemVLA là thay đổi lớn nhất về cách em research 
+từ trước tới giờ.
+
+Sau em cũng hiểu ta cần có các tiêu chuẩn gì để chọn paper. 
+- 1 là conference: ưu tiên top-1 major như ICLR, 
+- 2 là lượng xuất hiện của nó ở các paper khác
+- 3 là cái mục đích có phù hợp với mình không
+
+Có một insight về việc nhận ra các SOTA đang làm gì, đó là đọc các paper mới
+hơn nhận xét gì về hướng đi hiện tại. 
+
+Sau này em mới hiểu mục đích chính của team là xây dựng được foundation model.
+xử lý các vấn đề ngay từ giai đoạn pre-train. Từ đó em mới có thể biết paper mình
+thực sự cần là gì. 
+Từ đó em propose MemoryVLA với a, paper này em đã dùng làm base
+để tìm paper từ lâu rồi, nhưng bởi vì nó cũ hơn nên em không dám present cho anh,
+giờ em hiểu là một số paper quan trọng thì có thể performance không được tốt nhất, 
+nhưng là ổn định nhất và đáng sử dụng làm impliment nhất. 
+
+
